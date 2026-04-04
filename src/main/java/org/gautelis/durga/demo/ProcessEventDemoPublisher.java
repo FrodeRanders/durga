@@ -1,4 +1,4 @@
-package org.gautelis.durga.monitoring;
+package org.gautelis.durga.demo;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;

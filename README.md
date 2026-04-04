@@ -2,15 +2,15 @@
 Durga is a BPMN-driven Kafka scaffolding tool. It reads a BPMN model and generates Kafka-oriented worker,
 gateway, orchestration, and topic setup skeletons for process implementations.
 
-In Sanskrit, "Camunda" (or "Chamunda") refers to a Hindu goddess associated with war and protection. Chamunda is depicted as a fierce aspect of the goddess Kali or Durga, often portrayed as a warrior or protector.
-
 The project currently focuses on code generation and local process experimentation:
 - Parse BPMN models with Camunda
 - Generate Java skeletons with StringTemplate
 - Emit Kafka topic scripts and generated-project metadata
 - Support local development against the bundled Kafka setup
 
-You'll find the [manual](doc/system/sysdoc.pdf) in `doc/system`.
+You'll find [the manual](doc/system/sysdoc.pdf) in `doc/system`.
+
+In Sanskrit, "Camunda" (or "Chamunda") refers to a Hindu goddess associated with war and protection. Chamunda is depicted as a fierce aspect of the goddess Kali or Durga, often portrayed as a warrior or protector.
 
 ## Quick start
 Build the shaded JAR and run the scaffolder against a BPMN file:
@@ -74,7 +74,7 @@ java -jar target/durga-1.0-SNAPSHOT.jar path/to/process.bpmn
 ```
 
 Output is written under `generated/` by default:
-- Java sources in `generated/src/main/java/se/fk/kafka/generated/`
+- Java sources in `generated/src/main/java/org/gautelis/durga/generated/`
 - `topics.sh` and `summary.json` in `generated/`
 - demo/test helpers such as `demo-scenario.sh`, `send-task-input.sh`, `complete-task.sh`, `fail-task.sh`, `escalate-task.sh`, `complete-call-activity.sh`, `send-message-event.sh`, `send-signal-event.sh`, `watch-process-events.sh`, and `watch-task-output.sh`
 - `task-payloads.json` with sample task-shaped input payloads
@@ -92,7 +92,7 @@ Optional flags:
 - `--out <dir>` writes generated files to a custom output directory.
 - `--transactions` generates transactional worker classes using Kafka's producer/consumer APIs.
 
-The current BPMN element support boundary is documented in [docs/bpmn-kafka-coverage.md](/Users/froran/Projects/fk/kafkaplay/docs/bpmn-kafka-coverage.md).
+The current BPMN element support boundary is documented in [doc/bpmn-kafka-coverage.md](doc/bpmn-kafka-coverage.md).
 
 ## Monitoring with Kafka Streams
 Durga now includes a Kafka Streams monitoring skeleton built around a canonical `process-events` topic.
@@ -139,9 +139,9 @@ instance inspection.
 To drive the monitor without a generated workflow, publish a demo scenario directly to `process-events`:
 
 ```bash
-java -cp target/durga-1.0-SNAPSHOT.jar org.gautelis.durga.monitoring.ProcessEventScenarioRunner localhost:9094 happy invoice_receipt register_invoice,review_invoice,notify_requester
-java -cp target/durga-1.0-SNAPSHOT.jar org.gautelis.durga.monitoring.ProcessEventScenarioRunner localhost:9094 stuck invoice_receipt register_invoice,review_invoice,notify_requester
-java -cp target/durga-1.0-SNAPSHOT.jar org.gautelis.durga.monitoring.ProcessEventScenarioRunner localhost:9094 failed invoice_receipt register_invoice,review_invoice,notify_requester
+java -cp target/durga-1.0-SNAPSHOT.jar org.gautelis.durga.demo.ProcessEventScenarioRunner localhost:9094 happy invoice_receipt register_invoice,review_invoice,notify_requester
+java -cp target/durga-1.0-SNAPSHOT.jar org.gautelis.durga.demo.ProcessEventScenarioRunner localhost:9094 stuck invoice_receipt register_invoice,review_invoice,notify_requester
+java -cp target/durga-1.0-SNAPSHOT.jar org.gautelis.durga.demo.ProcessEventScenarioRunner localhost:9094 failed invoice_receipt register_invoice,review_invoice,notify_requester
 ```
 
 ## End-to-end demo

@@ -1,4 +1,4 @@
-package org.gautelis.durga.monitoring;
+package org.gautelis.durga.demo;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -13,12 +13,21 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
+/**
+ * Publishes named monitoring scenarios directly to the canonical {@code process-events} topic.
+ */
 public final class ProcessEventScenarioRunner {
     private static final String TOPIC = "process-events";
 
     private ProcessEventScenarioRunner() {
     }
 
+    /**
+     * Publishes one of the built-in monitoring demo scenarios.
+     *
+     * @param args optional
+     *             {@code <bootstrapServers> <scenario> <processId> <activity1,activity2,...> <businessKey>}
+     */
     public static void main(String[] args) {
         String bootstrapServers = args.length > 0 ? args[0] : "localhost:9094";
         String scenario = args.length > 1 ? args[1] : "happy";

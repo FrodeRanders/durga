@@ -8,8 +8,8 @@
     <!-- Appenders (writing to file in various ways) -->
     <Appenders>
         <RollingFile name="INTERNAL"
-                     fileName="${log-path}/kafka.log"
-                     filePattern="${log-path}/kafka-%d{yyyy-MM-dd}-%i.log">
+                     fileName="${log-path}/durga.log"
+                     filePattern="${log-path}/durga-%d{yyyy-MM-dd}-%i.log">
             <PatternLayout>
                 <!-- <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] [%-5level] %c{1}: %m%n</pattern> -->
                 <pattern>[%t] [%-5level] %c{1}: %m%n</pattern>

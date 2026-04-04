@@ -157,9 +157,9 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/main/resources/bpmn/invoice_message_exchange.bpmn", outputDir);
 
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/se/fk/kafka/generated/AwaitReviewResponseMessageCatchService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/se/fk/kafka/generated/SendReviewRequestMessageThrowService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/se/fk/kafka/generated/InvoiceMessageExchangeMessageEventPublisher.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/AwaitReviewResponseMessageCatchService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/SendReviewRequestMessageThrowService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/InvoiceMessageExchangeMessageEventPublisher.java")));
         assertTrue(Files.exists(outputDir.resolve("send-message-event.sh")));
 
         String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
@@ -173,10 +173,10 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/main/resources/bpmn/invoice_nested_subprocess.bpmn", outputDir);
 
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/se/fk/kafka/generated/ReviewScopeSubProcessEntryService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/se/fk/kafka/generated/ReviewScopeSubProcessCompletionService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/se/fk/kafka/generated/ApprovalScopeSubProcessEntryService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/se/fk/kafka/generated/ApprovalScopeSubProcessCompletionService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewScopeSubProcessEntryService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewScopeSubProcessCompletionService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ApprovalScopeSubProcessEntryService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ApprovalScopeSubProcessCompletionService.java")));
 
         String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
         assertTrue(applicationYaml.contains("invoice_nested_subprocess_review_scope_input"));
@@ -189,7 +189,7 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/main/resources/bpmn/invoice_review_reminder_non_interrupting.bpmn", outputDir);
 
-        Path boundaryHandler = outputDir.resolve("src/main/java/se/fk/kafka/generated/ReviewReminderBoundaryTimerService.java");
+        Path boundaryHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewReminderBoundaryTimerService.java");
         assertTrue(Files.exists(boundaryHandler));
 
         String boundarySource = Files.readString(boundaryHandler);
@@ -203,7 +203,7 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/main/resources/bpmn/invoice_subprocess_reminder_non_interrupting.bpmn", outputDir);
 
-        Path boundaryHandler = outputDir.resolve("src/main/java/se/fk/kafka/generated/ReviewScopeReminderBoundaryTimerService.java");
+        Path boundaryHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewScopeReminderBoundaryTimerService.java");
         assertTrue(Files.exists(boundaryHandler));
 
         String boundarySource = Files.readString(boundaryHandler);
@@ -217,8 +217,8 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/main/resources/bpmn/invoice_event_subprocess_message.bpmn", outputDir);
 
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/se/fk/kafka/generated/ManagerNotificationScopeEventSubProcessStartService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/se/fk/kafka/generated/ManagerNotificationScopeEventSubProcessCompletionService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ManagerNotificationScopeEventSubProcessStartService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ManagerNotificationScopeEventSubProcessCompletionService.java")));
 
         String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
         assertTrue(applicationYaml.contains("invoice_event_subprocess_message_manager_note_message"));
@@ -230,7 +230,7 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/main/resources/bpmn/invoice_event_subprocess_interrupting_message.bpmn", outputDir);
 
-        Path startHandler = outputDir.resolve("src/main/java/se/fk/kafka/generated/InvoiceCancellationScopeEventSubProcessStartService.java");
+        Path startHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/InvoiceCancellationScopeEventSubProcessStartService.java");
         assertTrue(Files.exists(startHandler));
 
         String source = Files.readString(startHandler);
@@ -246,7 +246,7 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/main/resources/bpmn/invoice_event_subprocess_timer.bpmn", outputDir);
 
-        Path startHandler = outputDir.resolve("src/main/java/se/fk/kafka/generated/ReviewReminderScopeEventSubProcessStartService.java");
+        Path startHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewReminderScopeEventSubProcessStartService.java");
         assertTrue(Files.exists(startHandler));
 
         String source = Files.readString(startHandler);
@@ -260,7 +260,7 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/main/resources/bpmn/invoice_event_subprocess_error.bpmn", outputDir);
 
-        Path startHandler = outputDir.resolve("src/main/java/se/fk/kafka/generated/ReviewErrorScopeEventSubProcessStartService.java");
+        Path startHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewErrorScopeEventSubProcessStartService.java");
         assertTrue(Files.exists(startHandler));
 
         String source = Files.readString(startHandler);
@@ -274,7 +274,7 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/main/resources/bpmn/invoice_event_subprocess_escalation.bpmn", outputDir);
 
-        Path startHandler = outputDir.resolve("src/main/java/se/fk/kafka/generated/ReviewEscalationScopeEventSubProcessStartService.java");
+        Path startHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewEscalationScopeEventSubProcessStartService.java");
         assertTrue(Files.exists(startHandler));
 
         String source = Files.readString(startHandler);

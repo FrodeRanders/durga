@@ -46,7 +46,7 @@ for _ in $(seq 1 30); do
 done
 
 publish_output=$(java -cp target/durga-1.0-SNAPSHOT.jar \
-  org.gautelis.durga.monitoring.ProcessEventScenarioRunner \
+  org.gautelis.durga.demo.ProcessEventScenarioRunner \
   "${BOOTSTRAP}" \
   "${SCENARIO}" \
   "${PROCESS_ID}" \

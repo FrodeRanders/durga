@@ -72,8 +72,8 @@ public class BpmnScaffolder {
         }
 
         Path outputRoot = Path.of(parsed.outputDir);
-        Path javaOutput = outputRoot.resolve("src/main/java/se/fk/kafka/generated");
-        Path coreJavaOutput = outputRoot.resolve("src/main/java/se/fk/kafka");
+        Path javaOutput = outputRoot.resolve("src/main/java/org/gautelis/durga/generated");
+        Path coreJavaOutput = outputRoot.resolve("src/main/java/org/gautelis/durga");
         Path mainSourceRoot = Path.of("src/main/java");
 
         BpmnModelInstance model = Bpmn.readModelFromFile(bpmnFile);
