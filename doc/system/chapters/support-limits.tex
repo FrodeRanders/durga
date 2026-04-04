@@ -25,7 +25,7 @@ to full BPMN-engine fidelity:
 \begin{itemize}
 \item cancellation propagation is pragmatic rather than globally token-precise,
 \item subprocess scope handling is explicit but still lighter than a full BPMN execution scope manager,
-\item monitoring is strong on current state, lighter on long-term history and trend analysis,
+\item monitoring now includes dedicated current-state indexes and coarse trend buckets, but it is still lighter on long-term analytical history than on current-state inspection,
 \item generated runtimes are optimized for understanding and experimentation rather than minimalism.
 \end{itemize}
 

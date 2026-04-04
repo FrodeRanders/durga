@@ -46,6 +46,12 @@ public final class ProcessMonitoringClient {
                 }
                 yield "/processes/" + args[2] + "/latency";
             }
+            case "trends" -> {
+                if (args.length < 3) {
+                    throw new IllegalArgumentException("Usage: ProcessMonitoringClient <baseUrl> trends <processId>");
+                }
+                yield "/processes/" + args[2] + "/trends";
+            }
             case "stuck" -> {
                 String processId = args.length > 2 ? args[2] : null;
                 String olderThanSeconds = args.length > 3 ? args[3] : "60";
@@ -61,6 +67,7 @@ public final class ProcessMonitoringClient {
                       ProcessMonitoringClient <baseUrl> instance <processInstanceId>
                       ProcessMonitoringClient <baseUrl> counts [processId]
                       ProcessMonitoringClient <baseUrl> latency <processId>
+                      ProcessMonitoringClient <baseUrl> trends <processId>
                       ProcessMonitoringClient <baseUrl> stuck [processId] [olderThanSeconds]
                     """);
         };

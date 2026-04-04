@@ -99,6 +99,9 @@ Durga now includes a Kafka Streams monitoring skeleton built around a canonical 
 The topology projects:
 - latest state per process instance into `process-state`
 - counts by current process state into `process-state-counts`
+- active-instance index into `process-active-state`
+- activity latency summaries into `process-latency`
+- coarse lifecycle trend buckets into `process-trends`
 
 The main entry points are:
 - `org.gautelis.durga.monitoring.ProcessMonitoringTopology`
@@ -120,6 +123,7 @@ The monitoring app exposes a small HTTP query surface:
 - `GET /instances/{processInstanceId}`
 - `GET /processes/{processId}/counts`
 - `GET /processes/{processId}/latency`
+- `GET /processes/{processId}/trends`
 - `GET /counts`
 - `GET /stuck?processId=<id>&olderThanSeconds=60`
 
@@ -129,12 +133,18 @@ There is also a tiny CLI client for those endpoints:
 java -cp target/durga-1.0-SNAPSHOT.jar org.gautelis.durga.monitoring.ProcessMonitoringClient http://localhost:8081 health
 java -cp target/durga-1.0-SNAPSHOT.jar org.gautelis.durga.monitoring.ProcessMonitoringClient http://localhost:8081 counts invoice_receipt
 java -cp target/durga-1.0-SNAPSHOT.jar org.gautelis.durga.monitoring.ProcessMonitoringClient http://localhost:8081 latency invoice_receipt
+java -cp target/durga-1.0-SNAPSHOT.jar org.gautelis.durga.monitoring.ProcessMonitoringClient http://localhost:8081 trends invoice_receipt
 java -cp target/durga-1.0-SNAPSHOT.jar org.gautelis.durga.monitoring.ProcessMonitoringClient http://localhost:8081 stuck invoice_receipt 300
 java -cp target/durga-1.0-SNAPSHOT.jar org.gautelis.durga.monitoring.ProcessMonitoringClient http://localhost:8081 instance <processInstanceId>
 ```
 
 Open `http://localhost:8081/dashboard` for a live dashboard with counts, latency, stuck instances, and
 instance inspection.
+
+The monitoring app now queries replicated read-side stores built from the published monitoring topics,
+so each app instance has a full local copy of the query model instead of only its partition-local
+Kafka Streams state. Latency summaries and trend buckets are also maintained incrementally instead of
+being derived from full scans of the latest-state projection.
 
 To drive the monitor without a generated workflow, publish a demo scenario directly to `process-events`:
 

@@ -10,16 +10,15 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
  * Query facade over the Kafka Streams monitoring state stores.
  * <p>
- * The service keeps the topology small by deriving some views, such as latency and stuck
- * instances, from the latest-state store at query time instead of materializing dedicated stores.
+ * The service reads from replicated query stores fed by monitoring topics, so each monitoring app
+ * instance has a full local copy of current state, counts, latency summaries, active-instance
+ * indexes, and coarse trend buckets.
  */
 public final class ProcessMonitoringQueryService {
     private final KafkaStreams streams;
@@ -54,12 +53,9 @@ public final class ProcessMonitoringQueryService {
      */
     public List<ProcessStateCount> countsForProcess(String processId) {
         List<ProcessStateCount> results = new ArrayList<>();
-        // Counts are stored globally by "processId:state", so process-specific views are a
-        // lightweight filter over the materialized count store rather than a second projection.
-        try (KeyValueIterator<String, Long> iterator = countsStore().all()) {
+        try (KeyValueIterator<String, ProcessStateCount> iterator = countsStore().all()) {
             while (iterator.hasNext()) {
-                var next = iterator.next();
-                ProcessStateCount count = ProcessStateCount.fromStateKey(next.key, next.value);
+                ProcessStateCount count = iterator.next().value;
                 if (processId.equals(count.processId())) {
                     results.add(count);
                 }
@@ -76,10 +72,9 @@ public final class ProcessMonitoringQueryService {
      */
     public List<ProcessStateCount> allCounts() {
         List<ProcessStateCount> results = new ArrayList<>();
-        try (KeyValueIterator<String, Long> iterator = countsStore().all()) {
+        try (KeyValueIterator<String, ProcessStateCount> iterator = countsStore().all()) {
             while (iterator.hasNext()) {
-                var next = iterator.next();
-                results.add(ProcessStateCount.fromStateKey(next.key, next.value));
+                results.add(iterator.next().value);
             }
         }
         results.sort(Comparator.comparing(ProcessStateCount::processId).thenComparing(ProcessStateCount::state));
@@ -87,39 +82,20 @@ public final class ProcessMonitoringQueryService {
     }
 
     /**
-     * Derives per-activity latency summaries for one process definition by scanning the latest
-     * state store.
+     * Returns pre-aggregated per-activity latency summaries for one process definition.
      *
      * @param processId process definition identifier
      * @return latency summaries ordered by activity id
      */
     public List<ActivityLatencySummary> latencyForProcess(String processId) {
-        Map<String, ActivityLatencyAccumulator> accumulators = new LinkedHashMap<>();
-        // Latency is derived on demand from the latest per-instance projection instead of being
-        // maintained as a separate store. That keeps the topology smaller at the cost of scans.
-        try (KeyValueIterator<String, ProcessStateView> iterator = stateStore().all()) {
+        List<ActivityLatencySummary> results = new ArrayList<>();
+        try (KeyValueIterator<String, ActivityLatencySummary> iterator = latencyStore().all()) {
             while (iterator.hasNext()) {
-                ProcessStateView state = iterator.next().value;
-                if (state == null || !processId.equals(state.processId())) {
-                    continue;
-                }
-                for (Map.Entry<String, Long> entry : state.activityDurationsMs().entrySet()) {
-                    accumulators.computeIfAbsent(entry.getKey(), ignored -> new ActivityLatencyAccumulator())
-                            .add(entry.getValue());
+                ActivityLatencySummary summary = iterator.next().value;
+                if (summary != null && processId.equals(summary.processId())) {
+                    results.add(summary);
                 }
             }
-        }
-
-        List<ActivityLatencySummary> results = new ArrayList<>();
-        for (Map.Entry<String, ActivityLatencyAccumulator> entry : accumulators.entrySet()) {
-            ActivityLatencyAccumulator value = entry.getValue();
-            results.add(new ActivityLatencySummary(
-                    processId,
-                    entry.getKey(),
-                    value.sampleCount,
-                    value.averageDurationMs(),
-                    value.maxDurationMs
-            ));
         }
         results.sort(Comparator.comparing(ActivityLatencySummary::activityId));
         return results;
@@ -135,9 +111,9 @@ public final class ProcessMonitoringQueryService {
     public List<StuckProcessInstance> stuckInstances(String processId, long olderThanSeconds) {
         Instant now = Instant.now();
         List<StuckProcessInstance> results = new ArrayList<>();
-        // "Stuck" is intentionally a query-time notion based on the age of active instances,
-        // not a separate lifecycle state written back into the projection.
-        try (KeyValueIterator<String, ProcessStateView> iterator = stateStore().all()) {
+        // "Stuck" remains a thresholded query, but it now scans only the dedicated active index
+        // rather than the full latest-state store.
+        try (KeyValueIterator<String, ProcessStateView> iterator = activeStore().all()) {
             while (iterator.hasNext()) {
                 ProcessStateView state = iterator.next().value;
                 if (state == null || state.lastUpdatedAt() == null || !"active".equals(state.lifecycleState())) {
@@ -156,6 +132,26 @@ public final class ProcessMonitoringQueryService {
         return results;
     }
 
+    /**
+     * Returns coarse lifecycle trend buckets for one process definition.
+     *
+     * @param processId process definition identifier
+     * @return trend points ordered by bucket start and metric
+     */
+    public List<ProcessTrendPoint> trendsForProcess(String processId) {
+        List<ProcessTrendPoint> results = new ArrayList<>();
+        try (KeyValueIterator<String, ProcessTrendPoint> iterator = trendsStore().all()) {
+            while (iterator.hasNext()) {
+                ProcessTrendPoint trend = iterator.next().value;
+                if (trend != null && processId.equals(trend.processId())) {
+                    results.add(trend);
+                }
+            }
+        }
+        results.sort(Comparator.comparing(ProcessTrendPoint::bucketStartedAt).thenComparing(ProcessTrendPoint::metric));
+        return results;
+    }
+
     private ReadOnlyKeyValueStore<String, ProcessStateView> stateStore() {
         return streams.store(
                 StoreQueryParameters.fromNameAndType(
@@ -165,7 +161,7 @@ public final class ProcessMonitoringQueryService {
         );
     }
 
-    private ReadOnlyKeyValueStore<String, Long> countsStore() {
+    private ReadOnlyKeyValueStore<String, ProcessStateCount> countsStore() {
         return streams.store(
                 StoreQueryParameters.fromNameAndType(
                         topics.countsStore(),
@@ -174,19 +170,30 @@ public final class ProcessMonitoringQueryService {
         );
     }
 
-    private static final class ActivityLatencyAccumulator {
-        private long sampleCount;
-        private long totalDurationMs;
-        private long maxDurationMs;
+    private ReadOnlyKeyValueStore<String, ProcessStateView> activeStore() {
+        return streams.store(
+                StoreQueryParameters.fromNameAndType(
+                        topics.activeStore(),
+                        QueryableStoreTypes.keyValueStore()
+                )
+        );
+    }
 
-        private void add(long durationMs) {
-            sampleCount++;
-            totalDurationMs += durationMs;
-            maxDurationMs = Math.max(maxDurationMs, durationMs);
-        }
+    private ReadOnlyKeyValueStore<String, ActivityLatencySummary> latencyStore() {
+        return streams.store(
+                StoreQueryParameters.fromNameAndType(
+                        topics.latencyStore(),
+                        QueryableStoreTypes.keyValueStore()
+                )
+        );
+    }
 
-        private long averageDurationMs() {
-            return sampleCount == 0 ? 0L : totalDurationMs / sampleCount;
-        }
+    private ReadOnlyKeyValueStore<String, ProcessTrendPoint> trendsStore() {
+        return streams.store(
+                StoreQueryParameters.fromNameAndType(
+                        topics.trendsStore(),
+                        QueryableStoreTypes.keyValueStore()
+                )
+        );
     }
 }

@@ -125,7 +125,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         }
         List<String> parts = pathParts(exchange.getRequestURI().getPath());
         if (parts.size() != 3) {
-            sendJson(exchange, 400, Map.of("error", "Expected /processes/{processId}/counts or /processes/{processId}/latency"));
+            sendJson(exchange, 400, Map.of("error", "Expected /processes/{processId}/counts, /latency, or /trends"));
             return;
         }
 
@@ -140,7 +140,11 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
                 sendJson(exchange, 200, queryService.latencyForProcess(parts.get(1)));
                 return;
             }
-            sendJson(exchange, 400, Map.of("error", "Expected /processes/{processId}/counts or /processes/{processId}/latency"));
+            if ("trends".equals(parts.get(2))) {
+                sendJson(exchange, 200, queryService.trendsForProcess(parts.get(1)));
+                return;
+            }
+            sendJson(exchange, 400, Map.of("error", "Expected /processes/{processId}/counts, /latency, or /trends"));
         } catch (InvalidStateStoreException e) {
             sendJson(exchange, 503, Map.of("error", "State store not queryable yet"));
         }

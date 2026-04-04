@@ -81,6 +81,7 @@ The query service is exposed through \texttt{ProcessMonitoringHttpServer} and th
 \item \texttt{/instances/\{processInstanceId\}},
 \item \texttt{/processes/\{processId\}/counts},
 \item \texttt{/processes/\{processId\}/latency},
+\item \texttt{/processes/\{processId\}/trends},
 \item \texttt{/counts},
 \item \texttt{/stuck}.
 \end{itemize}
@@ -91,13 +92,16 @@ This is complemented by a lightweight dashboard page that polls the same query s
 
 The monitoring topology is not only useful when a generated BPMN runtime is running. Repository-level demo publishers and scenario runners can emit synthetic lifecycle streams directly to \texttt{process-events}. That makes the monitoring subsystem independently testable and also makes it easier to understand the read-model behavior before a full generated process is involved.
 
-\subsection{Current limits}
+\subsection{Current shape}
 
-The topology is intentionally direct. It is strong enough for local experimentation and architectural validation, but it is not yet a comprehensive production operations subsystem. The main current limits are:
+The topology remains intentionally direct, but it is now stronger than the original local-only read model:
 \begin{itemize}
-\item the read model is local to the monitoring app instance,
-\item some queries are derived by scanning materialized state rather than by maintaining separate specialized indexes,
-\item history and trend reporting remain lighter than current-state reporting.
+\item queryable state is replicated from monitoring topics into global read-side stores, so each monitoring app instance carries a full local copy of the monitoring model,
+\item latency summaries are maintained incrementally from lifecycle events rather than being derived by scanning latest-instance state,
+\item active-instance queries use a dedicated active-state index instead of the full state projection,
+\item coarse history is maintained as bucketed trend counts for process starts, completions, and failures.
 \end{itemize}
 
-Even with those limits, the monitoring path is a major part of what makes Durga usable as an exploration tool rather than only a code generator.
+The main remaining limitation is that history is still intentionally coarse. Durga now supports basic trend reporting, but it is still optimized more for current-state inspection than for long-retention analytical reporting.
+
+Even with that remaining limit, the monitoring path is a major part of what makes Durga usable as an exploration tool rather than only a code generator.
