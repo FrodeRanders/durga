@@ -1,0 +1,58 @@
+\section{Troubleshooting}
+\label{sec:Troubleshooting}
+
+Durga is now runnable enough that practical failure modes matter. The most common problems are
+not subtle generator bugs, but startup timing, missing topics, incomplete task logic, or the
+difference between execution state and monitoring state.
+
+\subsection{Kafka UI logs connection failures at startup}
+
+This is usually normal in the local setup. Kafka UI often starts before the broker is fully
+ready and logs transient connection failures. If the broker then comes up and the errors stop,
+this is not itself a Durga problem.
+
+\subsection{Monitoring app says the state store is not queryable yet}
+
+This normally means Kafka Streams has started but the state stores are not yet ready for queries.
+The correct response is usually to wait briefly and retry rather than to assume the topology is
+broken immediately.
+
+\subsection{A generated process compiles but does not advance}
+
+The most common causes are:
+\begin{itemize}
+\item topics were not created,
+\item the relevant generated application is not running,
+\item an XOR branch condition still contains placeholder logic,
+\item a user or manual task entered a waiting state and needs explicit completion,
+\item the process instance was cancelled by a boundary or interrupting event subprocess.
+\end{itemize}
+
+\subsection{Boundary behavior does not appear to trigger}
+
+Check these points first:
+\begin{itemize}
+\item the triggering lifecycle event is actually emitted,
+\item the boundary is interrupting or non-interrupting as intended,
+\item the attached task or subprocess reached the expected state,
+\item failure or escalation was emitted through the generated helper path rather than by bypassing
+the lifecycle model.
+\end{itemize}
+
+\subsection{An external completion arrives after cancellation}
+
+The generated runtime now suppresses much of this post-cancel progress, but late events can still
+be confusing during debugging. In such cases, the canonical \texttt{process-events} stream is the
+best source of truth: check whether cancellation happened before the late completion arrived.
+
+\subsection{Monitoring counts do not match raw topic intuition}
+
+This is usually a model misunderstanding rather than a bug. Execution topics contain history and
+routing traffic. The monitoring counts are derived from the latest projected instance state, which
+is the intended read model for ``how many instances are in state X right now''.
+
+\subsection{The generated output looks harder to understand than expected}
+
+This often comes from BPMN naming. Unclear BPMN ids produce unclear Java classes, topics and helper
+artifacts. Cleaning up the BPMN model identifiers usually improves the generated runtime surface
+more than post-processing the generated files.

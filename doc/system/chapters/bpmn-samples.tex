@@ -1,0 +1,87 @@
+\section{BPMN Sample Catalog}
+\label{sec:BpmnSamples}
+
+The repository contains a growing set of BPMN models under
+\filepath{src/main/resources/bpmn}. They serve two purposes:
+\begin{itemize}
+\item they are regression inputs for the scaffolder and its tests,
+\item they are concrete learning models for understanding one BPMN feature at a time.
+\end{itemize}
+
+The samples are intentionally small. Most of them isolate one feature rather than trying
+to model a realistic end-to-end business process in full detail.
+
+\begin{longtable}{|>{\raggedright\arraybackslash}p{0.38\textwidth}|>{\raggedright\arraybackslash}p{0.54\textwidth}|}
+\hline
+\rowcolor[gray]{0.9}\textbf{Model} & \textbf{Primary focus} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor[gray]{0.9}\textbf{Model} & \textbf{Primary focus} \\
+\hline
+\endhead
+\filepath{invoice_receipt.bpmn} &
+Baseline process with start, service work, review, approval or rejection, and terminal notification. This is the best first model to inspect. \\
+\hline
+\filepath{order_fulfillment.bpmn} &
+Legacy process sample kept as an additional reference model. It is useful for checking that generator changes are not too tightly coupled to the invoice-oriented examples. \\
+\hline
+\filepath{invoice_receipt_reminder.bpmn} &
+Intermediate timer catch event between normal process steps. Demonstrates delay-driven routing without a boundary event. \\
+\hline
+\filepath{invoice_message_exchange.bpmn} &
+Intermediate message throw and catch events. Shows explicit Kafka topic mappings for message-based collaboration. \\
+\hline
+\filepath{invoice_signal_exchange.bpmn} &
+Intermediate signal throw and catch events. Useful for contrasting signal semantics with the more direct message-event mapping. \\
+\hline
+\filepath{invoice_review_deadline.bpmn} &
+Interrupting timer boundary on a task. Demonstrates timeout handling and normal-flow suppression after deadline expiry. \\
+\hline
+\filepath{invoice_review_reminder_non_interrupting.bpmn} &
+Non-interrupting timer boundary on a task. Demonstrates reminder-style branching without cancelling the main task. \\
+\hline
+\filepath{invoice_processing_error.bpmn} &
+Interrupting error boundary on a task, driven by task failure events from the generated runtime. \\
+\hline
+\filepath{invoice_review_escalation.bpmn} &
+Interrupting escalation boundary on a task. Shows how escalation differs from failure as an explicit lifecycle outcome. \\
+\hline
+\filepath{invoice_call_activity.bpmn} &
+Call-activity request and reply mapping. Demonstrates the generated call and reply topics plus manual completion of the invoked activity. \\
+\hline
+\filepath{invoice_review_subprocess.bpmn} &
+Embedded subprocess with explicit entry and completion handlers. This is the basic scope-aware subprocess sample. \\
+\hline
+\filepath{invoice_nested_subprocess.bpmn} &
+Nested embedded subprocesses. Useful for understanding recursive scope generation and subprocess-specific input and output channels. \\
+\hline
+\filepath{invoice_subprocess_deadline.bpmn} &
+Interrupting timer boundary attached to a subprocess scope. Demonstrates cancellation at the subprocess level rather than at one task. \\
+\hline
+\filepath{invoice_subprocess_reminder_non_interrupting.bpmn} &
+Non-interrupting timer boundary attached to a subprocess scope. Shows branch-without-cancel behavior for a whole scope. \\
+\hline
+\filepath{invoice_subprocess_error.bpmn} &
+Interrupting error boundary attached to a subprocess scope. Demonstrates subprocess-level failure propagation. \\
+\hline
+\filepath{invoice_event_subprocess_message.bpmn} &
+Non-interrupting embedded event subprocess with message start. Shows side-flow activation within an enclosing subprocess scope. \\
+\hline
+\filepath{invoice_event_subprocess_interrupting_message.bpmn} &
+Interrupting embedded event subprocess with message start. Demonstrates cancellation of the enclosing scope before the event subprocess branch starts. \\
+\hline
+\filepath{invoice_event_subprocess_timer.bpmn} &
+Embedded event subprocess with timer start. Demonstrates scoped delayed activation tied to the enclosing subprocess lifecycle. \\
+\hline
+\filepath{invoice_event_subprocess_error.bpmn} &
+Embedded event subprocess with error start. Demonstrates start-on-failure semantics driven by the canonical lifecycle stream. \\
+\hline
+\filepath{invoice_event_subprocess_escalation.bpmn} &
+Embedded event subprocess with escalation start. Demonstrates start-on-escalation semantics within a subprocess scope. \\
+\hline
+\end{longtable}
+
+Taken together, the sample set functions as a compact executable coverage matrix. When a new BPMN function
+is added to the generator, adding a dedicated sample model alongside it has become the preferred way to
+document the feature, test the generator, and provide a runnable teaching example.

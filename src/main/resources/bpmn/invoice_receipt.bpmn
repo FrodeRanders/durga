@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://example.com/bpmn">
+  <process id="invoice_receipt" name="Invoice Receipt" isExecutable="true">
+    <startEvent id="start" name="Invoice Received"/>
+    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice"/>
+
+    <serviceTask id="register_invoice" name="Register Invoice"/>
+    <sequenceFlow id="flow_register_to_review" sourceRef="register_invoice" targetRef="review_invoice"/>
+
+    <userTask id="review_invoice" name="Review Invoice"/>
+    <sequenceFlow id="flow_review_to_gateway" sourceRef="review_invoice" targetRef="invoice_approved"/>
+
+    <exclusiveGateway id="invoice_approved" name="Invoice Approved?"/>
+    <sequenceFlow id="flow_approved_to_notify" sourceRef="invoice_approved" targetRef="notify_requester">
+      <conditionExpression xsi:type="tFormalExpression">${approved == true}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_rejected_to_reject" sourceRef="invoice_approved" targetRef="reject_invoice">
+      <conditionExpression xsi:type="tFormalExpression">${approved == false}</conditionExpression>
+    </sequenceFlow>
+
+    <serviceTask id="notify_requester" name="Notify Requester"/>
+    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_approved"/>
+
+    <serviceTask id="reject_invoice" name="Reject Invoice"/>
+    <sequenceFlow id="flow_reject_to_end" sourceRef="reject_invoice" targetRef="end_rejected"/>
+
+    <endEvent id="end_approved" name="Invoice Approved"/>
+    <endEvent id="end_rejected" name="Invoice Rejected"/>
+  </process>
+</definitions>

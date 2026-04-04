@@ -1,0 +1,91 @@
+\section{Execution Model}
+\label{sec:ExecutionModel}
+
+\subsection{General mapping strategy}
+
+Durga maps a BPMN graph into a bounded Kafka runtime surface. In the current implementation, each supported BPMN element is converted into either:
+\begin{itemize}
+\item a generated service consuming from one topic and producing to one or more topics,
+\item a scope handler that turns subprocess semantics into lifecycle and routing events,
+\item or an external helper path that lets a human or another tool supply the missing runtime action.
+\end{itemize}
+
+The model is intentionally explicit. Instead of hiding process behavior behind one opaque runtime, the generated project exposes the process topology as concrete Kafka topics, generated services and helper scripts.
+
+\subsection{Core control-flow support}
+
+The executable subset currently includes:
+\begin{itemize}
+\item start events,
+\item service, user and manual tasks,
+\item exclusive and parallel gateways,
+\item call activities,
+\item explicit end-event completion,
+\item embedded subprocesses,
+\item several categories of boundary events,
+\item event subprocesses for selected start types.
+\end{itemize}
+
+The important distinction is that not all BPMN elements are treated the same way. A service task auto-completes in the generated worker model, while a user or manual task enters a waiting state and must be advanced through a generated completion helper.
+
+\subsection{Tasks and routing}
+
+Service tasks are generated as workers consuming \texttt{\%processId\%\_\%taskId\%\_input} and producing \texttt{\%processId\%\_\%taskId\%\_output}.
+
+User and manual tasks consume their input topic, emit an \texttt{ACTIVITY\_ENTERED} lifecycle event, and then wait for an external completion event generated via helper scripts.
+
+Exclusive gateways are generated as routing services that evaluate simple conditions against the event payload and emit the selected next activity. Parallel splits fan out to several downstream inputs. Parallel joins use the generated process-state store to wait for the required set of incoming completions before forwarding the flow.
+
+\subsection{Boundary behavior}
+
+Boundary timer, error and escalation handlers are generated from BPMN boundary events and consume the canonical lifecycle stream on \texttt{process-events-monitor}. The current boundary implementation supports:
+\begin{itemize}
+\item interrupting and non-interrupting timer boundaries,
+\item interrupting and non-interrupting error boundaries,
+\item interrupting and non-interrupting escalation boundaries,
+\item task-attached and subprocess-attached variants.
+\end{itemize}
+
+Interrupting boundaries now have behavioral effect, not just monitoring effect. Generated handlers consult the shared cancellation registry so that canceled work is suppressed rather than continuing to emit normal downstream progress.
+
+\begin{figure}[!ht]
+    \centering
+    \begin{tikzpicture}[node distance=12mm,>=latex]
+        \tikzstyle{box}=[draw=iptoMuted, rounded corners=2pt, line width=0.8pt, align=center, minimum width=30mm, minimum height=10mm, fill=white]
+        \tikzstyle{accentbox}=[box, fill=iptoAccent!12]
+        \node[box] (task) {task input\\and worker};
+        \node[box, right=20mm of task] (entered) {emit\\ACTIVITY\_ENTERED};
+        \node[box, right=20mm of entered] (normal) {normal\\completion path};
+
+        \node[accentbox, below=16mm of entered] (boundary) {boundary handler\\timer / error / escalation};
+        \node[box, left=20mm of boundary] (cancel) {optional\\cancellation};
+        \node[box, right=20mm of boundary] (branch) {boundary\\branch path};
+
+        \draw[->, thick] (task) -- (entered);
+        \draw[->, thick] (entered) -- (normal);
+        \draw[->, thick] (entered) -- (boundary);
+        \draw[->, thick] (boundary) -- (cancel);
+        \draw[->, thick] (boundary) -- (branch);
+    \end{tikzpicture}
+    \caption{Generated boundary handling separates normal flow from boundary-triggered flow}
+    \label{fig:DurgaBoundaryBehavior}
+\end{figure}
+
+\subsection{Subprocesses and event subprocesses}
+
+Embedded subprocesses are generated with explicit entry and completion services. These services emit subprocess-level lifecycle events and route into and out of the internal subprocess graph. Nested subprocesses are supported with the same pattern.
+
+Event subprocesses are currently implemented as scoped handlers rather than as a full general-purpose BPMN scope engine. The supported start types are:
+\begin{itemize}
+\item message,
+\item signal,
+\item timer inside an embedded subprocess scope,
+\item error inside an embedded subprocess scope,
+\item escalation inside an embedded subprocess scope.
+\end{itemize}
+
+Message and signal event subprocesses consume from dedicated external topics. Timer, error and escalation event subprocesses instead listen to scoped lifecycle signals on \texttt{process-events-monitor}. Interrupting event subprocesses emit cancellation for the enclosing scope before starting the event subprocess branch. Non-interrupting event subprocesses branch without canceling the parent flow.
+
+\subsection{Current execution boundary}
+
+The current execution boundary is broad enough for local process experimentation, but it is not full BPMN coverage. Inclusive gateways, complex gateways, BPMN-native data objects, and more advanced scope semantics are still out of scope. That boundary should be treated as a deliberate implementation limit, not as an accidental omission.

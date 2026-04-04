@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://example.com/bpmn">
+  <error id="processing_error_def" errorCode="register_invoice_failed" name="Processing Error"/>
+
+  <process id="invoice_processing_error" name="Invoice Processing Error" isExecutable="true">
+    <startEvent id="start" name="Invoice Received"/>
+    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice"/>
+
+    <serviceTask id="register_invoice" name="Register Invoice"/>
+    <sequenceFlow id="flow_register_to_notify" sourceRef="register_invoice" targetRef="notify_requester"/>
+
+    <boundaryEvent id="register_error" name="Register Error" attachedToRef="register_invoice" cancelActivity="true">
+      <errorEventDefinition errorRef="processing_error_def"/>
+    </boundaryEvent>
+    <sequenceFlow id="flow_error_to_reject" sourceRef="register_error" targetRef="reject_invoice"/>
+
+    <serviceTask id="notify_requester" name="Notify Requester"/>
+    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_completed"/>
+
+    <serviceTask id="reject_invoice" name="Reject Invoice"/>
+    <sequenceFlow id="flow_reject_to_end" sourceRef="reject_invoice" targetRef="end_failed"/>
+
+    <endEvent id="end_completed" name="Invoice Processed"/>
+    <endEvent id="end_failed" name="Invoice Rejected"/>
+  </process>
+</definitions>

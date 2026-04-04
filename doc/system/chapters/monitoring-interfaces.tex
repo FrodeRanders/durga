@@ -1,0 +1,103 @@
+\section{Monitoring Interfaces}
+\label{sec:MonitoringInterfaces}
+
+The monitoring subsystem is exposed through three interfaces that sit on top of the
+same Kafka Streams state:
+\begin{itemize}
+\item an HTTP query service,
+\item a small command-line client,
+\item a lightweight browser dashboard.
+\end{itemize}
+
+This split is intentional. The HTTP service is the primary integration surface, the
+CLI is the fastest way to inspect state from a terminal, and the dashboard is the
+fastest way to watch the system move.
+
+\subsection{HTTP service}
+
+The monitoring HTTP service is started by the monitoring application.
+Its main entry point is:
+\begin{quote}
+\filepath{org.gautelis.durga.monitoring.ProcessMonitoringApp}
+\end{quote}
+The query layer is implemented
+by the repository classes \texttt{ProcessMonitoringQueryService} and
+\texttt{ProcessMonitoringHttpServer}.
+
+The main endpoints are:
+\begin{itemize}
+\item \texttt{/health} for Kafka Streams readiness,
+\item \texttt{/instances/\{processInstanceId\}} for the latest instance view,
+\item \texttt{/processes/\{processId\}/counts} for process-specific current-state counts,
+\item \texttt{/processes/\{processId\}/latency} for activity latency summaries,
+\item \texttt{/counts} for the global state-count view,
+\item \texttt{/stuck} for stuck-instance detection.
+\end{itemize}
+
+The service is intentionally narrow. It is not trying to be a full workflow management
+API. Its role is to expose the read model produced by the monitoring topology.
+
+\subsection{CLI client}
+
+The command-line companion is
+\texttt{org.gautelis.durga.monitoring.ProcessMonitoringClient}. It exists because
+interactive inspection is common during development and BPMN exploration.
+
+The main client operations are:
+\begin{itemize}
+\item \texttt{health},
+\item \texttt{instance <processInstanceId>},
+\item \texttt{counts [processId]},
+\item \texttt{latency <processId>},
+\item \texttt{stuck [processId] [olderThanSeconds]}.
+\end{itemize}
+
+The CLI is useful when the user is already working with the generated helper scripts
+or with local Kafka infrastructure from a terminal. It keeps the entire observation
+loop close to the generated runtime.
+
+\subsection{Dashboard}
+
+The browser dashboard is served from \texttt{/dashboard}. It polls the same HTTP
+endpoints that the CLI uses and presents:
+\begin{itemize}
+\item Kafka Streams health,
+\item counts by current state,
+\item latency summaries,
+\item stuck instances,
+\item selected instance details.
+\end{itemize}
+
+The dashboard is intentionally simple. It avoids a separate frontend build and keeps
+the monitoring surface close to the backend implementation. That makes it suitable
+for local architectural exploration, generated-process demos, and small-scale testing.
+
+\subsection{How the interfaces fit together}
+
+The three interfaces are not separate products. They are different views over the same
+materialized state:
+\begin{enumerate}
+\item generated or demo events are published to \texttt{process-events},
+\item Kafka Streams materializes state and counts,
+\item the HTTP layer exposes that materialized state,
+\item the CLI and dashboard consume the same HTTP surface.
+\end{enumerate}
+
+This layering is important because it keeps the monitoring model coherent. The dashboard
+does not contain business logic that differs from the CLI, and the CLI does not bypass
+the query model. The read model remains single-sourced.
+
+\subsection{What this enables in practice}
+
+Taken together, the interfaces support a practical operator and learner workflow:
+\begin{itemize}
+\item publish a scenario or task outcome,
+\item watch \texttt{process-events},
+\item query one instance in detail,
+\item inspect counts and latency summaries,
+\item switch to the dashboard when a broader view is helpful.
+\end{itemize}
+
+That workflow is one of the reasons Durga is usable as an exploration environment.
+Without these interfaces, the generated BPMN runtime would be much harder to evaluate
+as a concrete Kafka-based process system.

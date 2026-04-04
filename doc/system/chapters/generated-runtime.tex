@@ -1,0 +1,79 @@
+\section{Generated Runtime Classes}
+\label{sec:GeneratedRuntime}
+
+Each generated project contains a set of Java classes under:
+\begin{quote}
+\filepath{src/main/java/se/fk/kafka/generated/}
+\end{quote}
+These classes are intentionally explicit.
+Durga does not try to hide the generated runtime behind one opaque engine class. Instead,
+it generates a visible set of handlers that map BPMN constructs onto Kafka consumers,
+producers and lifecycle events.
+
+\subsection{Class families}
+
+The generated classes usually fall into the following families:
+\begin{itemize}
+\item \textbf{Starter classes} start a new process instance by publishing the initial lifecycle event and the first task input.
+\item \textbf{Task services} handle BPMN tasks. Service-task-style handlers auto-complete after their work step, while user and manual task handlers enter a waiting state and require explicit completion, failure or escalation input.
+\item \textbf{Gateway services} handle XOR and parallel routing decisions, including fan-out and join behavior.
+\item \textbf{Event handlers} implement timer, message and signal behavior for both intermediate events and boundary-event reactions.
+\item \textbf{Call-activity helpers} model request and reply behavior for generated call activities.
+\item \textbf{Subprocess scope services} emit subprocess entry and completion lifecycle events and coordinate subprocess-local routing.
+\item \textbf{Process orchestrator} observes terminal flows and emits explicit process completion for the enclosing BPMN process.
+\item \textbf{Probe helpers} provide generated publishers and watchers that make the runtime easier to explore from the command line.
+\end{itemize}
+
+\subsection{Task-oriented classes}
+
+Generated task services are the core execution units. Their responsibilities usually include:
+\begin{itemize}
+\item consuming a task input topic,
+\item emitting \texttt{ACTIVITY\_ENTERED},
+\item performing the generated task action or entering a wait state,
+\item emitting \texttt{ACTIVITY\_COMPLETED}, \texttt{FAILED}, \texttt{ESCALATED} or
+\texttt{CANCELLED} when appropriate,
+\item forwarding the process to the next topic or boundary path.
+\end{itemize}
+
+This is one of Durga's central design choices: task execution and lifecycle reporting are
+generated together, rather than being split across unrelated runtime layers.
+
+\subsection{Routing and event classes}
+
+Gateway and event classes make control flow visible. XOR and parallel services turn BPMN
+branching into explicit topic routing. Timer, message and signal handlers make delays and
+external triggers concrete in the runtime graph.
+
+Boundary handlers are especially important because they show where BPMN semantics extend
+beyond a straight sequence of tasks. Generated timer, error and escalation boundary classes
+observe task or scope state and branch into exceptional or reminder flows when their trigger
+conditions are met.
+
+\subsection{Scope-oriented classes}
+
+Subprocess support introduces generated scope services. These classes do more than route a
+single task. They make scope boundaries explicit by:
+\begin{itemize}
+\item emitting subprocess-level entered and completed events,
+\item mediating flow into and out of the subprocess graph,
+\item propagating failure, escalation and cancellation at scope level,
+\item supporting nested subprocess structure.
+\end{itemize}
+
+Event subprocesses extend this further. Their generated start and completion handlers model
+subprocess-internal event-driven branches without collapsing them into the main task path.
+
+\subsection{Probe and helper classes}
+
+Generated publishers, scenario runners and watchers are also part of the runtime class set.
+They are not part of the business flow itself, but they are part of how the generated system
+is meant to be explored. In practice, these helpers are often the fastest way to verify that
+a waiting state, boundary path or event subprocess behaves as expected.
+
+\subsection{Why the runtime is generated this way}
+
+The generated class surface is intentionally verbose. That is a tradeoff. It produces more
+classes than a hidden workflow engine would, but it also makes BPMN-to-Kafka mapping easier
+to inspect, test and discuss. Durga is therefore as much a scaffolding and exploration tool
+as it is a code generator.

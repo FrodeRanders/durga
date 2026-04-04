@@ -1,0 +1,60 @@
+\section{Example Walkthrough}
+\label{sec:GeneratedProjectsExample}
+
+\subsection{Chosen example}
+
+The simplest useful walkthrough model in the repository is \filepath{src/main/resources/bpmn/invoice_receipt.bpmn}. It contains a start event, service work, a review step, an approval or rejection path, and a final notification step. That makes it a good reference model because it is small, but still representative of the core generator path.
+
+\subsection{Generation step}
+
+The normal way to generate the project is:
+\begin{itemize}
+\item \shellcmd{mvn -q clean package}
+\item \shellcmd{java -jar target/durga-1.0-SNAPSHOT.jar <bpmn-file>}
+\end{itemize}
+
+For this walkthrough, use the repository sample:
+\begin{quote}
+\filepath{src/main/resources/bpmn/invoice_receipt.bpmn}
+\end{quote}
+
+By default the output is written under \texttt{generated/}. The generated project contains Java sources, a Maven build, Kafka topic declarations, helper scripts and a generated README.
+
+\subsection{What appears in the generated project}
+
+For a model like \texttt{invoice\_receipt}, the generated output typically includes:
+\begin{itemize}
+\item worker services for automatic task execution,
+\item waiting-state handlers for any human-completion steps,
+\item a starter class that puts the first process event onto the start topic,
+\item a process orchestrator that detects terminal completions,
+\item helper publishers and watchers for demos and manual testing,
+\item generated Kafka bindings in \texttt{application.yml}.
+\end{itemize}
+
+The resulting project is intentionally explicit. Rather than hiding the process behind one entry point, Durga leaves the execution topics, task handlers and probes visible.
+
+\subsection{Runtime shape}
+
+For this example, the generated runtime follows a predictable pattern:
+\begin{enumerate}
+\item a starter publishes the initial process event,
+\item generated task workers or waiting handlers consume task input topics,
+\item each step emits lifecycle events to \texttt{process-events},
+\item routing services move the process to the next task or end event,
+\item the orchestrator emits explicit process completion.
+\end{enumerate}
+
+The same pattern scales outward to the richer BPMN samples in the repository. More advanced models add boundaries, subprocess scopes and event subprocesses, but they still rely on the same basic discipline: generated handlers move the process through Kafka topics while the canonical lifecycle stream captures the truth needed for monitoring.
+
+\subsection{How to explore the generated process}
+
+The generated helper scripts are the fastest way to understand the runtime:
+\begin{itemize}
+\item \texttt{demo-scenario.sh} exercises a whole process path,
+\item \texttt{send-task-input.sh} pushes one specific task input,
+\item \texttt{complete-task.sh}, \texttt{fail-task.sh} and \texttt{escalate-task.sh} let the user force specific task outcomes,
+\item \texttt{watch-process-events.sh} and \texttt{watch-task-output.sh} expose the generated flow as it runs.
+\end{itemize}
+
+This is a central idea in Durga. Generated projects are not only meant to compile; they are meant to be played with and observed.

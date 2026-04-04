@@ -1,0 +1,48 @@
+---
+quarkus:
+  application:
+    name: "durga"
+mp:
+  messaging:
+    incoming:
+      order_fulfillment_validate_order_input:
+        connector: "smallrye-kafka"
+        topic: "order_fulfillment_validate_order_input"
+        value:
+          deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+      order_fulfillment_fulfill_order_input:
+        connector: "smallrye-kafka"
+        topic: "order_fulfillment_fulfill_order_input"
+        value:
+          deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+      order_fulfillment_ship_order_input:
+        connector: "smallrye-kafka"
+        topic: "order_fulfillment_ship_order_input"
+        value:
+          deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+      order_fulfillment_reject_order_input:
+        connector: "smallrye-kafka"
+        topic: "order_fulfillment_reject_order_input"
+        value:
+          deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+    outgoing:
+      order_fulfillment_validate_order_output:
+        connector: "smallrye-kafka"
+        topic: "order_fulfillment_validate_order_output"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
+      order_fulfillment_fulfill_order_output:
+        connector: "smallrye-kafka"
+        topic: "order_fulfillment_fulfill_order_output"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
+      order_fulfillment_ship_order_output:
+        connector: "smallrye-kafka"
+        topic: "order_fulfillment_ship_order_output"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
+      order_fulfillment_reject_order_output:
+        connector: "smallrye-kafka"
+        topic: "order_fulfillment_reject_order_output"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"

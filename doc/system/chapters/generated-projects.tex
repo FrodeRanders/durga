@@ -1,0 +1,47 @@
+\section{Generated Projects}
+\label{sec:GeneratedProjects}
+
+\subsection{Generated files}
+
+Each generated project includes more than Java sources. The generated output normally contains:
+\begin{itemize}
+\item Java runtime classes under \texttt{src/main/java/se/fk/kafka/generated/},
+\item a generated \texttt{pom.xml},
+\item merged Kafka channel configuration in \texttt{application.yml},
+\item a topic-creation script,
+\item sample payload data in \texttt{task-payloads.json},
+\item a generated README,
+\item runnable helper scripts for demos, inputs, completions, failures, escalations and observers.
+\end{itemize}
+
+\subsection{Helper scripts}
+
+The helper layer is part of the product surface, not just developer convenience. Generated projects include scripts such as:
+\begin{itemize}
+\item \texttt{demo-scenario.sh},
+\item \texttt{send-task-input.sh},
+\item \texttt{complete-task.sh},
+\item \texttt{fail-task.sh},
+\item \texttt{escalate-task.sh},
+\item \texttt{complete-call-activity.sh},
+\item \texttt{send-message-event.sh},
+\item \texttt{send-signal-event.sh},
+\item \texttt{watch-process-events.sh},
+\item \texttt{watch-task-output.sh}.
+\end{itemize}
+
+That generated probe surface is important because it allows users to understand the runtime model without writing extra producers or Kafka CLI commands from scratch.
+
+\subsection{Development workflow}
+
+The intended workflow around a generated project is:
+\begin{enumerate}
+\item generate the project from a BPMN model,
+\item inspect \texttt{summary.json}, topic config and helper scripts,
+\item build the generated project independently,
+\item run a starter or a scenario,
+\item observe progress through \texttt{process-events} and the monitoring views,
+\item adjust the BPMN model and regenerate.
+\end{enumerate}
+
+This workflow is particularly useful when exploring BPMN-to-Kafka tradeoffs, because the generated runtime remains concrete and observable rather than abstract.

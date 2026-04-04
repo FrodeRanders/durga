@@ -1,0 +1,51 @@
+\section{Testing And Verification}
+\label{sec:TestingVerification}
+
+The repository now has a meaningful regression net around the scaffolder and the monitoring
+path, even though it is still not a full end-to-end production validation environment.
+
+\subsection{Generator verification}
+
+Generator verification currently has three layers:
+\begin{itemize}
+\item dry-run tests that treat scaffold summaries and previews as a contract,
+\item generation tests that write selected projects to temporary directories and check the
+resulting files and configuration,
+\item compile-level tests that run Maven on representative generated projects.
+\end{itemize}
+
+This matters because the generator is split across BPMN parsing logic, StringTemplate groups
+and multiple helper generators. Simple unit tests are not enough on their own.
+
+\subsection{Representative sample coverage}
+
+The verification set intentionally spans several BPMN areas, including:
+\begin{itemize}
+\item message and signal events,
+\item timers and boundaries,
+\item subprocesses and nested subprocesses,
+\item call activities,
+\item event subprocesses.
+\end{itemize}
+
+\subsection{Monitoring verification}
+
+The monitoring side is validated through:
+\begin{itemize}
+\item unit tests around the state-projection model,
+\item local startup and packaging checks,
+\item demo publishers and scenario runners that can drive the monitoring topology without a
+fully generated process runtime.
+\end{itemize}
+
+\subsection{What is not fully covered yet}
+
+The remaining verification gaps are mostly at the integrated runtime level:
+\begin{itemize}
+\item full end-to-end process executions across all BPMN features,
+\item broader load or concurrency-oriented behavior,
+\item stronger operational testing of multi-instance monitoring scenarios.
+\end{itemize}
+
+For the current project phase, the test strategy is therefore strongest on generator
+correctness and local runtime exploration, and lighter on production-style operational proof.

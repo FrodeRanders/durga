@@ -1,0 +1,39 @@
+\section{Generated Code Extension Strategy}
+\label{sec:ExtensionStrategy}
+
+Durga-generated code is meant to be a starting point, not an untouchable artifact. The safe
+engineering posture is:
+\begin{itemize}
+\item treat the BPMN model as the primary design source,
+\item treat generated code as scaffolding that is expected to be completed and adapted,
+\item keep custom logic easy to identify so regeneration does not become confusing.
+\end{itemize}
+
+\subsection{What is usually edited}
+
+The most common edits in generated projects are:
+\begin{itemize}
+\item task business logic,
+\item XOR decision conditions,
+\item payload handling and validation,
+\item integration calls inside service-style workers,
+\item operational configuration values.
+\end{itemize}
+
+\subsection{What should remain conceptually generated}
+
+The following areas are usually best kept close to the generated structure:
+\begin{itemize}
+\item topic and channel topology,
+\item lifecycle event emission shape,
+\item probe script surface,
+\item subprocess and boundary wiring,
+\item monitoring-facing event semantics.
+\end{itemize}
+
+\subsection{Practical recommendation}
+
+In practice, the easiest way to keep a generated project healthy is to preserve the overall
+generated runtime structure while filling in task-specific behavior. If the BPMN model changes
+substantially, prefer regeneration and re-application of focused logic changes over ad hoc
+manual rewiring of the generated topology.

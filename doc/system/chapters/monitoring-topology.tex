@@ -1,0 +1,103 @@
+\section{Monitoring Topology}
+\label{sec:MonitoringTopology}
+
+\subsection{Purpose}
+
+The monitoring subsystem is a separate runtime concern from the generated process execution graph. The generated handlers emit canonical lifecycle events, while the monitoring topology consumes those events and turns them into queryable operational views.
+
+This separation matters because execution topics are transport-oriented. They show how work is routed. The monitoring topology instead answers questions such as:
+\begin{itemize}
+\item where is a specific process instance now,
+\item how many instances are currently in a given state,
+\item which activities are taking the longest,
+\item which instances appear stuck.
+\end{itemize}
+
+\subsection{Streams topology}
+
+The core implementation lives in \texttt{org.gautelis.durga.monitoring.ProcessMonitoringTopology}. The topology consumes the shared \texttt{process-events} topic, filters out null keys or values, and then groups by process instance id.
+
+From there, the monitoring flow is:
+\begin{enumerate}
+\item aggregate lifecycle events into a latest per-instance projection,
+\item materialize that projection into a state store and a compacted topic,
+\item regroup by current state key,
+\item count instances per current state,
+\item materialize those counts into a second state store and topic.
+\end{enumerate}
+
+\begin{figure}[h!]
+    \centering
+    \begin{tikzpicture}[node distance=15mm,>=latex]
+        \tikzstyle{box}=[draw=iptoMuted, rounded corners=2pt, line width=0.8pt, align=center, minimum width=31mm, minimum height=10mm, fill=white]
+        \tikzstyle{accentbox}=[box, fill=iptoAccent!12]
+        \node[accentbox] (events) {process-events};
+        \node[box, right=10mm of events] (aggregate) {aggregate by\\instance id};
+        \node[box, right=10mm of aggregate] (state) {process-state\\topic + store};
+        \node[box, below=6mm of state] (query) {HTTP + CLI\\query surface};
+        \node[box, below=24mm of aggregate] (count) {group by\\current state};
+        \node[box, right=10mm of count] (counts) {process-state-counts\\topic + store};
+
+        \draw[->, thick] (events) -- (aggregate);
+        \draw[->, thick] (aggregate) -- (state);
+        \draw[->, thick] (aggregate) -- (count);
+        \draw[->, thick] (count) -- (counts);
+        \draw[->, thick] (state) -- (query);
+        \draw[->, thick] (counts) -- (query);
+    \end{tikzpicture}
+    \caption{Durga monitoring topology from canonical lifecycle stream to queryable state}
+    \label{fig:DurgaMonitoringTopology}
+\end{figure}
+
+\subsection{Materialized state}
+
+The per-instance projection is represented by \texttt{ProcessStateView}. It is not just a copy of the latest raw event. It accumulates enough information to support operational queries, including:
+\begin{itemize}
+\item current activity or lifecycle state,
+\item started, updated and completed timestamps,
+\item retry and failure information,
+\item per-activity timing information,
+\item correlation and business-key metadata.
+\end{itemize}
+
+That projection is written both to the Kafka Streams state store and to the \texttt{process-state} topic. The state store supports local low-latency queries. The topic keeps the projection observable and externalizable.
+
+\subsection{Counts, latency and stuck detection}
+
+The counts projection is simpler. The topology derives a state key from the latest per-instance view and counts how many instances currently map to each such key.
+
+Latency and stuck-instance reporting are handled by the query service layer on top of the materialized state:
+\begin{itemize}
+\item latency summaries are computed from timestamps and durations recorded in \texttt{ProcessStateView},
+\item stuck-instance detection scans state entries and compares their age against a threshold,
+\item process-specific counts are filtered from the global count view.
+\end{itemize}
+
+\subsection{HTTP and CLI surface}
+
+The query service is exposed through \texttt{ProcessMonitoringHttpServer} and the companion CLI client. The main endpoints are:
+\begin{itemize}
+\item \texttt{/health},
+\item \texttt{/instances/\{processInstanceId\}},
+\item \texttt{/processes/\{processId\}/counts},
+\item \texttt{/processes/\{processId\}/latency},
+\item \texttt{/counts},
+\item \texttt{/stuck}.
+\end{itemize}
+
+This is complemented by a lightweight dashboard page that polls the same query surface.
+
+\subsection{Relationship to demos}
+
+The monitoring topology is not only useful when a generated BPMN runtime is running. Repository-level demo publishers and scenario runners can emit synthetic lifecycle streams directly to \texttt{process-events}. That makes the monitoring subsystem independently testable and also makes it easier to understand the read-model behavior before a full generated process is involved.
+
+\subsection{Current limits}
+
+The topology is intentionally direct. It is strong enough for local experimentation and architectural validation, but it is not yet a comprehensive production operations subsystem. The main current limits are:
+\begin{itemize}
+\item the read model is local to the monitoring app instance,
+\item some queries are derived by scanning materialized state rather than by maintaining separate specialized indexes,
+\item history and trend reporting remain lighter than current-state reporting.
+\end{itemize}
+
+Even with those limits, the monitoring path is a major part of what makes Durga usable as an exploration tool rather than only a code generator.

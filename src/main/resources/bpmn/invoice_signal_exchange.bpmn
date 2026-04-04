@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://example.com/bpmn">
+  <signal id="invoice_review_signal_def" name="invoice_review_signal"/>
+
+  <process id="invoice_signal_exchange" name="Invoice Signal Exchange" isExecutable="true">
+    <startEvent id="start" name="Invoice Received"/>
+    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice"/>
+
+    <serviceTask id="register_invoice" name="Register Invoice"/>
+    <sequenceFlow id="flow_register_to_throw" sourceRef="register_invoice" targetRef="send_review_signal"/>
+
+    <intermediateThrowEvent id="send_review_signal" name="Send Review Signal">
+      <signalEventDefinition signalRef="invoice_review_signal_def"/>
+    </intermediateThrowEvent>
+    <sequenceFlow id="flow_throw_to_wait" sourceRef="send_review_signal" targetRef="await_review_signal"/>
+
+    <intermediateCatchEvent id="await_review_signal" name="Await Review Signal">
+      <signalEventDefinition signalRef="invoice_review_signal_def"/>
+    </intermediateCatchEvent>
+    <sequenceFlow id="flow_wait_to_notify" sourceRef="await_review_signal" targetRef="notify_requester"/>
+
+    <serviceTask id="notify_requester" name="Notify Requester"/>
+    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_completed"/>
+
+    <endEvent id="end_completed" name="Signal Handled"/>
+  </process>
+</definitions>

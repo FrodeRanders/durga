@@ -1,0 +1,20 @@
+\section{Glossary}
+\label{sec:Glossary}
+
+\begin{description}
+\item[BPMN] Business Process Model and Notation, the process-modeling notation used as input to Durga.
+\item[Canonical lifecycle stream] The shared \texttt{process-events} topic that carries normalized process and activity events.
+\item[Call activity] A BPMN element used to model invocation of another process-like unit, mapped in Durga through explicit call and reply topics.
+\item[Event subprocess] A subprocess triggered by an event within an enclosing scope instead of by the main sequence flow.
+\item[Execution topics] The generated Kafka topics that move work between tasks, gateways and handlers.
+\item[Generated helper scripts] The scaffolded scripts used to run demos, inject inputs, complete tasks, force failures and observe output.
+\item[Kafka Streams state store] The local materialized store used by the monitoring app to answer low-latency queries.
+\item[Process orchestrator] The generated runtime class that detects terminal flows and emits explicit completion for the enclosing process.
+\item[ProcessStateView] The repository's materialized per-instance monitoring projection.
+\item[Scope cancellation] The generated runtime behavior that suppresses or redirects normal flow after an interrupting boundary or interrupting event subprocess fires.
+\item[Scaffolder] The BPMN-driven generator entry point, implemented by:
+\begin{quote}
+\filepath{tools.org.gautelis.durga.BpmnScaffolder}
+\end{quote}
+\item[Subprocess scope service] A generated class that manages entry, completion and scope-level lifecycle behavior for an embedded subprocess.
+\end{description}

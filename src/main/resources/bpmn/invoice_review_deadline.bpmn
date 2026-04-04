@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://example.com/bpmn">
+  <process id="invoice_review_deadline" name="Invoice Review Deadline" isExecutable="true">
+    <startEvent id="start" name="Invoice Received"/>
+    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice"/>
+
+    <serviceTask id="register_invoice" name="Register Invoice"/>
+    <sequenceFlow id="flow_register_to_review" sourceRef="register_invoice" targetRef="review_invoice"/>
+
+    <userTask id="review_invoice" name="Review Invoice"/>
+    <sequenceFlow id="flow_review_to_notify" sourceRef="review_invoice" targetRef="notify_requester"/>
+
+    <boundaryEvent id="review_timeout" name="Review Timeout" attachedToRef="review_invoice" cancelActivity="true">
+      <timerEventDefinition>
+        <timeDuration>PT15S</timeDuration>
+      </timerEventDefinition>
+    </boundaryEvent>
+    <sequenceFlow id="flow_timeout_to_escalate" sourceRef="review_timeout" targetRef="escalate_review"/>
+
+    <serviceTask id="notify_requester" name="Notify Requester"/>
+    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_completed"/>
+
+    <serviceTask id="escalate_review" name="Escalate Review"/>
+    <sequenceFlow id="flow_escalate_to_end" sourceRef="escalate_review" targetRef="end_timed_out"/>
+
+    <endEvent id="end_completed" name="Review Completed"/>
+    <endEvent id="end_timed_out" name="Review Timed Out"/>
+  </process>
+</definitions>

@@ -1,0 +1,44 @@
+\section{BPMN Support And Limits}
+\label{sec:SupportLimits}
+
+Durga supports a pragmatic BPMN subset that is broad enough for exploration and code
+generation, but not yet a complete BPMN execution engine.
+
+\subsection{Well-supported areas}
+
+The strongest current coverage includes:
+\begin{itemize}
+\item start events and explicit end completion handling,
+\item service, user and manual task mappings,
+\item XOR and parallel gateway routing,
+\item intermediate timer, message and signal events,
+\item task and subprocess boundary timer, error and escalation handling,
+\item call activities,
+\item embedded subprocesses including nested subprocesses,
+\item event subprocesses for message, signal, timer, error and escalation starts.
+\end{itemize}
+
+\subsection{Current semantic boundaries}
+
+Some behaviors are supported only to the level needed for explicit generated runtimes, not
+to full BPMN-engine fidelity:
+\begin{itemize}
+\item cancellation propagation is pragmatic rather than globally token-precise,
+\item subprocess scope handling is explicit but still lighter than a full BPMN execution scope manager,
+\item monitoring is strong on current state, lighter on long-term history and trend analysis,
+\item generated runtimes are optimized for understanding and experimentation rather than minimalism.
+\end{itemize}
+
+\subsection{Still outside the current focus}
+
+The main areas still outside the project's current center of gravity are:
+\begin{itemize}
+\item full production-grade workflow-engine semantics,
+\item richer compensation and advanced BPMN exception orchestration,
+\item large-scale operational hardening beyond local and exploratory usage,
+\item a generalized multi-node monitoring and query deployment model.
+\end{itemize}
+
+The repository coverage matrix remains the most detailed element-by-element reference, but
+the overall design intent is simple: support enough BPMN to make the Kafka mapping useful,
+while keeping the generated runtime explicit and teachable.

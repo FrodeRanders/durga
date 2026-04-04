@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://example.com/bpmn">
+  <error id="error_review_failed" errorCode="review_failed"/>
+
+  <process id="invoice_event_subprocess_error" name="Invoice Event Subprocess Error" isExecutable="true">
+    <startEvent id="start" name="Invoice Received"/>
+    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice"/>
+
+    <serviceTask id="register_invoice" name="Register Invoice"/>
+    <sequenceFlow id="flow_register_to_review_scope" sourceRef="register_invoice" targetRef="review_scope"/>
+
+    <subProcess id="review_scope" name="Review Scope">
+      <startEvent id="review_scope_start" name="Enter Review"/>
+      <sequenceFlow id="flow_scope_start_to_review" sourceRef="review_scope_start" targetRef="review_invoice"/>
+
+      <userTask id="review_invoice" name="Review Invoice"/>
+      <sequenceFlow id="flow_review_to_approve" sourceRef="review_invoice" targetRef="approve_invoice"/>
+
+      <serviceTask id="approve_invoice" name="Approve Invoice"/>
+      <sequenceFlow id="flow_approve_to_scope_end" sourceRef="approve_invoice" targetRef="review_scope_end"/>
+
+      <subProcess id="review_error_scope" name="Review Error Scope" triggeredByEvent="true">
+        <startEvent id="review_error_start" name="Review Error Start" isInterrupting="true">
+          <errorEventDefinition errorRef="error_review_failed"/>
+        </startEvent>
+        <sequenceFlow id="flow_error_start_to_reject" sourceRef="review_error_start" targetRef="reject_invoice"/>
+
+        <serviceTask id="reject_invoice" name="Reject Invoice"/>
+        <sequenceFlow id="flow_reject_to_error_end" sourceRef="reject_invoice" targetRef="review_error_end"/>
+
+        <endEvent id="review_error_end" name="Review Error Handled"/>
+      </subProcess>
+
+      <endEvent id="review_scope_end" name="Review Done"/>
+    </subProcess>
+
+    <sequenceFlow id="flow_scope_to_notify" sourceRef="review_scope" targetRef="notify_requester"/>
+
+    <serviceTask id="notify_requester" name="Notify Requester"/>
+    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_completed"/>
+
+    <endEvent id="end_completed" name="Invoice Completed"/>
+  </process>
+</definitions>

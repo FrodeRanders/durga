@@ -1,0 +1,55 @@
+\section{Configuration And Operations}
+\label{sec:ConfigurationOperations}
+
+\subsection{Local runtime baseline}
+
+The normal local environment consists of:
+\begin{itemize}
+\item the bundled Kafka setup under \filepath{setup/},
+\item generated topic configuration in the scaffolded project,
+\item the optional monitoring app and dashboard.
+\end{itemize}
+
+The repository is intentionally optimized for a local single-broker loop so the generated
+processes and monitoring projections can be explored quickly.
+
+\subsection{Important configuration surfaces}
+
+The main configuration locations are:
+\begin{itemize}
+\item repository-level runtime defaults in \filepath{src/main/resources/application.yml},
+\item generated-project channel configuration in the scaffolded \texttt{application.yml},
+\item local Kafka infrastructure in \filepath{setup/docker-compose.yml},
+\item generated topic setup scripts in scaffolded output directories.
+\end{itemize}
+
+\subsection{Operational expectations}
+
+In normal local startup:
+\begin{itemize}
+\item Kafka UI may log temporary connection failures before the broker is ready,
+\item generated runtimes rely on explicit topics and channels rather than implicit discovery,
+\item the monitoring app may report a transitional Streams state before its stores become queryable.
+\end{itemize}
+
+\subsection{Where state lives}
+
+Durga uses several layers of state:
+\begin{itemize}
+\item transport history on execution topics,
+\item canonical lifecycle history on \texttt{process-events},
+\item materialized latest state and counts in Kafka Streams stores and corresponding topics,
+\item local waiting and cancellation bookkeeping inside some generated handlers.
+\end{itemize}
+
+\subsection{Recommended local operator loop}
+
+For practical local work:
+\begin{enumerate}
+\item start Kafka,
+\item build the repository or generated project,
+\item create topics,
+\item run the generated process or a demo publisher,
+\item start the monitoring app if query visibility is needed,
+\item inspect lifecycle events, counts and latency.
+\end{enumerate}

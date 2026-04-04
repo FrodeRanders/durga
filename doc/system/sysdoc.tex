@@ -1,0 +1,124 @@
+\documentclass{techdoc}
+
+\usepackage{url}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage[table]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[useregional]{datetime2}
+
+\date{\today}
+\title{durga}
+\subtitle{System and development documentation}
+\editors{Frode Randers}
+\author{OpenAI Codex}
+
+\makeatletter
+\renewcommand{\maketitle}{%
+    \thispagestyle{empty}
+    \setlength{\parindent}{0mm}
+    \begin{center}
+    \vspace*{18mm}
+
+
+    \vspace*{24mm}
+    {\huge\textsc{\@thetitle{}}}
+
+    \vspace*{18mm}
+    {\huge\textsc{\@thesubtitle{}}}
+
+    \vspace*{8mm}
+    {\large\@theeditors{}}
+
+    \vfill
+    {\large\today}
+    \end{center}
+}
+\makeatother
+
+\begin{document}
+
+    \rhead{}
+
+    \maketitle
+
+    \vfill
+
+    \newpage
+    \renewcommand\contentsname{Contents}
+    \tableofcontents
+    \newpage
+
+    \input{chapters/introduction.tex}
+    \newpage
+
+    \input{chapters/system-overview.tex}
+    \newpage
+
+    \input{chapters/documentation-gaps.tex}
+    \newpage
+
+    \input{chapters/architecture-decisions.tex}
+    \newpage
+
+    \input{chapters/execution-model.tex}
+    \newpage
+
+    \input{chapters/support-limits.tex}
+    \newpage
+
+    \input{chapters/monitoring.tex}
+    \newpage
+
+    \input{chapters/monitoring-topology.tex}
+    \newpage
+
+    \input{chapters/monitoring-interfaces.tex}
+    \newpage
+
+    \input{chapters/generated-projects.tex}
+    \newpage
+
+    \input{chapters/extension-strategy.tex}
+    \newpage
+
+    \input{chapters/generated-runtime.tex}
+    \newpage
+
+    \input{chapters/naming-conventions.tex}
+    \newpage
+
+    \input{chapters/project-lifecycle.tex}
+    \newpage
+
+    \input{chapters/demo-flows.tex}
+    \newpage
+
+    \input{chapters/configuration-operations.tex}
+    \newpage
+
+    \input{chapters/testing-verification.tex}
+    \newpage
+
+    \input{chapters/troubleshooting.tex}
+    \newpage
+
+    \input{chapters/design-tensions.tex}
+    \newpage
+
+    \input{chapters/bpmn-samples.tex}
+    \newpage
+
+    \input{chapters/example-walkthrough.tex}
+    \newpage
+
+    \input{chapters/current-status.tex}
+    \newpage
+
+    \input{chapters/glossary.tex}
+    \newpage
+
+\end{document}

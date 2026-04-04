@@ -1,0 +1,37 @@
+\section{Naming Conventions}
+\label{sec:NamingConventions}
+
+Durga relies heavily on predictable names because the generated topology is intentionally
+visible. Naming is therefore part of the system design, not only a cosmetic detail.
+
+\subsection{Common naming patterns}
+
+The generator generally follows these patterns:
+\begin{itemize}
+\item process identifiers come from BPMN process ids,
+\item task topics use process and task identifiers,
+\item generated classes use process and BPMN element names converted to Java class names,
+\item helper scripts use short imperative file names such as \texttt{complete-task.sh},
+\item monitoring topics use shared names such as:
+\begin{quote}
+\filepath{process-events}\\
+\filepath{process-state}\\
+\filepath{process-state-counts}
+\end{quote}
+\end{itemize}
+
+\subsection{Why this matters}
+
+Consistent names make it easier to:
+\begin{itemize}
+\item inspect topic traffic in Kafka tools,
+\item map BPMN elements to generated Java handlers,
+\item reason about subprocess and boundary scope behavior,
+\item debug routing and completion behavior quickly.
+\end{itemize}
+
+\subsection{Practical guidance}
+
+For the cleanest generated output, BPMN ids should be stable, readable and explicit. If BPMN
+models use unclear or heavily tool-generated ids, the generated Kafka and Java surface becomes
+harder to read as well.

@@ -1,0 +1,1767 @@
+applicationYaml(processId, tasks, timers, messageTopics, callActivities, subProcesses) ::= <<
+mp:
+  messaging:
+    incoming:
+      process-events-monitor:
+        connector: "smallrye-kafka"
+        topic: "process-events"
+        value:
+          deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+%tasks:{t|
+      %processId%_%t%_input:
+        connector: "smallrye-kafka"
+        topic: "%processId%_%t%_input"
+        value:
+          deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+}%
+%timers:{t|
+      %processId%_%t%_input:
+        connector: "smallrye-kafka"
+        topic: "%processId%_%t%_input"
+        value:
+          deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+}%
+%messageTopics:{t|
+      %t%:
+        connector: "smallrye-kafka"
+        topic: "%t%"
+        value:
+          deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+}%
+%callActivities:{t|
+      %processId%_%t%_reply:
+        connector: "smallrye-kafka"
+        topic: "%processId%_%t%_reply"
+        value:
+          deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+}%
+%subProcesses:{t|
+      %processId%_%t%_input:
+        connector: "smallrye-kafka"
+        topic: "%processId%_%t%_input"
+        value:
+          deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+      %processId%_%t%_output:
+        connector: "smallrye-kafka"
+        topic: "%processId%_%t%_output"
+        value:
+          deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+}%
+    outgoing:
+      process-events:
+        connector: "smallrye-kafka"
+        topic: "process-events"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
+%tasks:{t|
+      %processId%_%t%_input:
+        connector: "smallrye-kafka"
+        topic: "%processId%_%t%_input"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
+}%
+%timers:{t|
+      %processId%_%t%_input:
+        connector: "smallrye-kafka"
+        topic: "%processId%_%t%_input"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
+}%
+%messageTopics:{t|
+      %t%:
+        connector: "smallrye-kafka"
+        topic: "%t%"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
+}%
+%callActivities:{t|
+      %processId%_%t%_call:
+        connector: "smallrye-kafka"
+        topic: "%processId%_%t%_call"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
+      %processId%_%t%_reply:
+        connector: "smallrye-kafka"
+        topic: "%processId%_%t%_reply"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
+}%
+%subProcesses:{t|
+      %processId%_%t%_input:
+        connector: "smallrye-kafka"
+        topic: "%processId%_%t%_input"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
+      %processId%_%t%_output:
+        connector: "smallrye-kafka"
+        topic: "%processId%_%t%_output"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
+}%
+%tasks:{t|
+      %processId%_%t%_output:
+        connector: "smallrye-kafka"
+        topic: "%processId%_%t%_output"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
+}%
+>>
+
+topicsScript(processId, tasks, timers, messageTopics, callActivities, subProcesses) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+
+topics=(
+  "%processId%_start"
+  "%processId%_state"
+  "process-events"
+%timers:{t|
+  "%processId%_%t%_input"
+}%
+%messageTopics:{t|
+  "%t%"
+}%
+%callActivities:{t|
+  "%processId%_%t%_call"
+  "%processId%_%t%_reply"
+}%
+%subProcesses:{t|
+  "%processId%_%t%_input"
+  "%processId%_%t%_output"
+}%
+%tasks:{t|
+  "%processId%_%t%_input"
+  "%processId%_%t%_output"
+}%
+)
+
+for topic in "${topics[@]}"; do
+  if [[ "$topic" == "%processId%_state" ]]; then
+    kafka-topics --bootstrap-server "$BOOTSTRAP" \
+      --create --if-not-exists --topic "$topic" \
+      --config cleanup.policy=compact
+  else
+    kafka-topics --bootstrap-server "$BOOTSTRAP" \
+      --create --if-not-exists --topic "$topic"
+  fi
+done
+>>
+
+runLocalScript(processId, starterClass) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+START_KAFKA=${START_KAFKA:-false}
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
+
+if [[ "$START_KAFKA" == "true" ]]; then
+  if [[ -d "${PROJECT_ROOT}/setup" ]]; then
+    (cd "${PROJECT_ROOT}/setup" && docker compose up -d)
+  else
+    echo "setup/ not found at ${PROJECT_ROOT}/setup; skipping Kafka startup."
+  fi
+fi
+
+mvn -q clean package
+
+JAR="target/%processId%-generated-1.0-SNAPSHOT-all.jar"
+if [[ ! -f "$JAR" ]]; then
+  echo "Missing shaded jar at $JAR"
+  exit 1
+fi
+
+java -cp "$JAR" org.gautelis.durga.generated.%starterClass%Starter "$BOOTSTRAP" valid=true
+>>
+
+demoScenarioScript(processId, starterClass, firstTask, lastTask) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+SCENARIO=${1:-happy}
+
+case "$SCENARIO" in
+  happy|stuck|failed) ;;
+  *)
+    echo "Usage: $0 [happy|stuck|failed]"
+    exit 1
+    ;;
+esac
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${ROOT_DIR}"
+
+mvn -q clean package
+
+JAR="target/%processId%-generated-1.0-SNAPSHOT-all.jar"
+if [[ ! -f "$JAR" ]]; then
+  echo "Missing shaded jar at $JAR"
+  exit 1
+fi
+
+instance_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+java -cp "$JAR" org.gautelis.durga.generated.%starterClass%DemoScenarioRunner "$BOOTSTRAP" "$SCENARIO" "$instance_id"
+>>
+
+taskInputScript(processId, starterClass) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+TASK_ID=${1:-}
+INSTANCE_ID=${2:-$(uuidgen | tr '[:upper:]' '[:lower:]')}
+
+if [[ -z "$TASK_ID" ]]; then
+  echo "Usage: $0 <task-id> [instance-id]"
+  exit 1
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${ROOT_DIR}"
+
+mvn -q clean package
+
+JAR="target/%processId%-generated-1.0-SNAPSHOT-all.jar"
+if [[ ! -f "$JAR" ]]; then
+  echo "Missing shaded jar at $JAR"
+  exit 1
+fi
+
+java -cp "$JAR" org.gautelis.durga.generated.%starterClass%TaskInputPublisher "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID"
+>>
+
+taskCompletionScript(processId, starterClass) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+TASK_ID=${1:-}
+INSTANCE_ID=${2:-}
+
+if [[ -z "$TASK_ID" || -z "$INSTANCE_ID" ]]; then
+  echo "Usage: $0 <task-id> <instance-id>"
+  exit 1
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${ROOT_DIR}"
+
+mvn -q clean package
+
+JAR="target/%processId%-generated-1.0-SNAPSHOT-all.jar"
+if [[ ! -f "$JAR" ]]; then
+  echo "Missing shaded jar at $JAR"
+  exit 1
+fi
+
+java -cp "$JAR" org.gautelis.durga.generated.%starterClass%TaskCompletionPublisher "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID"
+>>
+
+taskFailureScript(processId, starterClass) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+TASK_ID=${1:-}
+INSTANCE_ID=${2:-}
+
+if [[ -z "$TASK_ID" || -z "$INSTANCE_ID" ]]; then
+  echo "Usage: $0 <task-id> <instance-id>"
+  exit 1
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${ROOT_DIR}"
+
+mvn -q clean package
+
+JAR="target/%processId%-generated-1.0-SNAPSHOT-all.jar"
+if [[ ! -f "$JAR" ]]; then
+  echo "Missing shaded jar at $JAR"
+  exit 1
+fi
+
+java -cp "$JAR" org.gautelis.durga.generated.%starterClass%TaskFailurePublisher "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID"
+>>
+
+taskEscalationScript(processId, starterClass) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+TASK_ID=${1:-}
+INSTANCE_ID=${2:-}
+
+if [[ -z "$TASK_ID" || -z "$INSTANCE_ID" ]]; then
+  echo "Usage: $0 <task-id> <instance-id>"
+  exit 1
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${ROOT_DIR}"
+
+mvn -q clean package
+
+JAR="target/%processId%-generated-1.0-SNAPSHOT-all.jar"
+if [[ ! -f "$JAR" ]]; then
+  echo "Missing shaded jar at $JAR"
+  exit 1
+fi
+
+java -cp "$JAR" org.gautelis.durga.generated.%starterClass%TaskEscalationPublisher "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID"
+>>
+
+callActivityCompletionScript(processId, starterClass) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+CALL_ACTIVITY_ID=${1:-}
+INSTANCE_ID=${2:-}
+
+if [[ -z "$CALL_ACTIVITY_ID" || -z "$INSTANCE_ID" ]]; then
+  echo "Usage: $0 <call-activity-id> <instance-id>"
+  exit 1
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${ROOT_DIR}"
+
+mvn -q clean package
+
+JAR="target/%processId%-generated-1.0-SNAPSHOT-all.jar"
+if [[ ! -f "$JAR" ]]; then
+  echo "Missing shaded jar at $JAR"
+  exit 1
+fi
+
+java -cp "$JAR" org.gautelis.durga.generated.%starterClass%CallActivityCompletionPublisher "$BOOTSTRAP" "$CALL_ACTIVITY_ID" "$INSTANCE_ID"
+>>
+
+messageEventScript(processId, starterClass) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+MESSAGE_TOPIC=${1:-}
+INSTANCE_ID=${2:-}
+
+if [[ -z "$MESSAGE_TOPIC" || -z "$INSTANCE_ID" ]]; then
+  echo "Usage: $0 <message-topic> <instance-id>"
+  exit 1
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${ROOT_DIR}"
+
+mvn -q clean package
+
+JAR="target/%processId%-generated-1.0-SNAPSHOT-all.jar"
+if [[ ! -f "$JAR" ]]; then
+  echo "Missing shaded jar at $JAR"
+  exit 1
+fi
+
+java -cp "$JAR" org.gautelis.durga.generated.%starterClass%MessageEventPublisher "$BOOTSTRAP" "$MESSAGE_TOPIC" "$INSTANCE_ID"
+>>
+
+signalEventScript(processId, starterClass) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+SIGNAL_TOPIC=${1:-}
+INSTANCE_ID=${2:-}
+
+if [[ -z "$SIGNAL_TOPIC" || -z "$INSTANCE_ID" ]]; then
+  echo "Usage: $0 <signal-topic> <instance-id>"
+  exit 1
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${ROOT_DIR}"
+
+mvn -q clean package
+
+JAR="target/%processId%-generated-1.0-SNAPSHOT-all.jar"
+if [[ ! -f "$JAR" ]]; then
+  echo "Missing shaded jar at $JAR"
+  exit 1
+fi
+
+java -cp "$JAR" org.gautelis.durga.generated.%starterClass%SignalEventPublisher "$BOOTSTRAP" "$SIGNAL_TOPIC" "$INSTANCE_ID"
+>>
+
+processEventsWatchScript(processId, starterClass) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+INSTANCE_ID=${1:-}
+MAX_RECORDS=${MAX_RECORDS:-20}
+TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-30}
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${ROOT_DIR}"
+
+mvn -q clean package
+
+JAR="target/%processId%-generated-1.0-SNAPSHOT-all.jar"
+if [[ ! -f "$JAR" ]]; then
+  echo "Missing shaded jar at $JAR"
+  exit 1
+fi
+
+java -cp "$JAR" org.gautelis.durga.generated.%starterClass%ProcessEventsWatcher \
+  "$BOOTSTRAP" "$INSTANCE_ID" "$MAX_RECORDS" "$TIMEOUT_SECONDS"
+>>
+
+taskOutputWatchScript(processId, starterClass) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+TASK_ID=${1:-}
+INSTANCE_ID=${2:-}
+MAX_RECORDS=${MAX_RECORDS:-20}
+TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-30}
+
+if [[ -z "$TASK_ID" ]]; then
+  echo "Usage: $0 <task-id> [instance-id]"
+  exit 1
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${ROOT_DIR}"
+
+mvn -q clean package
+
+JAR="target/%processId%-generated-1.0-SNAPSHOT-all.jar"
+if [[ ! -f "$JAR" ]]; then
+  echo "Missing shaded jar at $JAR"
+  exit 1
+fi
+
+java -cp "$JAR" org.gautelis.durga.generated.%starterClass%TaskOutputWatcher \
+  "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID" "$MAX_RECORDS" "$TIMEOUT_SECONDS"
+>>
+
+demoScenarioRunnerClass(packageName, className, processId, firstTask, lastTask) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.gautelis.durga.ProcessEvent;
+import tools.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+
+public class %className% {
+    private static final String TOPIC = "process-events";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
+        String scenario = args.length > 1 ? args[1] : "happy";
+        String processInstanceId = args.length > 2 ? args[2] : UUID.randomUUID().toString();
+
+        if (!List.of("happy", "stuck", "failed").contains(scenario)) {
+            throw new IllegalArgumentException("Scenario must be one of: happy, stuck, failed");
+        }
+
+        TaskPayloads payloads = loadTaskPayloads();
+        String correlationId = UUID.randomUUID().toString();
+        String businessKey = payloads.businessKeyExample() != null ? payloads.businessKeyExample() : "%processId%-demo-001";
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            publish(producer, processInstanceId, event(processInstanceId, correlationId, businessKey,
+                    "start", Map.of("source", "generated-demo", "scenario", scenario),
+                    ProcessEvent.Status.STARTED, null, ProcessEvent.EventType.PROCESS_STARTED));
+
+            switch (scenario) {
+                case "happy" -> {
+                    publishActivityLifecycle(producer, processInstanceId, correlationId, businessKey, payloads.task("%firstTask%"), "%firstTask%");
+                    if (!"%firstTask%".equals("%lastTask%")) {
+                        publishActivityLifecycle(producer, processInstanceId, correlationId, businessKey, payloads.task("%lastTask%"), "%lastTask%");
+                    }
+                    publish(producer, processInstanceId, event(processInstanceId, correlationId, businessKey,
+                            "completed", payloads.task("%lastTask%"),
+                            ProcessEvent.Status.COMPLETED, null, ProcessEvent.EventType.PROCESS_COMPLETED));
+                }
+                case "stuck" -> publish(producer, processInstanceId, event(processInstanceId, correlationId, businessKey,
+                        "%lastTask%", payloads.task("%lastTask%"),
+                        ProcessEvent.Status.STARTED, null, ProcessEvent.EventType.ACTIVITY_ENTERED));
+                case "failed" -> {
+                    publish(producer, processInstanceId, event(processInstanceId, correlationId, businessKey,
+                            "%lastTask%", payloads.task("%lastTask%"),
+                            ProcessEvent.Status.STARTED, null, ProcessEvent.EventType.ACTIVITY_ENTERED));
+                    publish(producer, processInstanceId, event(processInstanceId, correlationId, businessKey,
+                            "%lastTask%", payloads.task("%lastTask%"),
+                            ProcessEvent.Status.FAILED,
+                            new ProcessEvent.ErrorInfo("Generated demo failure", "GENERATED_DEMO_FAILED"),
+                            ProcessEvent.EventType.PROCESS_FAILED));
+                }
+            }
+            producer.flush();
+        }
+
+        System.out.println("Published scenario=" + scenario + " for instanceId=" + processInstanceId);
+    }
+
+    private static void publishActivityLifecycle(
+            KafkaProducer<String, String> producer,
+            String processInstanceId,
+            String correlationId,
+            String businessKey,
+            Map<String, Object> payload,
+            String activityId
+    ) {
+        publish(producer, processInstanceId, event(processInstanceId, correlationId, businessKey,
+                activityId, payload, ProcessEvent.Status.STARTED, null, ProcessEvent.EventType.ACTIVITY_ENTERED));
+        publish(producer, processInstanceId, event(processInstanceId, correlationId, businessKey,
+                activityId, payload, ProcessEvent.Status.COMPLETED, null, ProcessEvent.EventType.ACTIVITY_COMPLETED));
+    }
+
+    private static ProcessEvent event(
+            String processInstanceId,
+            String correlationId,
+            String businessKey,
+            String activityId,
+            Map<String, Object> payload,
+            ProcessEvent.Status status,
+            ProcessEvent.ErrorInfo error,
+            ProcessEvent.EventType eventType
+    ) {
+        return new ProcessEvent(
+                processInstanceId,
+                "%processId%",
+                activityId,
+                UUID.randomUUID().toString(),
+                correlationId,
+                payload,
+                status,
+                error,
+                eventType,
+                "v1",
+                businessKey,
+                Instant.now().toString()
+        );
+    }
+
+    private static void publish(KafkaProducer<String, String> producer, String key, ProcessEvent event) {
+        producer.send(new ProducerRecord<>(TOPIC, key, event.toJson()));
+    }
+
+    private static TaskPayloads loadTaskPayloads() {
+        Path path = Path.of("task-payloads.json");
+        if (!Files.exists(path)) {
+            throw new IllegalStateException("Missing task-payloads.json in " + path.toAbsolutePath());
+        }
+        try {
+            return MAPPER.readValue(Files.readString(path), TaskPayloads.class);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read task-payloads.json", e);
+        }
+    }
+
+    public record TaskPayloads(String processId, String businessKeyExample, Map<String, Map<String, Object> > tasks) {
+        public Map<String, Object> task(String taskId) {
+            if (tasks == null) {
+                return Map.of();
+            }
+            Map<String, Object> payload = tasks.get(taskId);
+            return payload != null ? new LinkedHashMap<>(payload) : Map.of();
+        }
+    }
+}
+>>
+
+taskInputPublisherClass(packageName, className, processId) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.gautelis.durga.ProcessEvent;
+import tools.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+
+public class %className% {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
+        String taskId = args.length > 1 ? args[1] : null;
+        String processInstanceId = args.length > 2 ? args[2] : UUID.randomUUID().toString();
+
+        if (taskId == null || taskId.isBlank()) {
+            throw new IllegalArgumentException("Usage: <bootstrap> <task-id> [instance-id]");
+        }
+
+        TaskPayloads payloads = loadTaskPayloads();
+        Map<String, Object> payload = new LinkedHashMap<>(payloads.task(taskId));
+        String correlationId = UUID.randomUUID().toString();
+        String businessKey = payloads.businessKeyExample() != null ? payloads.businessKeyExample() : "%processId%-demo-001";
+        String topic = "%processId%_" + taskId + "_input";
+
+        ProcessEvent event = new ProcessEvent(
+                processInstanceId,
+                "%processId%",
+                taskId,
+                UUID.randomUUID().toString(),
+                correlationId,
+                payload,
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                "v1",
+                businessKey,
+                Instant.now().toString()
+        );
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.send(new ProducerRecord<>(topic, processInstanceId, event.toJson()));
+            producer.send(new ProducerRecord<>("process-events", processInstanceId, event.toJson()));
+            producer.flush();
+        }
+
+        System.out.println("Published task input for taskId=" + taskId + " instanceId=" + processInstanceId);
+    }
+
+    private static TaskPayloads loadTaskPayloads() {
+        Path path = Path.of("task-payloads.json");
+        if (!Files.exists(path)) {
+            throw new IllegalStateException("Missing task-payloads.json in " + path.toAbsolutePath());
+        }
+        try {
+            return MAPPER.readValue(Files.readString(path), TaskPayloads.class);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read task-payloads.json", e);
+        }
+    }
+
+    public record TaskPayloads(String processId, String businessKeyExample, Map<String, Map<String, Object> > tasks) {
+        public Map<String, Object> task(String taskId) {
+            if (tasks == null) {
+                return Map.of();
+            }
+            Map<String, Object> payload = tasks.get(taskId);
+            return payload != null ? new LinkedHashMap<>(payload) : Map.of();
+        }
+    }
+}
+>>
+
+taskCompletionPublisherClass(packageName, className, processId) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.gautelis.durga.ProcessEvent;
+import tools.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+
+public class %className% {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
+        String taskId = args.length > 1 ? args[1] : null;
+        String processInstanceId = args.length > 2 ? args[2] : null;
+
+        if (taskId == null || taskId.isBlank() || processInstanceId == null || processInstanceId.isBlank()) {
+            throw new IllegalArgumentException("Usage: <bootstrap> <task-id> <instance-id>");
+        }
+
+        TaskPayloads payloads = loadTaskPayloads();
+        Map<String, Object> payload = new LinkedHashMap<>(payloads.task(taskId));
+        payload.put("completedBy", "generated-task-completer");
+        payload.put("waitingForCompletion", false);
+
+        String correlationId = UUID.randomUUID().toString();
+        String businessKey = payloads.businessKeyExample() != null ? payloads.businessKeyExample() : "%processId%-demo-001";
+        String topic = "%processId%_" + taskId + "_output";
+
+        ProcessEvent event = new ProcessEvent(
+                processInstanceId,
+                "%processId%",
+                taskId,
+                UUID.randomUUID().toString(),
+                correlationId,
+                payload,
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                "v1",
+                businessKey,
+                Instant.now().toString()
+        );
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.send(new ProducerRecord<>(topic, processInstanceId, event.toJson()));
+            producer.send(new ProducerRecord<>("process-events", processInstanceId, event.toJson()));
+            producer.flush();
+        }
+
+        System.out.println("Published task completion for taskId=" + taskId + " instanceId=" + processInstanceId);
+    }
+
+    private static TaskPayloads loadTaskPayloads() {
+        Path path = Path.of("task-payloads.json");
+        if (!Files.exists(path)) {
+            throw new IllegalStateException("Missing task-payloads.json in " + path.toAbsolutePath());
+        }
+        try {
+            return MAPPER.readValue(Files.readString(path), TaskPayloads.class);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read task-payloads.json", e);
+        }
+    }
+
+    public record TaskPayloads(String processId, String businessKeyExample, Map<String, Map<String, Object> > tasks) {
+        public Map<String, Object> task(String taskId) {
+            if (tasks == null) {
+                return Map.of();
+            }
+            Map<String, Object> payload = tasks.get(taskId);
+            return payload != null ? new LinkedHashMap<>(payload) : Map.of();
+        }
+    }
+}
+>>
+
+taskFailurePublisherClass(packageName, className, processId) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.gautelis.durga.ProcessEvent;
+import tools.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+
+public class %className% {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
+        String taskId = args.length > 1 ? args[1] : null;
+        String processInstanceId = args.length > 2 ? args[2] : null;
+
+        if (taskId == null || taskId.isBlank() || processInstanceId == null || processInstanceId.isBlank()) {
+            throw new IllegalArgumentException("Usage: <bootstrap> <task-id> <instance-id>");
+        }
+
+        TaskPayloads payloads = loadTaskPayloads();
+        Map<String, Object> payload = new LinkedHashMap<>(payloads.task(taskId));
+        payload.put("failedBy", "generated-task-failure-publisher");
+
+        String correlationId = UUID.randomUUID().toString();
+        String businessKey = payloads.businessKeyExample() != null ? payloads.businessKeyExample() : "%processId%-demo-001";
+        String topic = "%processId%_" + taskId + "_output";
+        String errorCode = taskId + "_failed";
+
+        ProcessEvent event = new ProcessEvent(
+                processInstanceId,
+                "%processId%",
+                taskId,
+                UUID.randomUUID().toString(),
+                correlationId,
+                payload,
+                ProcessEvent.Status.FAILED,
+                new ProcessEvent.ErrorInfo("Generated task failure for " + taskId, errorCode),
+                ProcessEvent.EventType.PROCESS_FAILED,
+                "v1",
+                businessKey,
+                Instant.now().toString()
+        );
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.send(new ProducerRecord<>(topic, processInstanceId, event.toJson()));
+            producer.send(new ProducerRecord<>("process-events", processInstanceId, event.toJson()));
+            producer.flush();
+        }
+
+        System.out.println("Published task failure for taskId=" + taskId + " instanceId=" + processInstanceId);
+    }
+
+    private static TaskPayloads loadTaskPayloads() {
+        Path path = Path.of("task-payloads.json");
+        if (!Files.exists(path)) {
+            throw new IllegalStateException("Missing task-payloads.json in " + path.toAbsolutePath());
+        }
+        try {
+            return MAPPER.readValue(Files.readString(path), TaskPayloads.class);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read task-payloads.json", e);
+        }
+    }
+
+    public record TaskPayloads(String processId, String businessKeyExample, Map<String, Map<String, Object> > tasks) {
+        public Map<String, Object> task(String taskId) {
+            if (tasks == null) {
+                return Map.of();
+            }
+            Map<String, Object> payload = tasks.get(taskId);
+            return payload != null ? new LinkedHashMap<>(payload) : Map.of();
+        }
+    }
+}
+>>
+
+taskEscalationPublisherClass(packageName, className, processId) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.gautelis.durga.ProcessEvent;
+import tools.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+
+public class %className% {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
+        String taskId = args.length > 1 ? args[1] : null;
+        String processInstanceId = args.length > 2 ? args[2] : null;
+
+        if (taskId == null || taskId.isBlank() || processInstanceId == null || processInstanceId.isBlank()) {
+            throw new IllegalArgumentException("Usage: <bootstrap> <task-id> <instance-id>");
+        }
+
+        TaskPayloads payloads = loadTaskPayloads();
+        Map<String, Object> payload = new LinkedHashMap<>(payloads.task(taskId));
+        payload.put("escalatedBy", "generated-task-escalation-publisher");
+
+        String correlationId = UUID.randomUUID().toString();
+        String businessKey = payloads.businessKeyExample() != null ? payloads.businessKeyExample() : "%processId%-demo-001";
+        String topic = "%processId%_" + taskId + "_output";
+        String escalationCode = taskId + "_escalated";
+
+        ProcessEvent event = new ProcessEvent(
+                processInstanceId,
+                "%processId%",
+                taskId,
+                UUID.randomUUID().toString(),
+                correlationId,
+                payload,
+                ProcessEvent.Status.ESCALATED,
+                new ProcessEvent.ErrorInfo("Generated task escalation for " + taskId, escalationCode),
+                ProcessEvent.EventType.ACTIVITY_ESCALATED,
+                "v1",
+                businessKey,
+                Instant.now().toString()
+        );
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.send(new ProducerRecord<>(topic, processInstanceId, event.toJson()));
+            producer.send(new ProducerRecord<>("process-events", processInstanceId, event.toJson()));
+            producer.flush();
+        }
+
+        System.out.println("Published task escalation for taskId=" + taskId + " instanceId=" + processInstanceId);
+    }
+
+    private static TaskPayloads loadTaskPayloads() {
+        Path path = Path.of("task-payloads.json");
+        if (!Files.exists(path)) {
+            throw new IllegalStateException("Missing task-payloads.json in " + path.toAbsolutePath());
+        }
+        try {
+            return MAPPER.readValue(Files.readString(path), TaskPayloads.class);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read task-payloads.json", e);
+        }
+    }
+
+    public record TaskPayloads(String processId, String businessKeyExample, Map<String, Map<String, Object> > tasks) {
+        public Map<String, Object> task(String taskId) {
+            if (tasks == null) {
+                return Map.of();
+            }
+            Map<String, Object> payload = tasks.get(taskId);
+            return payload != null ? new LinkedHashMap<>(payload) : Map.of();
+        }
+    }
+}
+>>
+
+callActivityCompletionPublisherClass(packageName, className, processId) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.gautelis.durga.ProcessEvent;
+import tools.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+
+public class %className% {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
+        String callActivityId = args.length > 1 ? args[1] : null;
+        String processInstanceId = args.length > 2 ? args[2] : null;
+
+        if (callActivityId == null || callActivityId.isBlank() || processInstanceId == null || processInstanceId.isBlank()) {
+            throw new IllegalArgumentException("Usage: <bootstrap> <call-activity-id> <instance-id>");
+        }
+
+        TaskPayloads payloads = loadTaskPayloads();
+        Map<String, Object> payload = new LinkedHashMap<>(payloads.task(callActivityId));
+        payload.put("completedBy", "generated-call-activity-completer");
+        payload.put("waitingForReply", false);
+
+        String correlationId = UUID.randomUUID().toString();
+        String businessKey = payloads.businessKeyExample() != null ? payloads.businessKeyExample() : "%processId%-demo-001";
+        String topic = "%processId%_" + callActivityId + "_reply";
+
+        ProcessEvent event = new ProcessEvent(
+                processInstanceId,
+                "%processId%",
+                callActivityId,
+                UUID.randomUUID().toString(),
+                correlationId,
+                payload,
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                "v1",
+                businessKey,
+                Instant.now().toString()
+        );
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.send(new ProducerRecord<>(topic, processInstanceId, event.toJson()));
+            producer.flush();
+        }
+
+        System.out.println("Published call activity completion for callActivityId=" + callActivityId + " instanceId=" + processInstanceId);
+    }
+
+    private static TaskPayloads loadTaskPayloads() {
+        Path path = Path.of("task-payloads.json");
+        if (!Files.exists(path)) {
+            throw new IllegalStateException("Missing task-payloads.json in " + path.toAbsolutePath());
+        }
+        try {
+            return MAPPER.readValue(Files.readString(path), TaskPayloads.class);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read task-payloads.json", e);
+        }
+    }
+
+    public record TaskPayloads(String processId, String businessKeyExample, Map<String, Map<String, Object> > tasks) {
+        public Map<String, Object> task(String taskId) {
+            if (tasks == null) {
+                return Map.of();
+            }
+            Map<String, Object> payload = tasks.get(taskId);
+            return payload != null ? new LinkedHashMap<>(payload) : Map.of();
+        }
+    }
+}
+>>
+
+messageEventPublisherClass(packageName, className, processId) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.gautelis.durga.ProcessEvent;
+
+import java.time.Instant;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+
+public class %className% {
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
+        String messageTopic = args.length > 1 ? args[1] : null;
+        String processInstanceId = args.length > 2 ? args[2] : null;
+
+        if (messageTopic == null || messageTopic.isBlank() || processInstanceId == null || processInstanceId.isBlank()) {
+            throw new IllegalArgumentException("Usage: <bootstrap> <message-topic> <instance-id>");
+        }
+
+        ProcessEvent event = new ProcessEvent(
+                processInstanceId,
+                "%processId%",
+                messageTopic,
+                UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
+                Map.of("source", "generated-message-event-publisher", "messageTopic", messageTopic),
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                "v1",
+                "%processId%-demo-001",
+                Instant.now().toString()
+        );
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.send(new ProducerRecord<>(messageTopic, processInstanceId, event.toJson()));
+            producer.flush();
+        }
+
+        System.out.println("Published message event for topic=" + messageTopic + " instanceId=" + processInstanceId);
+    }
+}
+>>
+
+signalEventPublisherClass(packageName, className, processId) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.gautelis.durga.ProcessEvent;
+
+import java.time.Instant;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+
+public class %className% {
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
+        String signalTopic = args.length > 1 ? args[1] : null;
+        String processInstanceId = args.length > 2 ? args[2] : null;
+
+        if (signalTopic == null || signalTopic.isBlank() || processInstanceId == null || processInstanceId.isBlank()) {
+            throw new IllegalArgumentException("Usage: <bootstrap> <signal-topic> <instance-id>");
+        }
+
+        ProcessEvent event = new ProcessEvent(
+                processInstanceId,
+                "%processId%",
+                signalTopic,
+                UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
+                Map.of("source", "generated-signal-event-publisher", "signalTopic", signalTopic),
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                "v1",
+                "%processId%-demo-001",
+                Instant.now().toString()
+        );
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.send(new ProducerRecord<>(signalTopic, processInstanceId, event.toJson()));
+            producer.flush();
+        }
+
+        System.out.println("Published signal event to topic=" + signalTopic + " instanceId=" + processInstanceId);
+    }
+}
+>>
+
+processEventsWatcherClass(packageName, className, processId) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.gautelis.durga.ProcessEvent;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.Properties;
+import java.util.UUID;
+
+public class %className% {
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
+        String processInstanceId = args.length > 1 ? args[1] : "";
+        int maxRecords = args.length > 2 ? Integer.parseInt(args[2]) : 20;
+        long timeoutSeconds = args.length > 3 ? Long.parseLong(args[3]) : 30;
+
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "%processId%-process-events-watcher-" + UUID.randomUUID());
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(Collections.singletonList("process-events"));
+            long deadlineMs = System.currentTimeMillis() + (timeoutSeconds * 1000);
+            int seen = 0;
+
+            while (System.currentTimeMillis() < deadlineMs && seen < maxRecords) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
+                for (ConsumerRecord<String, String> record : records) {
+                    ProcessEvent event = ProcessEvent.fromJson(record.value());
+                    if (!"%processId%".equals(event.processId())) {
+                        continue;
+                    }
+                    if (!processInstanceId.isBlank() && !processInstanceId.equals(event.processInstanceId())) {
+                        continue;
+                    }
+                    seen++;
+                    System.out.println(
+                            seen
+                                    + " " + event.timestamp()
+                                    + " instance=" + event.processInstanceId()
+                                    + " activity=" + event.activityId()
+                                    + " status=" + event.status()
+                                    + " event=" + event.eventType()
+                                    + " payload=" + event.payload()
+                    );
+                    if (seen >= maxRecords) {
+                        break;
+                    }
+                }
+            }
+
+            System.out.println("Watcher finished after records=" + seen);
+        }
+    }
+}
+>>
+
+taskOutputWatcherClass(packageName, className, processId) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.gautelis.durga.ProcessEvent;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.Properties;
+import java.util.UUID;
+
+public class %className% {
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
+        String taskId = args.length > 1 ? args[1] : "";
+        String processInstanceId = args.length > 2 ? args[2] : "";
+        int maxRecords = args.length > 3 ? Integer.parseInt(args[3]) : 20;
+        long timeoutSeconds = args.length > 4 ? Long.parseLong(args[4]) : 30;
+
+        if (taskId.isBlank()) {
+            throw new IllegalArgumentException("Usage: <bootstrap> <task-id> [instance-id] [max-records] [timeout-seconds]");
+        }
+
+        String topic = "%processId%_" + taskId + "_output";
+
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "%processId%-task-output-watcher-" + UUID.randomUUID());
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(Collections.singletonList(topic));
+            long deadlineMs = System.currentTimeMillis() + (timeoutSeconds * 1000);
+            int seen = 0;
+
+            while (System.currentTimeMillis() < deadlineMs && seen < maxRecords) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
+                for (ConsumerRecord<String, String> record : records) {
+                    ProcessEvent event = ProcessEvent.fromJson(record.value());
+                    if (!processInstanceId.isBlank() && !processInstanceId.equals(event.processInstanceId())) {
+                        continue;
+                    }
+                    seen++;
+                    System.out.println(
+                            seen
+                                    + " " + event.timestamp()
+                                    + " topic=" + topic
+                                    + " instance=" + event.processInstanceId()
+                                    + " activity=" + event.activityId()
+                                    + " status=" + event.status()
+                                    + " payload=" + event.payload()
+                    );
+                    if (seen >= maxRecords) {
+                        break;
+                    }
+                }
+            }
+
+            System.out.println("Watcher finished after records=" + seen + " topic=" + topic);
+        }
+    }
+}
+>>
+
+pomXml(processId, starterClass) ::= <<
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>se.fk.generated</groupId>
+    <artifactId>%processId%-generated</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <quarkus.platform.version>3.29.2</quarkus.platform.version>
+        <kafka.version>4.1.1</kafka.version>
+        <slf4j.version>2.0.17</slf4j.version>
+        <log4j.version>2.25.3</log4j.version>
+        <jackson.version>3.0.3</jackson.version>
+        <logmgr.version>3.1.2.Final</logmgr.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-messaging-kafka</artifactId>
+            <version>${quarkus.platform.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.logmanager</groupId>
+            <artifactId>jboss-logmanager</artifactId>
+            <version>${logmgr.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <version>${kafka.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j2-impl</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>${maven.compiler.source}</source>
+                    <target>${maven.compiler.target}</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>all</shadedClassifierName>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <manifestEntries>
+                                        <Main-Class>org.gautelis.durga.generated.%starterClass%Starter</Main-Class>
+                                        <Java-Util-Logging-Manager>org.jboss.logmanager.LogManager</Java-Util-Logging-Manager>
+                                    </manifestEntries>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+>>
+
+starterClass(packageName, className, processId) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.gautelis.durga.ProcessEvent;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+
+public class %className% {
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
+        String topic = "%processId%_start";
+        Map<String, Object> payload = new HashMap<>();
+
+        for (int i = 1; i < args.length; i++) {
+            String arg = args[i];
+            int eq = arg.indexOf('=');
+            if (eq > 0) {
+                payload.put(arg.substring(0, eq), arg.substring(eq + 1));
+            }
+        }
+
+        ProcessEvent event = new ProcessEvent(
+                UUID.randomUUID().toString(),
+                "%processId%",
+                "start",
+                UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
+                payload,
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.PROCESS_STARTED,
+                "v1",
+                null,
+                null
+        );
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.send(new ProducerRecord<>(topic, event.processInstanceId(), event.toJson()));
+            producer.send(new ProducerRecord<>("process-events", event.processInstanceId(), event.toJson()));
+            producer.flush();
+        }
+
+        System.out.println("Sent start event to " + topic + " with instanceId=" + event.processInstanceId());
+    }
+}
+>>
+
+scopeCancellationRegistryClass() ::= <<
+package org.gautelis.durga;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
+@ApplicationScoped
+public class ScopeCancellationRegistry {
+    private final Map<String, Set<String> > cancelledActivitiesByInstance = new ConcurrentHashMap<String, Set<String> >();
+
+    public void cancelScope(String processInstanceId, Collection<String> activityIds) {
+        if (processInstanceId == null || processInstanceId.isBlank() || activityIds == null || activityIds.isEmpty()) {
+            return;
+        }
+        cancelledActivitiesByInstance.compute(processInstanceId, (ignored, existing) -> {
+            Set<String> updated = existing != null
+                    ? ConcurrentHashMap.newKeySet(existing.size() + activityIds.size())
+                    : ConcurrentHashMap.newKeySet();
+            if (existing != null) {
+                updated.addAll(existing);
+            }
+            updated.addAll(activityIds);
+            return updated;
+        });
+    }
+
+    public void clearScope(String processInstanceId, Collection<String> activityIds) {
+        if (processInstanceId == null || processInstanceId.isBlank() || activityIds == null || activityIds.isEmpty()) {
+            return;
+        }
+        cancelledActivitiesByInstance.computeIfPresent(processInstanceId, (ignored, existing) -> {
+            existing.removeAll(activityIds);
+            return existing.isEmpty() ? null : existing;
+        });
+    }
+
+    public boolean isCancelled(String processInstanceId, String activityId) {
+        if (processInstanceId == null || processInstanceId.isBlank() || activityId == null || activityId.isBlank()) {
+            return false;
+        }
+        Set<String> cancelled = cancelledActivitiesByInstance.get(processInstanceId);
+        return cancelled != null && cancelled.contains(activityId);
+    }
+}
+>>
+
+processEventClass() ::= <<
+package org.gautelis.durga;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+
+import java.time.Instant;
+import java.util.Map;
+
+public record ProcessEvent(
+        String processInstanceId,
+        String processId,
+        String activityId,
+        String tokenId,
+        String correlationId,
+        Map<String, Object> payload,
+        Status status,
+        ErrorInfo error,
+        EventType eventType,
+        String processVersion,
+        String businessKey,
+        String timestamp
+) {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public enum Status {
+        STARTED,
+        COMPLETED,
+        FAILED,
+        ESCALATED,
+        CANCELLED
+    }
+
+    public enum EventType {
+        PROCESS_STARTED,
+        ACTIVITY_ENTERED,
+        ACTIVITY_COMPLETED,
+        ACTIVITY_ESCALATED,
+        ACTIVITY_CANCELLED,
+        GATEWAY_TAKEN,
+        PROCESS_COMPLETED,
+        PROCESS_FAILED
+    }
+
+    public record ErrorInfo(String message, String code) {
+    }
+
+    public ProcessEvent(
+            String processInstanceId,
+            String processId,
+            String activityId,
+            String tokenId,
+            String correlationId,
+            Map<String, Object> payload,
+            Status status,
+            ErrorInfo error
+    ) {
+        this(
+                processInstanceId,
+                processId,
+                activityId,
+                tokenId,
+                correlationId,
+                payload,
+                status,
+                error,
+                inferEventType(status),
+                null,
+                null,
+                Instant.now().toString()
+        );
+    }
+
+    public ProcessEvent {
+        eventType = eventType != null ? eventType : inferEventType(status);
+        timestamp = timestamp != null ? timestamp : Instant.now().toString();
+    }
+
+    private static EventType inferEventType(Status status) {
+        if (status == null) {
+            return EventType.ACTIVITY_ENTERED;
+        }
+        return switch (status) {
+            case STARTED -> EventType.PROCESS_STARTED;
+            case COMPLETED -> EventType.ACTIVITY_COMPLETED;
+            case FAILED -> EventType.PROCESS_FAILED;
+            case ESCALATED -> EventType.ACTIVITY_ESCALATED;
+            case CANCELLED -> EventType.ACTIVITY_CANCELLED;
+        };
+    }
+
+    public String toJson() {
+        try {
+            return MAPPER.writeValueAsString(this);
+        } catch (JacksonException e) {
+            throw new IllegalStateException("Failed to serialize ProcessEvent", e);
+        }
+    }
+
+    public static ProcessEvent fromJson(String json) {
+        try {
+            return MAPPER.readValue(json, ProcessEvent.class);
+        } catch (JacksonException e) {
+            throw new IllegalArgumentException("Failed to parse ProcessEvent", e);
+        }
+    }
+}
+>>
+
+processStateClass() ::= <<
+package org.gautelis.durga;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.List;
+import java.util.Map;
+
+public record ProcessState(
+        String processInstanceId,
+        List<Token> tokens,
+        Map<String, Object> variables,
+        long version
+) {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public record Token(String tokenId, String at) {
+    }
+
+    public String toJson() {
+        try {
+            return MAPPER.writeValueAsString(this);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize ProcessState", e);
+        }
+    }
+
+    public static ProcessState fromJson(String json) {
+        try {
+            return MAPPER.readValue(json, ProcessState.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Failed to parse ProcessState", e);
+        }
+    }
+}
+>>
+
+processStateStoreClass() ::= <<
+package org.gautelis.durga;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+public class ProcessStateStore implements AutoCloseable {
+    private final KafkaProducer<String, String> producer;
+    private final KafkaConsumer<String, String> consumer;
+    private final String topic;
+
+    public ProcessStateStore(String bootstrapServers, String topic) {
+        this.topic = topic;
+
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        this.producer = new KafkaProducer<>(producerProps);
+
+        Properties consumerProps = new Properties();
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "process-state-reader");
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+        this.consumer = new KafkaConsumer<>(consumerProps);
+    }
+
+    public void save(ProcessState state) {
+        ProducerRecord<String, String> record =
+                new ProducerRecord<>(topic, state.processInstanceId(), state.toJson());
+        producer.send(record);
+        producer.flush();
+    }
+
+    public ProcessState loadLatest(String processInstanceId, Duration timeout) {
+        List<TopicPartition> partitions = consumer.partitionsFor(topic).stream()
+                .map(info -> new TopicPartition(topic, info.partition()))
+                .toList();
+
+        if (partitions.isEmpty()) {
+            return null;
+        }
+
+        consumer.assign(partitions);
+        consumer.seekToBeginning(partitions);
+
+        // Naive scan to find the latest value for a key in a compacted topic.
+        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
+        Map<TopicPartition, Long> lastOffsets = new HashMap<>();
+        ProcessState latest = null;
+
+        long deadlineMs = System.currentTimeMillis() + timeout.toMillis();
+        while (System.currentTimeMillis() < deadlineMs) {
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
+            for (var record : records) {
+                TopicPartition partition = new TopicPartition(record.topic(), record.partition());
+                lastOffsets.put(partition, record.offset());
+                if (processInstanceId.equals(record.key())) {
+                    latest = ProcessState.fromJson(record.value());
+                }
+            }
+
+            boolean caughtUp = endOffsets.entrySet().stream().allMatch(entry -> {
+                long last = lastOffsets.getOrDefault(entry.getKey(), -1L);
+                return last >= entry.getValue() - 1;
+            });
+
+            if (caughtUp) {
+                return latest;
+            }
+        }
+
+        return latest;
+    }
+
+    @Override
+    public void close() {
+        producer.close();
+        consumer.close();
+    }
+}
+>>

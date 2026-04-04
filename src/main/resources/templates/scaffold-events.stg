@@ -1,0 +1,1133 @@
+boundaryTimerEventClass(packageName, className, attachedTaskId, outputChannel, outputActivityId, outputNodeType, timerId, timerType, timerExpression, cancelActivity) ::= <<
+package %packageName%;
+
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
+@ApplicationScoped
+public class %className% {
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    private final ConcurrentMap<String, ScheduledFuture> pendingTimeouts =
+            new ConcurrentHashMap<String, ScheduledFuture>();
+
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%outputChannel%")
+    Emitter<String> outputEmitter;
+
+    @Incoming("process-events-monitor")
+    public CompletionStage<Void> onProcessEvent(Message<String> msg) {
+        ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
+        if (!"%attachedTaskId%".equals(event.activityId())) {
+            return msg.ack();
+        }
+
+        if (event.eventType() == ProcessEvent.EventType.ACTIVITY_CANCELLED) {
+            ScheduledFuture existing = pendingTimeouts.remove(event.processInstanceId());
+            if (existing != null) {
+                existing.cancel(false);
+            }
+            return msg.ack();
+        }
+
+        if (event.eventType() == ProcessEvent.EventType.ACTIVITY_COMPLETED && event.status() == ProcessEvent.Status.COMPLETED) {
+            ScheduledFuture existing = pendingTimeouts.remove(event.processInstanceId());
+            if (existing != null) {
+                existing.cancel(false);
+            }
+            return msg.ack();
+        }
+
+        if (event.eventType() != ProcessEvent.EventType.ACTIVITY_ENTERED) {
+            return msg.ack();
+        }
+
+        long delayMillis = delayMillis("%timerType%", "%timerExpression%");
+        ScheduledFuture existing = pendingTimeouts.remove(event.processInstanceId());
+        if (existing != null) {
+            existing.cancel(false);
+        }
+        ScheduledFuture scheduled = scheduler.schedule(new Runnable() {
+            @Override
+            public void run() {
+                fireTimeout(event);
+            }
+        }, delayMillis, TimeUnit.MILLISECONDS);
+        pendingTimeouts.put(event.processInstanceId(), scheduled);
+        return msg.ack();
+    }
+
+    private void fireTimeout(ProcessEvent event) {
+        pendingTimeouts.remove(event.processInstanceId());
+
+%if(cancelActivity)%
+        processEventsEmitter.send(new ProcessEvent(
+                event.processInstanceId(),
+                event.processId(),
+                "%attachedTaskId%",
+                event.tokenId(),
+                event.correlationId(),
+                event.payload(),
+                ProcessEvent.Status.CANCELLED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_CANCELLED,
+                event.processVersion(),
+                event.businessKey(),
+                Instant.now().toString()
+        ).toJson());
+%endif%
+
+        processEventsEmitter.send(new ProcessEvent(
+                event.processInstanceId(),
+                event.processId(),
+                "%timerId%",
+                event.tokenId(),
+                event.correlationId(),
+                event.payload(),
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                event.processVersion(),
+                event.businessKey(),
+                Instant.now().toString()
+        ).toJson());
+
+        if ("%outputNodeType%".equals("endEvent")) {
+            processEventsEmitter.send(new ProcessEvent(
+                    event.processInstanceId(),
+                    event.processId(),
+                    "%outputActivityId%",
+                    event.tokenId(),
+                    event.correlationId(),
+                    event.payload(),
+                    ProcessEvent.Status.COMPLETED,
+                    null,
+                    ProcessEvent.EventType.PROCESS_COMPLETED,
+                    event.processVersion(),
+                    event.businessKey(),
+                    Instant.now().toString()
+            ).toJson());
+            return;
+        }
+
+        ProcessEvent nextEvent = new ProcessEvent(
+                event.processInstanceId(),
+                event.processId(),
+                "%outputActivityId%",
+                event.tokenId(),
+                event.correlationId(),
+                event.payload(),
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                event.processVersion(),
+                event.businessKey(),
+                Instant.now().toString()
+        );
+        outputEmitter.send(nextEvent.toJson());
+        processEventsEmitter.send(nextEvent.toJson());
+    }
+
+    private long delayMillis(String timerType, String expression) {
+        try {
+            return switch (timerType) {
+                case "timeDate" -> Math.max(0L, Duration.between(Instant.now(), Instant.parse(expression)).toMillis());
+                case "timeCycle" -> parseTimeCycle(expression);
+                default -> Math.max(0L, Duration.parse(expression).toMillis());
+            };
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    private long parseTimeCycle(String expression) {
+        String candidate = expression;
+        if (expression.contains("/")) {
+            String[] segments = expression.split("/");
+            candidate = segments[segments.length - 1];
+        }
+        return Math.max(0L, Duration.parse(candidate).toMillis());
+    }
+
+    @PreDestroy
+    public void close() {
+        scheduler.shutdownNow();
+    }
+}
+>>
+
+boundaryErrorEventClass(packageName, className, attachedTaskId, outputChannel, outputActivityId, outputNodeType, errorId, errorCode, cancelActivity) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+
+import java.time.Instant;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%outputChannel%")
+    Emitter<String> outputEmitter;
+
+    @Incoming("process-events-monitor")
+    public CompletionStage<Void> onProcessEvent(Message<String> msg) {
+        ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
+        if (!"%attachedTaskId%".equals(event.activityId()) || event.status() != ProcessEvent.Status.FAILED) {
+            return msg.ack();
+        }
+
+        String code = event.error() != null && event.error().code() != null ? event.error().code() : "";
+        if (!code.isBlank() && !"%errorCode%".equals(code)) {
+            return msg.ack();
+        }
+
+%if(cancelActivity)%
+        processEventsEmitter.send(new ProcessEvent(
+                event.processInstanceId(),
+                event.processId(),
+                "%attachedTaskId%",
+                event.tokenId(),
+                event.correlationId(),
+                event.payload(),
+                ProcessEvent.Status.CANCELLED,
+                event.error(),
+                ProcessEvent.EventType.ACTIVITY_CANCELLED,
+                event.processVersion(),
+                event.businessKey(),
+                Instant.now().toString()
+        ).toJson());
+%endif%
+
+        processEventsEmitter.send(new ProcessEvent(
+                event.processInstanceId(),
+                event.processId(),
+                "%errorId%",
+                event.tokenId(),
+                event.correlationId(),
+                event.payload(),
+                ProcessEvent.Status.COMPLETED,
+                event.error(),
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                event.processVersion(),
+                event.businessKey(),
+                Instant.now().toString()
+        ).toJson());
+
+        if ("%outputNodeType%".equals("endEvent")) {
+            processEventsEmitter.send(new ProcessEvent(
+                    event.processInstanceId(),
+                    event.processId(),
+                    "%outputActivityId%",
+                    event.tokenId(),
+                    event.correlationId(),
+                    event.payload(),
+                    ProcessEvent.Status.COMPLETED,
+                    event.error(),
+                    ProcessEvent.EventType.PROCESS_COMPLETED,
+                    event.processVersion(),
+                    event.businessKey(),
+                    Instant.now().toString()
+            ).toJson());
+            return msg.ack();
+        }
+
+        ProcessEvent nextEvent = new ProcessEvent(
+                event.processInstanceId(),
+                event.processId(),
+                "%outputActivityId%",
+                event.tokenId(),
+                event.correlationId(),
+                event.payload(),
+                ProcessEvent.Status.STARTED,
+                event.error(),
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                event.processVersion(),
+                event.businessKey(),
+                Instant.now().toString()
+        );
+        outputEmitter.send(nextEvent.toJson());
+        processEventsEmitter.send(nextEvent.toJson());
+        return msg.ack();
+    }
+}
+>>
+
+boundaryEscalationEventClass(packageName, className, attachedTaskId, outputChannel, outputActivityId, outputNodeType, escalationId, escalationCode, cancelActivity) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+
+import java.time.Instant;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%outputChannel%")
+    Emitter<String> outputEmitter;
+
+    @Incoming("process-events-monitor")
+    public CompletionStage<Void> onProcessEvent(Message<String> msg) {
+        ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
+        if (!"%attachedTaskId%".equals(event.activityId()) || event.status() != ProcessEvent.Status.ESCALATED) {
+            return msg.ack();
+        }
+
+        String code = event.error() != null && event.error().code() != null ? event.error().code() : "";
+        if (!code.isBlank() && !"%escalationCode%".equals(code)) {
+            return msg.ack();
+        }
+
+%if(cancelActivity)%
+        processEventsEmitter.send(new ProcessEvent(
+                event.processInstanceId(),
+                event.processId(),
+                "%attachedTaskId%",
+                event.tokenId(),
+                event.correlationId(),
+                event.payload(),
+                ProcessEvent.Status.CANCELLED,
+                event.error(),
+                ProcessEvent.EventType.ACTIVITY_CANCELLED,
+                event.processVersion(),
+                event.businessKey(),
+                Instant.now().toString()
+        ).toJson());
+%endif%
+
+        processEventsEmitter.send(new ProcessEvent(
+                event.processInstanceId(),
+                event.processId(),
+                "%escalationId%",
+                event.tokenId(),
+                event.correlationId(),
+                event.payload(),
+                ProcessEvent.Status.COMPLETED,
+                event.error(),
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                event.processVersion(),
+                event.businessKey(),
+                Instant.now().toString()
+        ).toJson());
+
+        if ("%outputNodeType%".equals("endEvent")) {
+            processEventsEmitter.send(new ProcessEvent(
+                    event.processInstanceId(),
+                    event.processId(),
+                    "%outputActivityId%",
+                    event.tokenId(),
+                    event.correlationId(),
+                    event.payload(),
+                    ProcessEvent.Status.COMPLETED,
+                    event.error(),
+                    ProcessEvent.EventType.PROCESS_COMPLETED,
+                    event.processVersion(),
+                    event.businessKey(),
+                    Instant.now().toString()
+            ).toJson());
+            return msg.ack();
+        }
+
+        ProcessEvent nextEvent = new ProcessEvent(
+                event.processInstanceId(),
+                event.processId(),
+                "%outputActivityId%",
+                event.tokenId(),
+                event.correlationId(),
+                event.payload(),
+                ProcessEvent.Status.STARTED,
+                event.error(),
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                event.processVersion(),
+                event.businessKey(),
+                Instant.now().toString()
+        );
+        outputEmitter.send(nextEvent.toJson());
+        processEventsEmitter.send(nextEvent.toJson());
+        return msg.ack();
+    }
+}
+>>
+
+timerCatchEventClass(packageName, className, inputChannel, outputChannel, outputActivityId, outputNodeType, timerId, timerType, timerExpression) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeUnit;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%outputChannel%")
+    Emitter<String> outputEmitter;
+
+    @Incoming("%inputChannel%")
+    public CompletionStage<Void> waitForTimer(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%timerId%")) {
+            return msg.ack();
+        }
+        ProcessEvent timerEntered = new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%timerId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                inputEvent.payload(),
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        );
+        processEventsEmitter.send(timerEntered.toJson());
+
+        long delayMillis = delayMillis("%timerType%", "%timerExpression%");
+        return CompletableFuture
+                .runAsync(() -> fireAfterDelay(inputEvent), CompletableFuture.delayedExecutor(delayMillis, TimeUnit.MILLISECONDS))
+                .thenCompose(ignored -> msg.ack());
+    }
+
+    private void fireAfterDelay(ProcessEvent inputEvent) {
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%timerId%")) {
+            return;
+        }
+        ProcessEvent timerCompleted = new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%timerId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                inputEvent.payload(),
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        );
+        processEventsEmitter.send(timerCompleted.toJson());
+
+        if ("%outputNodeType%".equals("endEvent")) {
+            ProcessEvent completed = new ProcessEvent(
+                    inputEvent.processInstanceId(),
+                    inputEvent.processId(),
+                    "%outputActivityId%",
+                    inputEvent.tokenId(),
+                    inputEvent.correlationId(),
+                    inputEvent.payload(),
+                    ProcessEvent.Status.COMPLETED,
+                    null,
+                    ProcessEvent.EventType.PROCESS_COMPLETED,
+                    inputEvent.processVersion(),
+                    inputEvent.businessKey(),
+                    null
+            );
+            processEventsEmitter.send(completed.toJson());
+            return;
+        }
+
+        ProcessEvent nextEvent = new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%outputActivityId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                inputEvent.payload(),
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        );
+        outputEmitter.send(nextEvent.toJson());
+        processEventsEmitter.send(nextEvent.toJson());
+    }
+
+    private long delayMillis(String timerType, String expression) {
+        try {
+            return switch (timerType) {
+                case "timeDate" -> Math.max(0L, Duration.between(Instant.now(), Instant.parse(expression)).toMillis());
+                case "timeCycle" -> parseTimeCycle(expression);
+                default -> Math.max(0L, Duration.parse(expression).toMillis());
+            };
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    private long parseTimeCycle(String expression) {
+        String candidate = expression;
+        if (expression.contains("/")) {
+            String[] segments = expression.split("/");
+            candidate = segments[segments.length - 1];
+        }
+        return Math.max(0L, Duration.parse(candidate).toMillis());
+    }
+}
+>>
+
+messageCatchEventClass(packageName, className, inputChannel, messageTopic, messageId, messageName, outputChannel, outputActivityId, outputNodeType) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+
+@ApplicationScoped
+public class %className% {
+    private final Map<String, ProcessEvent> waitingInstances = new ConcurrentHashMap<>();
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%outputChannel%")
+    Emitter<String> outputEmitter;
+
+    @Incoming("process-events-monitor")
+    public CompletionStage<Void> onProcessEvent(Message<String> msg) {
+        ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
+        if ("%messageId%".equals(event.activityId())
+                && event.eventType() == ProcessEvent.EventType.ACTIVITY_CANCELLED) {
+            waitingInstances.remove(event.processInstanceId());
+        }
+        return msg.ack();
+    }
+
+    @Incoming("%inputChannel%")
+    public CompletionStage<Void> enterWaitState(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%messageId%")) {
+            return msg.ack();
+        }
+        waitingInstances.put(inputEvent.processInstanceId(), inputEvent);
+
+        processEventsEmitter.send(new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%messageId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                inputEvent.payload(),
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        ).toJson());
+        return msg.ack();
+    }
+
+    @Incoming("%messageTopic%")
+    public CompletionStage<Void> onExternalMessage(Message<String> msg) {
+        ProcessEvent messageEvent = ProcessEvent.fromJson(msg.getPayload());
+        ProcessEvent waiting = waitingInstances.remove(messageEvent.processInstanceId());
+        if (waiting == null) {
+            return msg.ack();
+        }
+        if (cancellationRegistry.isCancelled(waiting.processInstanceId(), "%messageId%")) {
+            return msg.ack();
+        }
+
+        processEventsEmitter.send(new ProcessEvent(
+                waiting.processInstanceId(),
+                waiting.processId(),
+                "%messageId%",
+                waiting.tokenId(),
+                waiting.correlationId(),
+                messageEvent.payload(),
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                waiting.processVersion(),
+                waiting.businessKey(),
+                null
+        ).toJson());
+
+        if ("%outputNodeType%".equals("endEvent")) {
+            processEventsEmitter.send(new ProcessEvent(
+                    waiting.processInstanceId(),
+                    waiting.processId(),
+                    "%outputActivityId%",
+                    waiting.tokenId(),
+                    waiting.correlationId(),
+                    messageEvent.payload(),
+                    ProcessEvent.Status.COMPLETED,
+                    null,
+                    ProcessEvent.EventType.PROCESS_COMPLETED,
+                    waiting.processVersion(),
+                    waiting.businessKey(),
+                    null
+            ).toJson());
+            return msg.ack();
+        }
+
+        ProcessEvent nextEvent = new ProcessEvent(
+                waiting.processInstanceId(),
+                waiting.processId(),
+                "%outputActivityId%",
+                waiting.tokenId(),
+                waiting.correlationId(),
+                messageEvent.payload(),
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                waiting.processVersion(),
+                waiting.businessKey(),
+                null
+        );
+        outputEmitter.send(nextEvent.toJson());
+        processEventsEmitter.send(nextEvent.toJson());
+        return msg.ack();
+    }
+}
+>>
+
+messageThrowEventClass(packageName, className, inputChannel, messageTopic, messageId, messageName, outputChannel, outputActivityId, outputNodeType) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%messageTopic%")
+    Emitter<String> messageEmitter;
+
+    @Inject
+    @Channel("%outputChannel%")
+    Emitter<String> outputEmitter;
+
+    @Incoming("%inputChannel%")
+    public void throwMessage(String payload) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(payload);
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%messageId%")) {
+            return;
+        }
+        ProcessEvent thrownMessage = new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%messageId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                inputEvent.payload(),
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        );
+        messageEmitter.send(thrownMessage.toJson());
+        processEventsEmitter.send(thrownMessage.toJson());
+
+        if ("%outputNodeType%".equals("endEvent")) {
+            processEventsEmitter.send(new ProcessEvent(
+                    inputEvent.processInstanceId(),
+                    inputEvent.processId(),
+                    "%outputActivityId%",
+                    inputEvent.tokenId(),
+                    inputEvent.correlationId(),
+                    inputEvent.payload(),
+                    ProcessEvent.Status.COMPLETED,
+                    null,
+                    ProcessEvent.EventType.PROCESS_COMPLETED,
+                    inputEvent.processVersion(),
+                    inputEvent.businessKey(),
+                    null
+            ).toJson());
+            return;
+        }
+
+        ProcessEvent nextEvent = new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%outputActivityId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                inputEvent.payload(),
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        );
+        outputEmitter.send(nextEvent.toJson());
+        processEventsEmitter.send(nextEvent.toJson());
+    }
+}
+>>
+
+signalCatchEventClass(packageName, className, inputChannel, signalTopic, signalId, signalName, outputChannel, outputActivityId, outputNodeType) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+
+@ApplicationScoped
+public class %className% {
+    private final Map<String, ProcessEvent> waitingInstances = new ConcurrentHashMap<>();
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%outputChannel%")
+    Emitter<String> outputEmitter;
+
+    @Incoming("process-events-monitor")
+    public CompletionStage<Void> onProcessEvent(Message<String> msg) {
+        ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
+        if ("%signalId%".equals(event.activityId())
+                && event.eventType() == ProcessEvent.EventType.ACTIVITY_CANCELLED) {
+            waitingInstances.remove(event.processInstanceId());
+        }
+        return msg.ack();
+    }
+
+    @Incoming("%inputChannel%")
+    public CompletionStage<Void> enterWaitState(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%signalId%")) {
+            return msg.ack();
+        }
+        waitingInstances.put(inputEvent.processInstanceId(), inputEvent);
+
+        processEventsEmitter.send(new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%signalId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                inputEvent.payload(),
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        ).toJson());
+        return msg.ack();
+    }
+
+    @Incoming("%signalTopic%")
+    public CompletionStage<Void> onSignal(Message<String> msg) {
+        ProcessEvent signalEvent = ProcessEvent.fromJson(msg.getPayload());
+        ProcessEvent waiting = waitingInstances.remove(signalEvent.processInstanceId());
+        if (waiting == null) {
+            return msg.ack();
+        }
+        if (cancellationRegistry.isCancelled(waiting.processInstanceId(), "%signalId%")) {
+            return msg.ack();
+        }
+
+        processEventsEmitter.send(new ProcessEvent(
+                waiting.processInstanceId(),
+                waiting.processId(),
+                "%signalId%",
+                waiting.tokenId(),
+                waiting.correlationId(),
+                signalEvent.payload(),
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                waiting.processVersion(),
+                waiting.businessKey(),
+                null
+        ).toJson());
+
+        if ("%outputNodeType%".equals("endEvent")) {
+            processEventsEmitter.send(new ProcessEvent(
+                    waiting.processInstanceId(),
+                    waiting.processId(),
+                    "%outputActivityId%",
+                    waiting.tokenId(),
+                    waiting.correlationId(),
+                    signalEvent.payload(),
+                    ProcessEvent.Status.COMPLETED,
+                    null,
+                    ProcessEvent.EventType.PROCESS_COMPLETED,
+                    waiting.processVersion(),
+                    waiting.businessKey(),
+                    null
+            ).toJson());
+            return msg.ack();
+        }
+
+        ProcessEvent nextEvent = new ProcessEvent(
+                waiting.processInstanceId(),
+                waiting.processId(),
+                "%outputActivityId%",
+                waiting.tokenId(),
+                waiting.correlationId(),
+                signalEvent.payload(),
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                waiting.processVersion(),
+                waiting.businessKey(),
+                null
+        );
+        outputEmitter.send(nextEvent.toJson());
+        processEventsEmitter.send(nextEvent.toJson());
+        return msg.ack();
+    }
+}
+>>
+
+signalThrowEventClass(packageName, className, inputChannel, signalTopic, signalId, signalName, outputChannel, outputActivityId, outputNodeType) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%signalTopic%")
+    Emitter<String> signalEmitter;
+
+    @Inject
+    @Channel("%outputChannel%")
+    Emitter<String> outputEmitter;
+
+    @Incoming("%inputChannel%")
+    public void throwSignal(String payload) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(payload);
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%signalId%")) {
+            return;
+        }
+        ProcessEvent thrownSignal = new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%signalId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                inputEvent.payload(),
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        );
+        signalEmitter.send(thrownSignal.toJson());
+        processEventsEmitter.send(thrownSignal.toJson());
+
+        if ("%outputNodeType%".equals("endEvent")) {
+            processEventsEmitter.send(new ProcessEvent(
+                    inputEvent.processInstanceId(),
+                    inputEvent.processId(),
+                    "%outputActivityId%",
+                    inputEvent.tokenId(),
+                    inputEvent.correlationId(),
+                    inputEvent.payload(),
+                    ProcessEvent.Status.COMPLETED,
+                    null,
+                    ProcessEvent.EventType.PROCESS_COMPLETED,
+                    inputEvent.processVersion(),
+                    inputEvent.businessKey(),
+                    null
+            ).toJson());
+            return;
+        }
+
+        ProcessEvent nextEvent = new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%outputActivityId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                inputEvent.payload(),
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        );
+        outputEmitter.send(nextEvent.toJson());
+        processEventsEmitter.send(nextEvent.toJson());
+    }
+}
+>>
+
+callActivityHandlerClass(packageName, className, processId, taskId, calledElement, inputChannel, requestChannel, replyChannel, outputChannel, nextChannel, nextActivityId, nextNodeType) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+
+@ApplicationScoped
+public class %className% {
+    private final Map<String, ProcessEvent> waitingInstances = new ConcurrentHashMap<String, ProcessEvent>();
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%requestChannel%")
+    Emitter<String> requestEmitter;
+
+    @Inject
+    @Channel("%outputChannel%")
+    Emitter<String> outputEmitter;
+
+    @Inject
+    @Channel("%nextChannel%")
+    Emitter<String> nextEmitter;
+
+    @Incoming("process-events-monitor")
+    public CompletionStage<Void> onProcessEvent(Message<String> msg) {
+        ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
+        if ("%taskId%".equals(event.activityId())
+                && event.eventType() == ProcessEvent.EventType.ACTIVITY_CANCELLED) {
+            waitingInstances.remove(event.processInstanceId());
+        }
+        return msg.ack();
+    }
+
+    @Incoming("%inputChannel%")
+    public CompletionStage<Void> invoke(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+        waitingInstances.put(inputEvent.processInstanceId(), inputEvent);
+
+        Map<String, Object> requestPayload = new HashMap<String, Object>();
+        if (inputEvent.payload() != null) {
+            requestPayload.putAll(inputEvent.payload());
+        }
+        requestPayload.put("callActivityId", "%taskId%");
+        requestPayload.put("calledElement", "%calledElement%");
+        requestPayload.put("waitingForReply", true);
+
+        ProcessEvent entered = new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%taskId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                requestPayload,
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                Instant.now().toString()
+        );
+        processEventsEmitter.send(entered.toJson());
+        requestEmitter.send(entered.toJson());
+        return msg.ack();
+    }
+
+    @Incoming("%replyChannel%")
+    public CompletionStage<Void> onReply(Message<String> msg) {
+        ProcessEvent replyEvent = ProcessEvent.fromJson(msg.getPayload());
+        ProcessEvent waiting = waitingInstances.remove(replyEvent.processInstanceId());
+        if (waiting == null) {
+            return msg.ack();
+        }
+        if (cancellationRegistry.isCancelled(waiting.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+
+        Map<String, Object> completionPayload = new HashMap<String, Object>();
+        if (waiting.payload() != null) {
+            completionPayload.putAll(waiting.payload());
+        }
+        if (replyEvent.payload() != null) {
+            completionPayload.putAll(replyEvent.payload());
+        }
+        completionPayload.put("callActivityId", "%taskId%");
+        completionPayload.put("calledElement", "%calledElement%");
+        completionPayload.put("waitingForReply", false);
+
+        ProcessEvent completed = new ProcessEvent(
+                waiting.processInstanceId(),
+                waiting.processId(),
+                "%taskId%",
+                waiting.tokenId(),
+                waiting.correlationId(),
+                completionPayload,
+                ProcessEvent.Status.COMPLETED,
+                replyEvent.error(),
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                waiting.processVersion(),
+                waiting.businessKey(),
+                Instant.now().toString()
+        );
+        outputEmitter.send(completed.toJson());
+        processEventsEmitter.send(completed.toJson());
+
+        if ("%nextNodeType%".equals("endEvent")) {
+            processEventsEmitter.send(new ProcessEvent(
+                    waiting.processInstanceId(),
+                    waiting.processId(),
+                    "%nextActivityId%",
+                    waiting.tokenId(),
+                    waiting.correlationId(),
+                    completionPayload,
+                    ProcessEvent.Status.COMPLETED,
+                    replyEvent.error(),
+                    ProcessEvent.EventType.PROCESS_COMPLETED,
+                    waiting.processVersion(),
+                    waiting.businessKey(),
+                    Instant.now().toString()
+            ).toJson());
+            return msg.ack();
+        }
+
+        ProcessEvent nextEvent = new ProcessEvent(
+                waiting.processInstanceId(),
+                waiting.processId(),
+                "%nextActivityId%",
+                waiting.tokenId(),
+                waiting.correlationId(),
+                completionPayload,
+                ProcessEvent.Status.STARTED,
+                replyEvent.error(),
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                waiting.processVersion(),
+                waiting.businessKey(),
+                Instant.now().toString()
+        );
+        nextEmitter.send(nextEvent.toJson());
+        processEventsEmitter.send(nextEvent.toJson());
+        return msg.ack();
+    }
+}
+>>

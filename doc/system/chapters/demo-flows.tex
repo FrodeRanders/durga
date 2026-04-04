@@ -1,0 +1,63 @@
+\section{Demo Flows And Helper Scripts}
+\label{sec:DemoFlows}
+
+Durga is easier to understand when treated as something to run and probe, not only
+as a generator to inspect statically. For that reason, generated helper scripts are
+part of the intended product surface.
+
+\subsection{Purpose of the helper layer}
+
+The generated scripts serve three distinct roles:
+\begin{itemize}
+\item they provide runnable examples of the generated Kafka topology,
+\item they reduce the amount of manual Kafka producer and consumer work needed during exploration,
+\item they make BPMN semantics visible through explicit actions such as completion, failure, escalation and observation.
+\end{itemize}
+
+This matters because many workflow designs seem plausible in BPMN notation, but only become
+clear once concrete runtime events are observed. Durga therefore generates a probe layer
+alongside the executable runtime.
+
+\subsection{Common generated scripts}
+
+The exact set depends on the BPMN model, but the common script categories are:
+\begin{itemize}
+\item \texttt{demo-scenario.sh} for whole-process happy, stuck or failed runs,
+\item \texttt{send-task-input.sh} for manual injection into one task input topic,
+\item \texttt{complete-task.sh}, \texttt{fail-task.sh} and \texttt{escalate-task.sh} for human or exceptional task outcomes,
+\item \texttt{complete-call-activity.sh} for returning from a generated call activity,
+\item \texttt{send-message-event.sh} and \texttt{send-signal-event.sh} for external event stimulation,
+\item \texttt{watch-process-events.sh} and \texttt{watch-task-output.sh} for runtime observation.
+\end{itemize}
+
+\subsection{Recommended learning loop}
+
+The most effective way to understand a generated process is usually:
+\begin{enumerate}
+\item generate a project from one small BPMN sample,
+\item create the Kafka topics and start the generated runtime,
+\item run \texttt{watch-process-events.sh},
+\item execute \texttt{demo-scenario.sh happy},
+\item repeat with a failure, escalation or timeout-oriented script,
+\item inspect the monitoring endpoints or dashboard after each run.
+\end{enumerate}
+
+This loop exposes the difference between nominal flow and exceptional flow with very little setup.
+It also makes one design principle visible: the execution topics carry work, but the canonical
+\texttt{process-events} stream carries the lifecycle truth.
+
+\subsection{A practical division of use}
+
+In practice the helper surface is most useful in three situations:
+\begin{description}
+\item[Learning] A user wants to understand how one BPMN construct maps to Kafka consumers, producers and events.
+\item[Testing] A developer wants to force a boundary, event-subprocess or call-activity path without creating a custom producer.
+\item[Debugging] A generated process compiles, but the user needs to see where runtime routing or cancellation deviates from the BPMN intent.
+\end{description}
+
+\subsection{Why this is documented in the manual}
+
+This documentation is deliberate. The helper scripts are not incidental wrappers around the runtime.
+They are part of how Durga explains itself. A BPMN-to-Kafka tool with no easy way to trigger and
+observe the generated process would be much harder to evaluate, especially when exploring tradeoffs
+around timers, boundaries, event subprocesses and subprocess scopes.
