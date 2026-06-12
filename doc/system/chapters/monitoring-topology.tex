@@ -3,105 +3,127 @@
 
 \subsection{Purpose}
 
-The monitoring subsystem is a separate runtime concern from the generated process execution graph. The generated handlers emit canonical lifecycle events, while the monitoring topology consumes those events and turns them into queryable operational views.
+The monitoring subsystem is a separate runtime concern from the generated process
+execution graph. Generated handlers emit canonical lifecycle events; the monitoring
+topology consumes those events and turns them into queryable operational views.
 
-This separation matters because execution topics are transport-oriented. They show how work is routed. The monitoring topology instead answers questions such as:
+Execution topics show how work is routed. The monitoring topology answers:
 \begin{itemize}
 \item where is a specific process instance now,
-\item how many instances are currently in a given state,
+\item how many instances are in a given state,
 \item which activities are taking the longest,
-\item which instances appear stuck.
+\item which instances appear stuck,
+\item what are the coarse trend counts for starts, completions, and failures.
 \end{itemize}
 
-\subsection{Streams topology}
+\subsection{Topology structure}
 
-The core implementation lives in \texttt{org.gautelis.durga.monitoring.ProcessMonitoringTopology}. The topology consumes the shared \texttt{process-events} topic, filters out null keys or values, and then groups by process instance id.
+The entry point is \texttt{ProcessMonitoringTopology.buildTopology()}. It consumes
+\texttt{process-events}, filters null keys and values, and forks the stream into
+five parallel sub-topologies, each with a dedicated local state store:
 
-From there, the monitoring flow is:
-\begin{enumerate}
-\item aggregate lifecycle events into a latest per-instance projection,
-\item materialize that projection into a state store and a compacted topic,
-\item regroup by current state key,
-\item count instances per current state,
-\item materialize those counts into a second state store and topic.
-\end{enumerate}
+\begin{description}
+\item[Instance state] Aggregates events into \texttt{ProcessStateView} per instance.
+Materialized in \texttt{process-state-store}, output to \texttt{process-state}.
+A filtered subset (active instances) is output to \texttt{process-active-state}.
+\item[State counts] Regroups state views by \texttt{processId:state} key and counts
+instances. Materialized in \texttt{process-state-counts-store}, output to
+\texttt{process-state-counts}.
+\item[Activity latency] Feeds events through a custom \texttt{ActivityLatencyProcessor}
+that records \texttt{ACTIVITY\_ENTERED} timestamps in a persistent key-value store
+(\texttt{process-activity-entry-store}) and, on later completion or termination events,
+emits duration deltas. These deltas are aggregated into rolling \texttt{ActivityLatencyStats}
+per activity, then mapped to \texttt{ActivityLatencySummary} and output to
+\texttt{process-latency}.
+\item[Trends] Filters to \texttt{PROCESS\_STARTED}, \texttt{PROCESS\_COMPLETED},
+and \texttt{PROCESS\_FAILED} events, maps them to hourly trend bucket keys,
+counts per bucket, and outputs \texttt{ProcessTrendPoint} records to
+\texttt{process-trends}. Materialized in \texttt{process-trends-store}.
+\item[Queryable replicas] Five \texttt{builder.globalTable()} calls consume the
+output topics above, each materialized as a global table with a \texttt{-global-store}
+suffix. These are full replicas on every monitoring instance and are what the query
+service reads.
+\end{description}
 
-\begin{figure}[h!]
-    \centering
-    \begin{tikzpicture}[node distance=15mm,>=latex]
-        \tikzstyle{box}=[draw=iptoMuted, rounded corners=2pt, line width=0.8pt, align=center, minimum width=31mm, minimum height=10mm, fill=white]
-        \tikzstyle{accentbox}=[box, fill=iptoAccent!12]
-        \node[accentbox] (events) {process-events};
-        \node[box, right=10mm of events] (aggregate) {aggregate by\\instance id};
-        \node[box, right=10mm of aggregate] (state) {process-state\\topic + store};
-        \node[box, below=6mm of state] (query) {HTTP + CLI\\query surface};
-        \node[box, below=24mm of aggregate] (count) {group by\\current state};
-        \node[box, right=10mm of count] (counts) {process-state-counts\\topic + store};
+\subsection{State stores}
 
-        \draw[->, thick] (events) -- (aggregate);
-        \draw[->, thick] (aggregate) -- (state);
-        \draw[->, thick] (aggregate) -- (count);
-        \draw[->, thick] (count) -- (counts);
-        \draw[->, thick] (state) -- (query);
-        \draw[->, thick] (counts) -- (query);
-    \end{tikzpicture}
-    \caption{Durga monitoring topology from canonical lifecycle stream to queryable state}
-    \label{fig:DurgaMonitoringTopology}
-\end{figure}
+The topology maintains ten state stores:
 
-\subsection{Materialized state}
+\newcommand{\storetable}[1]{%
+\begin{longtable}{|>{\raggedright\arraybackslash}p{0.38\textwidth}|>{\raggedright\arraybackslash}p{0.22\textwidth}|>{\raggedright\arraybackslash}p{0.32\textwidth}|}
+\hline
+\rowcolor[gray]{0.9}\textbf{Store} & \textbf{Type} & \textbf{Purpose} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor[gray]{0.9}\textbf{Store} & \textbf{Type} & \textbf{Purpose} \\
+\hline
+\endhead
+#1
+\end{longtable}
+}
 
-The per-instance projection is represented by \texttt{ProcessStateView}. It is not just a copy of the latest raw event. It accumulates enough information to support operational queries, including:
-\begin{itemize}
-\item current activity or lifecycle state,
-\item started, updated and completed timestamps,
-\item retry and failure information,
-\item per-activity timing information,
-\item correlation and business-key metadata.
-\end{itemize}
+\storetable{
+\texttt{process-state-store} & Local KTable aggregate & Per-instance latest \texttt{ProcessStateView} \\
+\texttt{process-state-counts-store} & Local KTable count & Counts per \texttt{processId:state} key \\
+\texttt{process-latency-store} & Local KTable aggregate & Rolling \texttt{ActivityLatencyStats} per activity \\
+\texttt{process-activity-entry-store} & Persistent KV & Timestamps for the latency temporal join \\
+\texttt{process-trends-store} & Local KTable count & Trend bucket counts \\
+\texttt{*-global-store} (5$\times$) & Global table & Full replicas for HTTP/CLI query access \\
+}
 
-That projection is written both to the Kafka Streams state store and to the \texttt{process-state} topic. The state store supports local low-latency queries. The topic keeps the projection observable and externalizable.
+The five local stores drive computation — aggregation, counting, and temporal joins.
+The five global stores serve queries. The output topics (\texttt{process-state},
+\texttt{process-state-counts}, \texttt{process-active-state}, \texttt{process-latency},
+\texttt{process-trends}) decouple computation from query access: any monitoring instance
+can spin up and receive a full read replica without recomputing.
 
-\subsection{Counts, latency and stuck detection}
+\subsection{Latency computation}
 
-The counts projection is simpler. The topology derives a state key from the latest per-instance view and counts how many instances currently map to each such key.
+Activity latency uses a temporal join pattern without windowed stream-stream joins.
+The \texttt{ActivityLatencyProcessor} stores each \texttt{ACTIVITY\_ENTERED} event's
+timestamp under the key \texttt{instanceId:activityId} in the persistent
+\texttt{process-activity-entry-store}. When a later \texttt{ACTIVITY\_COMPLETED},
+\texttt{ACTIVITY\_ESCALATED}, \texttt{ACTIVITY\_CANCELLED}, \texttt{GATEWAY\_TAKEN},
+\texttt{PROCESS\_COMPLETED}, or \texttt{PROCESS\_FAILED} event arrives for the same
+key, the processor computes the duration and emits an \texttt{ActivityLatencyDelta}.
 
-Latency and stuck-instance reporting are handled by the query service layer on top of the materialized state:
-\begin{itemize}
-\item latency summaries are computed from timestamps and durations recorded in \texttt{ProcessStateView},
-\item stuck-instance detection scans state entries and compares their age against a threshold,
-\item process-specific counts are filtered from the global count view.
-\end{itemize}
+These deltas are grouped by a canonical activity key (processId, version, activityId,
+event type) and aggregated into \texttt{ActivityLatencyStats} — a running count,
+sum, min, and max — then mapped to \texttt{ActivityLatencySummary} for output.
 
-\subsection{HTTP and CLI surface}
+\subsection{Processing guarantees}
 
-The query service is exposed through \texttt{ProcessMonitoringHttpServer} and the companion CLI client. The main endpoints are:
-\begin{itemize}
-\item \texttt{/health},
-\item \texttt{/instances/\{processInstanceId\}},
-\item \texttt{/processes/\{processId\}/counts},
-\item \texttt{/processes/\{processId\}/latency},
-\item \texttt{/processes/\{processId\}/trends},
-\item \texttt{/counts},
-\item \texttt{/stuck}.
-\end{itemize}
+The topology is configured with \texttt{AT\_LEAST\_ONCE} semantics. This trades
+exactly-once guarantees for higher throughput and lower latency. State views may
+transiently reflect duplicate or stale updates, which is acceptable for a monitoring
+read model. The state directory is configured to \filepath{target/kafka-streams-state}
+— suitable for local development, but should be made configurable for production use.
 
-This is complemented by a lightweight dashboard page that polls the same query surface.
+\subsection{Query access pattern}
+
+The query service (\texttt{ProcessMonitoringQueryService}) accesses only the global
+table stores via \texttt{KafkaStreams.store()}. It uses point lookups for instance
+state and full-store scans for counts, latency, trends, and stuck detection — filtering
+in memory by process ID where needed. No interactive queries or cross-instance RPC is
+required, since global tables replicate the entire content to every monitoring instance.
 
 \subsection{Relationship to demos}
 
-The monitoring topology is not only useful when a generated BPMN runtime is running. Repository-level demo publishers and scenario runners can emit synthetic lifecycle streams directly to \texttt{process-events}. That makes the monitoring subsystem independently testable and also makes it easier to understand the read-model behavior before a full generated process is involved.
+Repository-level demo publishers and scenario runners emit synthetic lifecycle
+events directly to \texttt{process-events}, making the monitoring subsystem
+independently testable without a full generated process runtime.
 
 \subsection{Current shape}
 
-The topology remains intentionally direct, but it is now stronger than the original local-only read model:
+The monitoring path is now stronger than the original local-only read model:
 \begin{itemize}
-\item queryable state is replicated from monitoring topics into global read-side stores, so each monitoring app instance carries a full local copy of the monitoring model,
-\item latency summaries are maintained incrementally from lifecycle events rather than being derived by scanning latest-instance state,
+\item queryable state is replicated from monitoring topics into global read-side stores, so each instance carries a full local copy of the monitoring model,
+\item latency summaries are maintained incrementally via a custom processor rather than derived from scanning latest-instance state,
 \item active-instance queries use a dedicated active-state index instead of the full state projection,
 \item coarse history is maintained as bucketed trend counts for process starts, completions, and failures.
 \end{itemize}
 
-The main remaining limitation is that history is still intentionally coarse. Durga now supports basic trend reporting, but it is still optimized more for current-state inspection than for long-retention analytical reporting.
-
-Even with that remaining limit, the monitoring path is a major part of what makes Durga usable as an exploration tool rather than only a code generator.
+History is intentionally coarse — Durga supports basic trend reporting but is
+optimized more for current-state inspection than long-retention analytical
+reporting.

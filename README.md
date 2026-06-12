@@ -3,7 +3,7 @@
 BPMN-driven Kafka scaffolding tool. Reads a BPMN model and generates Kafka-oriented
 worker, gateway, orchestration, and topic setup skeletons for process implementations.
 
-[System manual](doc/system/sysdoc.pdf) | [BPMN coverage matrix](doc/bpmn-kafka-coverage.md)
+[System manual](doc/system/sysdoc.pdf) | [BPMN coverage matrix](doc/bpmn-kafka-coverage.md) | [Deployment guide](doc/deployment.md) | [Plugin architecture](doc/data-pipeline-blueprint.md)
 
 ## Quick start
 

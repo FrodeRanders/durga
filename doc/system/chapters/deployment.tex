@@ -1,0 +1,246 @@
+\section{Deployment}
+\label{sec:Deployment}
+
+Durga-generated projects are plain Java applications that connect to Kafka.
+They can be deployed as JARs, Docker containers, or Kubernetes workloads
+with no Durga-specific runtime dependencies beyond a Kafka cluster.
+
+\subsection{Architecture}
+
+Each generated process instance is a set of Quarkus-based workers (one per
+BPMN task) communicating through Kafka topics. There is no central orchestrator
+at runtime --- workers consume from input topics and produce to output topics
+independently. This means:
+
+\begin{itemize}
+\item every worker is horizontally scalable via Kafka consumer groups,
+\item deployment is stateless (all state lives in Kafka topics and Streams stores),
+\item the generated shaded JAR is self-contained (all dependencies bundled).
+\end{itemize}
+
+\subsection{Local development \& testing}
+
+The recommended local loop uses Docker Compose for Kafka and direct JVM
+execution for the pipeline:
+
+\begin{verbatim}
+# Start Kafka
+cd setup && docker compose up -d
+
+# Build and run the pipeline
+cd generated/<project>
+START_KAFKA=false BOOTSTRAP=localhost:9094 ./run-local.sh
+\end{verbatim}
+
+For iterative development, keep Kafka running and rebuild the pipeline:
+
+\begin{verbatim}
+mvn -q clean package -DskipTests
+java -cp target/<project>-all.jar \
+  org.gautelis.durga.generated.<Process>Starter localhost:9094
+\end{verbatim}
+
+To test with the monitoring dashboard:
+
+\begin{enumerate}
+\item Start Kafka as above.
+\item Start the monitoring app:
+  \begin{verbatim}
+  cd setup
+  START_KAFKA=false ./demo-monitoring.sh
+  \end{verbatim}
+\item Run pipeline scenarios via the generated helper scripts.
+\item Open \texttt{http://localhost:18081/dashboard} for the Svelte dashboard
+      or \texttt{http://localhost:8081} for the Quarkus REST API.
+\end{enumerate}
+
+\subsection{Connection to Kafka}
+
+Kafka bootstrap servers are configured through a chain of fallbacks:
+
+\begin{enumerate}
+\item JVM system property \texttt{kafka.bootstrap.servers}.
+\item Environment variable \texttt{KAFKA\_BOOTSTRAP\_SERVERS}.
+\item Hardcoded default \texttt{localhost:9094}.
+\end{enumerate}
+
+In Docker and Kubernetes, set \texttt{KAFKA\_BOOTSTRAP\_SERVERS} as a container
+environment variable. The generated \texttt{Dockerfile} passes it to the JVM:
+
+\begin{verbatim}
+ENTRYPOINT ["java", "-Xms64m", "-Xmx256m", \
+  "-Dkafka.bootstrap.servers=${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}", \
+  "-jar", "/app/pipeline.jar"]
+\end{verbatim}
+
+\subsection{Topic provisioning}
+
+Kafka topics must exist before the pipeline starts. There are three approaches,
+each supported by the generated artifacts.
+
+\subsubsection{Pre-creation via shell script}
+
+The generated \texttt{topics.sh} creates all required topics using the Kafka
+CLI tools bundled with the Kafka distribution:
+
+\begin{verbatim}
+KAFKA_BOOTSTRAP_SERVERS=kafka-broker:9092 ./topics.sh
+\end{verbatim}
+
+This is suitable for development, staging, and manual production setups.
+For automated environments, run \texttt{topics.sh} as an init container or
+a CI/CD pipeline step before deploying the workers.
+
+\subsubsection{Init container}
+
+For Kubernetes deployments where the Kafka broker shares the cluster,
+add an init container to the generated \texttt{k8s.yml}:
+
+\begin{verbatim}
+initContainers:
+  - name: topic-init
+    image: bitnami/kafka:latest
+    command: ['/bin/sh', '-c']
+    args:
+      - |
+        /opt/bitnami/kafka/bin/kafka-topics.sh --create \
+          --bootstrap-server $KAFKA_BOOTSTRAP_SERVERS \
+          --topic <name> --partitions 3 --replication-factor 1
+\end{verbatim}
+
+\subsubsection{Kafka operator (Strimzi)}
+
+In Kubernetes environments running the Strimzi operator, topics can be
+declared as \texttt{KafkaTopic} custom resources. A generated
+\texttt{kafka-topics.yml} CRD manifest can be applied alongside the
+Deployment:
+
+\begin{verbatim}
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: <process>_<task>_input
+  labels:
+    strimzi.io/cluster: my-kafka
+spec:
+  partitions: 3
+  replicas: 1
+---
+\end{verbatim}
+
+The scaffolder currently generates \texttt{topics.sh}; Strimzi CRD
+generation can be added as an optional output format.
+
+\subsection{Test environment deployment}
+
+A Docker Compose-based test environment is the fastest way to validate a
+pipeline end-to-end. The repository's \texttt{setup/docker-compose.yml}
+provides a single-node Kafka broker and Kafka UI.
+
+Add a \texttt{docker-compose.test.yml} to the generated project:
+
+\begin{verbatim}
+version: "3"
+services:
+  pipeline:
+    build: .
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      - kafka
+  kafka:
+    image: bitnami/kafka:latest
+    environment:
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+\end{verbatim}
+
+Run with:
+\begin{verbatim}
+docker compose -f docker-compose.test.yml up --build
+\end{verbatim}
+
+\subsection{Production deployment}
+
+The generated \texttt{deploy.sh} supports three targets:
+
+\begin{description}
+\item[JAR] \texttt{./deploy.sh} --- builds the shaded JAR and runs locally.
+  Suitable for VMs and bare-metal deployments.
+\item[Docker] \texttt{DOCKER=true ./deploy.sh} --- builds a Docker image
+  tagged \texttt{<processId>:latest}.
+\item[Kubernetes] \texttt{DOCKER=true K8S=true ./deploy.sh} --- builds the
+  image and applies the generated \texttt{k8s.yml}.
+\end{description}
+
+\subsubsection{Docker image}
+
+The generated \texttt{Dockerfile} uses \texttt{eclipse-temurin:21-jre-alpine},
+runs as a non-root user, and includes a process-based health check:
+
+\begin{verbatim}
+FROM eclipse-temurin:21-jre-alpine
+RUN addgroup -S durga && adduser -S durga -G durga
+USER durga
+COPY target/*-all.jar /app/pipeline.jar
+HEALTHCHECK --interval=30s ...
+ENTRYPOINT ["java", "-Xms64m", "-Xmx256m", \
+  "-Dkafka.bootstrap.servers=${KAFKA_BOOTSTRAP_SERVERS:-...}", \
+  "-jar", "/app/pipeline.jar"]
+\end{verbatim}
+
+\subsubsection{Kubernetes}
+
+The generated \texttt{k8s.yml} provides:
+
+\begin{itemize}
+\item A \texttt{Deployment} with 2 replicas (configurable), resource requests
+  and limits (128Mi/512Mi memory, 100m/500m CPU),
+\item A \texttt{Service} exposing port 8080,
+\item Exec-based liveness and readiness probes.
+\end{itemize}
+
+Scaling is done via \texttt{kubectl scale} or the replicas field:
+
+\begin{verbatim}
+kubectl scale deployment/<processId> --replicas=4
+\end{verbatim}
+
+Maximum parallelism per consumer group is bounded by the number of Kafka
+partitions for each topic. Configure partitions in \texttt{topics.sh} before
+provisioning, then scale workers up to the partition count.
+
+\subsection{Monitoring in production}
+
+The monitoring topology (\texttt{ProcessMonitoringApp}) is a separate
+deployment that consumes the canonical \texttt{process-events} topic and
+materializes queryable state. In production:
+
+\begin{itemize}
+\item Deploy the monitoring app as a companion service alongside the pipeline
+  (same Kafka cluster, different consumer group).
+\item The Quarkus REST API and Svelte dashboard provide operational visibility ---
+  instance counts, latency summaries, stuck-instance detection, trend reporting.
+\item The monitoring topology uses global tables: every instance has a full
+  local replica of the monitoring model. Any instance can answer all queries
+  without cross-instance RPC.
+\end{itemize}
+
+\subsection{Configuration reference}
+
+\begin{longtable}{|>{\raggedright\arraybackslash}p{0.32\textwidth}|>{\raggedright\arraybackslash}p{0.18\textwidth}|>{\raggedright\arraybackslash}p{0.42\textwidth}|}
+\hline
+\rowcolor[gray]{0.9}\textbf{Variable} & \textbf{Default} & \textbf{Description} \\
+\hline
+\texttt{KAFKA\_BOOTSTRAP\_SERVERS} & \texttt{localhost:9094} & Kafka broker list \\
+\texttt{HTTP\_PORT} & \texttt{8080} & Quarkus HTTP port \\
+\texttt{PROFILE} & \texttt{dev} & Quarkus configuration profile \\
+\texttt{START\_KAFKA} & \texttt{false} & Start Docker Compose Kafka before running \\
+\texttt{DOCKER} & \texttt{false} & Build Docker image in deploy script \\
+\texttt{K8S} & \texttt{false} & Apply Kubernetes manifests in deploy script \\
+\hline
+\end{longtable}

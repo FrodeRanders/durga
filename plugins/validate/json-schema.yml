@@ -2,22 +2,29 @@ id: json-schema-validator
 name: JSON Schema Validator
 version: 1.0.0
 category: validate
-status: planned
+status: experimental
 description: >
-  Validates input payloads against a JSON Schema. Routes valid messages
-  to the normal output channel and invalid messages to a separate invalid
-  channel or dead-letter topic.
+  Validates JSON payloads against a configurable schema subset. Supports
+  type checking, required fields, enum values, numeric ranges, string
+  length bounds, regex patterns, nested objects, and array item validation.
+  Invalid payloads throw, routing to the DLQ channel.
+
+input:
+  schema:
+    type: object
+    description: JSON payload to validate
+
+output:
+  schema:
+    type: object
+    description: Input payload unchanged if valid
 
 config:
-  schema:
-    type: string
-    required: true
-    description: JSON Schema to validate against (inline or file path)
-  onInvalid:
-    type: enum
-    values: [dlq, skip, fail]
-    default: dlq
-  invalidChannel:
-    type: string
-    required: false
-    description: Topic for invalid messages (defaults to %taskId%_invalid)
+  type: inline-json-schema
+  description: >
+    JSON object defining the schema. Supports: type, required, properties,
+    enum, minimum, maximum, minLength, maxLength, pattern (Java regex),
+    items (array element schema).
+
+implementation:
+  class: org.gautelis.durga.plugins.JsonSchemaValidator

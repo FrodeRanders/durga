@@ -313,6 +313,38 @@ public class BpmnScaffolder {
             writeFile(taskOutputWatchPath, taskOutputWatchPreview);
             generatedFiles.add(outputRoot.relativize(taskOutputWatchPath).toString());
 
+            Path dockerfilePath = outputRoot.resolve("Dockerfile");
+            try {
+                writeFile(dockerfilePath, renderDockerfile(group, processId));
+                generatedFiles.add(outputRoot.relativize(dockerfilePath).toString());
+            } catch (Exception e) {
+                System.err.println("Warning: failed to generate Dockerfile: " + e.getMessage());
+            }
+
+            Path k8sPath = outputRoot.resolve("k8s.yml");
+            try {
+                writeFile(k8sPath, renderK8s(group, processId));
+                generatedFiles.add(outputRoot.relativize(k8sPath).toString());
+            } catch (Exception e) {
+                System.err.println("Warning: failed to generate k8s.yml: " + e.getMessage());
+            }
+
+            Path deployPath = outputRoot.resolve("deploy.sh");
+            try {
+                writeFile(deployPath, renderDeployScript(group, processId));
+                generatedFiles.add(outputRoot.relativize(deployPath).toString());
+            } catch (Exception e) {
+                System.err.println("Warning: failed to generate deploy.sh: " + e.getMessage());
+            }
+
+            Path composeTestPath = outputRoot.resolve("docker-compose.test.yml");
+            try {
+                writeFile(composeTestPath, renderDockerComposeTest(group, processId));
+                generatedFiles.add(outputRoot.relativize(composeTestPath).toString());
+            } catch (Exception e) {
+                System.err.println("Warning: failed to generate docker-compose.test.yml: " + e.getMessage());
+            }
+
             Path payloadPath = outputRoot.resolve("task-payloads.json");
             writeFile(payloadPath, payloadPreview);
             generatedFiles.add(outputRoot.relativize(payloadPath).toString());
@@ -1938,6 +1970,30 @@ public class BpmnScaffolder {
         script.add("processId", processId);
         script.add("starterClass", toClassName(processId));
         return script.render();
+    }
+
+    private static String renderDockerfile(STGroupString group, String processId) {
+        ST tmpl = group.getInstanceOf("dockerfileTemplate");
+        tmpl.add("className", toClassName(processId));
+        return tmpl.render();
+    }
+
+    private static String renderK8s(STGroupString group, String processId) {
+        ST tmpl = group.getInstanceOf("kubernetesTemplate");
+        tmpl.add("processId", processId);
+        return tmpl.render();
+    }
+
+    private static String renderDeployScript(STGroupString group, String processId) {
+        ST tmpl = group.getInstanceOf("deployScript");
+        tmpl.add("processId", processId);
+        return tmpl.render();
+    }
+
+    private static String renderDockerComposeTest(STGroupString group, String processId) {
+        ST tmpl = group.getInstanceOf("dockerComposeTest");
+        tmpl.add("processId", processId);
+        return tmpl.render();
     }
 
     private static void generateCoreClasses(
