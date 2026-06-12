@@ -16,7 +16,10 @@ Several parts of the system are now in reasonably good shape:
 \item cancellation behavior for interrupting boundaries now affects runtime behavior through a plain in-memory registry rather than an unused CDI annotation,
 \item demo and probe tooling are generated as part of the process output,
 \item a GitHub Actions CI pipeline runs the full test suite on every push and pull request,
-\item BPMN sample fixtures have been moved to \filepath{src/test/resources/bpmn/}.
+\item BPMN sample fixtures have been moved to \filepath{src/test/resources/bpmn/},
+\item \texttt{SendTask}, \texttt{ReceiveTask}, \texttt{ScriptTask} and \texttt{BusinessRuleTask} now generate dedicated handlers instead of silently falling through to generic auto-completing workers,
+\item inclusive gateway (OR) split and join are now supported alongside XOR and AND,
+\item multi-instance loop characteristics are detected and reported in generated summaries.
 \end{itemize}
 
 \subsection{Important limits}

@@ -63,6 +63,7 @@ final class TaskRoutingGenerator {
             Map<String, List<FlowInfo>> flowsBySource,
             List<NodeInfo> xors,
             List<NodeInfo> ands,
+            List<NodeInfo> ors,
             Set<String> existingSources,
             Path outputRoot,
             List<String> generatedFiles,
@@ -137,6 +138,57 @@ final class TaskRoutingGenerator {
                 tmpl.add("outputTaskId", output.get().taskId);
                 tmpl.add("incomingMethodsBlock", buildJoinMethodsBlock(incomingMethods));
                 tmpl.add("joinCondition", buildJoinCondition(incomingMethods));
+                if (!dryRun) {
+                    BpmnScaffolder.writeFile(outputFile, tmpl.render());
+                }
+                generatedFiles.add(outputRoot.relativize(outputFile).toString());
+            }
+        }
+
+        for (NodeInfo or : ors) {
+            if (or.outgoingIds.size() >= 2 && or.incomingIds.size() == 1) {
+                Optional<String> inputChannel = BpmnScaffolder.resolveInputChannel(processId, nodes, or.incomingIds.getFirst());
+                List<OutputSpec> outputs = BpmnScaffolder.resolveOutputChannels(
+                        processId, nodes, or.outgoingIds, flowsBySource.get(or.id), or.defaultFlowId
+                );
+                if (inputChannel.isEmpty() || outputs.size() < 2) {
+                    continue;
+                }
+                outputs = BpmnScaffolder.withConditionBlocks(outputs);
+
+                String className = "Or" + BpmnScaffolder.toClassName(or.name) + "SplitService";
+                Path outputFile = javaOutput.resolve(className + ".java");
+                if (Files.exists(outputFile) || existingSources.contains(className + ".java")) {
+                    continue;
+                }
+                ST tmpl = group.getInstanceOf("orSplitGatewayClass");
+                tmpl.add("packageName", "org.gautelis.durga.generated");
+                tmpl.add("className", className);
+                tmpl.add("inputChannel", inputChannel.get());
+                tmpl.add("outputs", outputs);
+                if (!dryRun) {
+                    BpmnScaffolder.writeFile(outputFile, tmpl.render());
+                }
+                generatedFiles.add(outputRoot.relativize(outputFile).toString());
+            } else if (or.incomingIds.size() > 1) {
+                List<JoinMethodSpec> incomingMethods = resolveIncomingMethods(processId, nodes, or.incomingIds);
+                Optional<OutputSpec> output = BpmnScaffolder.resolveSingleOutput(processId, nodes, or.outgoingIds);
+                if (incomingMethods.isEmpty() || output.isEmpty()) {
+                    continue;
+                }
+                String className = "Or" + BpmnScaffolder.toClassName(or.name) + "JoinService";
+                Path outputFile = javaOutput.resolve(className + ".java");
+                if (Files.exists(outputFile) || existingSources.contains(className + ".java")) {
+                    continue;
+                }
+                ST tmpl = group.getInstanceOf("orJoinGatewayClass");
+                tmpl.add("packageName", "org.gautelis.durga.generated");
+                tmpl.add("className", className);
+                tmpl.add("processId", processId);
+                tmpl.add("outputChannel", output.get().channel);
+                tmpl.add("outputTaskId", output.get().taskId);
+                tmpl.add("incomingMethodsBlock", buildJoinMethodsBlock(incomingMethods));
+                tmpl.add("incomingCount", incomingMethods.size());
                 if (!dryRun) {
                     BpmnScaffolder.writeFile(outputFile, tmpl.render());
                 }

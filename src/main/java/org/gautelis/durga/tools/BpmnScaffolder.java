@@ -5,6 +5,7 @@ import org.stringtemplate.v4.STGroupString;
 import org.camunda.bpm.model.bpmn.Bpmn;
 import org.camunda.bpm.model.bpmn.BpmnModelInstance;
 import org.camunda.bpm.model.bpmn.instance.BoundaryEvent;
+import org.camunda.bpm.model.bpmn.instance.BusinessRuleTask;
 import org.camunda.bpm.model.bpmn.instance.CallActivity;
 import org.camunda.bpm.model.bpmn.instance.ConditionExpression;
 import org.camunda.bpm.model.bpmn.instance.EndEvent;
@@ -12,12 +13,17 @@ import org.camunda.bpm.model.bpmn.instance.EscalationEventDefinition;
 import org.camunda.bpm.model.bpmn.instance.ErrorEventDefinition;
 import org.camunda.bpm.model.bpmn.instance.ExclusiveGateway;
 import org.camunda.bpm.model.bpmn.instance.FlowNode;
+import org.camunda.bpm.model.bpmn.instance.InclusiveGateway;
 import org.camunda.bpm.model.bpmn.instance.ManualTask;
 import org.camunda.bpm.model.bpmn.instance.IntermediateCatchEvent;
 import org.camunda.bpm.model.bpmn.instance.IntermediateThrowEvent;
 import org.camunda.bpm.model.bpmn.instance.MessageEventDefinition;
+import org.camunda.bpm.model.bpmn.instance.MultiInstanceLoopCharacteristics;
 import org.camunda.bpm.model.bpmn.instance.ParallelGateway;
 import org.camunda.bpm.model.bpmn.instance.Process;
+import org.camunda.bpm.model.bpmn.instance.ReceiveTask;
+import org.camunda.bpm.model.bpmn.instance.ScriptTask;
+import org.camunda.bpm.model.bpmn.instance.SendTask;
 import org.camunda.bpm.model.bpmn.instance.SequenceFlow;
 import org.camunda.bpm.model.bpmn.instance.ServiceTask;
 import org.camunda.bpm.model.bpmn.instance.SignalEventDefinition;
@@ -127,6 +133,19 @@ public class BpmnScaffolder {
             ands.add(info);
         }
 
+        List<NodeInfo> ors = new ArrayList<>();
+        for (InclusiveGateway gateway : model.getModelElementsByType(InclusiveGateway.class)) {
+            NodeInfo info = new NodeInfo(gateway.getId(), normalize(nameOrId(gateway.getName(), gateway.getId())),
+                    NodeType.OR);
+            if (gateway.getDefault() != null) {
+                info.defaultFlowId = gateway.getDefault().getId();
+            }
+            nodes.put(gateway.getId(), info);
+            ors.add(info);
+        }
+
+        List<MultiInstanceSpec> multiInstanceSpecs = collectMultiInstanceSpecs(model);
+
         for (StartEvent startEvent : model.getModelElementsByType(StartEvent.class)) {
             if (enclosingSubProcessId(startEvent) != null) {
                 continue;
@@ -210,7 +229,7 @@ public class BpmnScaffolder {
         generateTaskOutputWatcher(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
 
         TaskRoutingGenerator.generateGateways(
-                processId, group, javaOutput, nodes, flowsBySource, xors, ands, existingSources,
+                processId, group, javaOutput, nodes, flowsBySource, xors, ands, ors, existingSources,
                 outputRoot, generatedFiles, parsed.dryRun
         );
         TaskRoutingGenerator.generateOrchestrator(
@@ -300,7 +319,7 @@ public class BpmnScaffolder {
         List<String> boundaryEvents = combineNames(combineNames(boundaryTimers, boundaryErrors), boundaryEscalations);
         Map<String, Object> summary = GeneratedProjectSupport.buildSummary(
                 processId, tasks, allTimers, messageEvents, messageTopics, signalEvents, signalTopics,
-                boundaryEvents, callActivities, subProcesses, xors, ands, generatedFiles
+                boundaryEvents, callActivities, subProcesses, xors, ands, ors, multiInstanceSpecs, generatedFiles
         );
         String summaryJson = GeneratedProjectSupport.renderSummaryJson(summary);
 
@@ -308,8 +327,8 @@ public class BpmnScaffolder {
             GeneratedProjectSupport.writeSummary(outputRoot, summaryJson);
             GeneratedProjectSupport.writeGeneratedReadme(
                     outputRoot, processId, tasks, allTimers, messageEvents, messageTopics, signalEvents,
-                    signalTopics, boundaryEvents, callActivities, subProcesses, xors, ands, generatedFiles,
-                    payloadPreview
+                    signalTopics, boundaryEvents, callActivities, subProcesses, xors, ands, ors,
+                    multiInstanceSpecs, generatedFiles, payloadPreview
             );
         }
 
@@ -318,6 +337,8 @@ public class BpmnScaffolder {
         System.out.println("Tasks: " + tasks);
         System.out.println("Call activities: " + callActivities);
         System.out.println("Embedded subprocesses: " + subProcesses);
+        System.out.println("OR gateways: " + ors.stream().map(o -> o.name).toList());
+        System.out.println("Multi-instance tasks: " + multiInstanceSpecs.stream().map(m -> m.taskName).toList());
         System.out.println("Event subprocesses: " + eventSubProcessSpecs.stream().map(spec -> spec.name).toList());
         System.out.println("Timers: " + allTimers);
         System.out.println("Boundary events: " + boundaryEvents);
@@ -541,6 +562,10 @@ public class BpmnScaffolder {
         registerTaskSpecs(model.getModelElementsByType(ServiceTask.class), TaskKind.SERVICE, taskSpecs, nodes);
         registerTaskSpecs(model.getModelElementsByType(UserTask.class), TaskKind.USER, taskSpecs, nodes);
         registerTaskSpecs(model.getModelElementsByType(ManualTask.class), TaskKind.MANUAL, taskSpecs, nodes);
+        registerTaskSpecs(model.getModelElementsByType(SendTask.class), TaskKind.SEND, taskSpecs, nodes);
+        registerTaskSpecs(model.getModelElementsByType(ReceiveTask.class), TaskKind.RECEIVE, taskSpecs, nodes);
+        registerTaskSpecs(model.getModelElementsByType(ScriptTask.class), TaskKind.SCRIPT, taskSpecs, nodes);
+        registerTaskSpecs(model.getModelElementsByType(BusinessRuleTask.class), TaskKind.BUSINESS_RULE, taskSpecs, nodes);
         for (CallActivity callActivity : model.getModelElementsByType(CallActivity.class)) {
             String name = normalize(nameOrId(callActivity.getName(), callActivity.getId()));
             taskSpecs.put(callActivity.getId(), new TaskSpec(callActivity.getId(), name, TaskKind.CALL));
@@ -550,6 +575,8 @@ public class BpmnScaffolder {
                 continue;
             }
             String name = normalize(nameOrId(task.getName(), task.getId()));
+            System.err.println("Warning: unknown BPMN task type for '" + name + "' (id=" + task.getId()
+                    + "), generating generic auto-completing worker");
             taskSpecs.put(task.getId(), new TaskSpec(task.getId(), name, TaskKind.GENERIC));
             nodes.put(task.getId(), new NodeInfo(task.getId(), name, NodeType.TASK, TaskKind.GENERIC));
         }
@@ -573,6 +600,33 @@ public class BpmnScaffolder {
             nodes.put(event.getId(), new NodeInfo(event.getId(), name, NodeType.TIMER));
         }
         return timers;
+    }
+
+    private static List<MultiInstanceSpec> collectMultiInstanceSpecs(BpmnModelInstance model) {
+        List<MultiInstanceSpec> specs = new ArrayList<>();
+        for (Task task : model.getModelElementsByType(Task.class)) {
+            if (!(task.getLoopCharacteristics() instanceof MultiInstanceLoopCharacteristics loop)) {
+                continue;
+            }
+            String name = normalize(nameOrId(task.getName(), task.getId()));
+            String cardinality = loop.getLoopCardinality() != null ? loop.getLoopCardinality().getTextContent() : null;
+            String completion = loop.getCompletionCondition() != null ? loop.getCompletionCondition().getTextContent() : null;
+            specs.add(new MultiInstanceSpec(task.getId(), name, loop.isSequential(), cardinality, completion));
+            System.err.println("Note: multi-instance task '" + name + "' (sequential="
+                    + loop.isSequential() + ", cardinality=" + cardinality + ")");
+        }
+        for (SubProcess sub : model.getModelElementsByType(SubProcess.class)) {
+            if (!(sub.getLoopCharacteristics() instanceof MultiInstanceLoopCharacteristics loop)) {
+                continue;
+            }
+            String name = normalize(nameOrId(sub.getName(), sub.getId()));
+            String cardinality = loop.getLoopCardinality() != null ? loop.getLoopCardinality().getTextContent() : null;
+            String completion = loop.getCompletionCondition() != null ? loop.getCompletionCondition().getTextContent() : null;
+            specs.add(new MultiInstanceSpec(sub.getId(), name, loop.isSequential(), cardinality, completion));
+            System.err.println("Note: multi-instance subprocess '" + name + "' (sequential="
+                    + loop.isSequential() + ", cardinality=" + cardinality + ")");
+        }
+        return specs;
     }
 
     private static List<EventSubProcessSpec> collectEventSubProcessSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
@@ -1218,6 +1272,18 @@ public class BpmnScaffolder {
         if (kind == TaskKind.CALL) {
             return "callActivityTaskStubClass";
         }
+        if (kind == TaskKind.SEND) {
+            return "sendTaskClass";
+        }
+        if (kind == TaskKind.RECEIVE) {
+            return "receiveTaskClass";
+        }
+        if (kind == TaskKind.SCRIPT) {
+            return "scriptTaskHandlerClass";
+        }
+        if (kind == TaskKind.BUSINESS_RULE) {
+            return "businessRuleTaskHandlerClass";
+        }
         return transactions ? "transactionalWorkerClass" : "workerClass";
     }
 
@@ -1226,6 +1292,10 @@ public class BpmnScaffolder {
             case USER -> "UserTaskService";
             case MANUAL -> "ManualTaskService";
             case CALL -> "CallActivityStub";
+            case SEND -> "SendTaskService";
+            case RECEIVE -> "ReceiveTaskService";
+            case SCRIPT -> "ScriptTaskService";
+            case BUSINESS_RULE -> "BusinessRuleTaskService";
             case SERVICE, GENERIC -> transactions ? "TransactionalWorker" : "WorkerService";
         };
     }

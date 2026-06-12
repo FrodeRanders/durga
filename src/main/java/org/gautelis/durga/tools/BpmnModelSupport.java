@@ -51,6 +51,10 @@ enum TaskKind {
     SERVICE("serviceTask"),
     USER("userTask"),
     MANUAL("manualTask"),
+    SEND("sendTask"),
+    RECEIVE("receiveTask"),
+    SCRIPT("scriptTask"),
+    BUSINESS_RULE("businessRuleTask"),
     CALL("callActivity"),
     GENERIC("task");
 
@@ -69,6 +73,7 @@ enum NodeType {
     CALL_ACTIVITY("callActivity"),
     SUB_PROCESS("subProcess"),
     XOR("xorGateway"),
+    OR("inclusiveGateway"),
     AND("parallelGateway"),
     START("startEvent"),
     END("endEvent"),
@@ -442,5 +447,54 @@ final class ParsedArgs {
         this.outputDir = outputDir;
         this.dryRun = dryRun;
         this.transactions = transactions;
+    }
+}
+
+/**
+ * Internal descriptor for a BPMN send task with a message reference.
+ */
+final class SendTaskSpec {
+    final String id;
+    final String name;
+    final String messageName;
+
+    SendTaskSpec(String id, String name, String messageName) {
+        this.id = id;
+        this.name = name;
+        this.messageName = messageName;
+    }
+}
+
+/**
+ * Internal descriptor for a BPMN receive task with a message reference.
+ */
+final class ReceiveTaskSpec {
+    final String id;
+    final String name;
+    final String messageName;
+
+    ReceiveTaskSpec(String id, String name, String messageName) {
+        this.id = id;
+        this.name = name;
+        this.messageName = messageName;
+    }
+}
+
+/**
+ * Minimal descriptor for multi-instance loop characteristics on a task or subprocess.
+ */
+final class MultiInstanceSpec {
+    final String taskId;
+    final String taskName;
+    final boolean sequential;
+    final String loopCardinality;
+    final String completionCondition;
+
+    MultiInstanceSpec(String taskId, String taskName, boolean sequential, String loopCardinality, String completionCondition) {
+        this.taskId = taskId;
+        this.taskName = taskName;
+        this.sequential = sequential;
+        this.loopCardinality = loopCardinality;
+        this.completionCondition = completionCondition;
     }
 }

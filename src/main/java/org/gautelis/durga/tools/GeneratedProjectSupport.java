@@ -189,6 +189,8 @@ final class GeneratedProjectSupport {
             List<String> subProcesses,
             List<NodeInfo> xors,
             List<NodeInfo> ands,
+            List<NodeInfo> ors,
+            List<MultiInstanceSpec> multiInstanceSpecs,
             List<String> generatedFiles
     ) {
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -203,7 +205,11 @@ final class GeneratedProjectSupport {
         summary.put("callActivities", callActivities);
         summary.put("subProcesses", subProcesses);
         summary.put("xorGateways", xors.stream().map(info -> info.name).toList());
+        summary.put("orGateways", ors.stream().map(info -> info.name).toList());
         summary.put("andGateways", ands.stream().map(info -> info.name).toList());
+        if (!multiInstanceSpecs.isEmpty()) {
+            summary.put("multiInstanceTasks", multiInstanceSpecs.stream().map(m -> m.taskName).toList());
+        }
         summary.put("generatedFiles", generatedFiles);
         return summary;
     }
@@ -252,6 +258,8 @@ final class GeneratedProjectSupport {
             List<String> subProcesses,
             List<NodeInfo> xors,
             List<NodeInfo> ands,
+            List<NodeInfo> ors,
+            List<MultiInstanceSpec> multiInstanceSpecs,
             List<String> generatedFiles,
             String payloadPreview
     ) {
@@ -309,6 +317,7 @@ final class GeneratedProjectSupport {
         }
         builder.append("\n## Gateways\n");
         builder.append("- XOR: ").append(xors.stream().map(info -> info.name).toList()).append("\n");
+        builder.append("- OR: ").append(ors.stream().map(info -> info.name).toList()).append("\n");
         builder.append("- AND: ").append(ands.stream().map(info -> info.name).toList()).append("\n");
         builder.append("\n## Generated Files\n");
         for (String file : generatedFiles) {
