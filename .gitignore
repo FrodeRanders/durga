@@ -22,3 +22,5 @@ buildNumber.properties
 .eclipse/
 *.iml
 .DS_Store
+monitoring-ui/node_modules/
+monitoring-ui/dist/

@@ -3,7 +3,7 @@
 
 \subsection{General mapping strategy}
 
-Durga maps a BPMN graph into a bounded Kafka runtime surface. In the current implementation, each supported BPMN element is converted into either:
+Durga maps a BPMN graph into a bounded Kafka runtime. In the current implementation, each supported BPMN element is converted into either:
 \begin{itemize}
 \item a generated service consuming from one topic and producing to one or more topics,
 \item a scope handler that turns subprocess semantics into lifecycle and routing events,

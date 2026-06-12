@@ -1,51 +1,35 @@
 \section{Monitoring Interfaces}
 \label{sec:MonitoringInterfaces}
 
-The monitoring subsystem is exposed through three interfaces that sit on top of the
-same Kafka Streams state:
+The monitoring subsystem exposes three interfaces over the same Kafka Streams state:
 \begin{itemize}
 \item an HTTP query service,
-\item a small command-line client,
-\item a lightweight browser dashboard.
+\item a command-line client,
+\item a browser dashboard.
 \end{itemize}
-
-This split is intentional. The HTTP service is the primary integration surface, the
-CLI is the fastest way to inspect state from a terminal, and the dashboard is the
-fastest way to watch the system move.
 
 \subsection{HTTP service}
 
-The monitoring HTTP service is started by the monitoring application.
-Its main entry point is:
-\begin{quote}
-\filepath{org.gautelis.durga.monitoring.ProcessMonitoringApp}
-\end{quote}
-The query layer is implemented
-by the repository classes \texttt{ProcessMonitoringQueryService} and
-\texttt{ProcessMonitoringHttpServer}.
+Entry point: \texttt{ProcessMonitoringApp}. Query layer:
+\texttt{ProcessMonitoringQueryService} and \texttt{ProcessMonitoringHttpServer}.
 
-The main endpoints are:
+Endpoints:
 \begin{itemize}
-\item \texttt{/health} for Kafka Streams readiness,
-\item \texttt{/instances/\{processInstanceId\}} for the latest instance view,
-\item \texttt{/processes/\{processId\}/counts} for process-specific current-state counts,
-\item \texttt{/processes/\{processId\}/latency} for activity latency summaries,
-\item \texttt{/processes/\{processId\}/trends} for bucketed history of starts, completions and failures,
-\item \texttt{/counts} for the global state-count view,
-\item \texttt{/stuck} for stuck-instance detection,
-\item \texttt{/dashboard} serving a lightweight browser dashboard that polls the same query surface.
+\item \texttt{/health} --- Kafka Streams readiness,
+\item \texttt{/instances/\{processInstanceId\}} --- latest instance view,
+\item \texttt{/processes/\{processId\}/counts} --- process-specific state counts,
+\item \texttt{/processes/\{processId\}/latency} --- activity latency summaries,
+\item \texttt{/processes/\{processId\}/trends} --- bucketed start/completion/failure history,
+\item \texttt{/counts} --- global state-count view,
+\item \texttt{/stuck} --- stuck-instance detection,
+\item \texttt{/dashboard} --- browser dashboard.
 \end{itemize}
-
-The service is intentionally narrow. It is not trying to be a full workflow management
-API. Its role is to expose the read model produced by the monitoring topology.
 
 \subsection{CLI client}
 
-The command-line companion is
-\texttt{org.gautelis.durga.monitoring.ProcessMonitoringClient}. It exists because
-interactive inspection is common during development and BPMN exploration.
+\texttt{ProcessMonitoringClient} provides terminal access for development and
+exploration:
 
-The main client operations are:
 \begin{itemize}
 \item \texttt{health},
 \item \texttt{instance <processInstanceId>},
@@ -54,52 +38,27 @@ The main client operations are:
 \item \texttt{stuck [processId] [olderThanSeconds]}.
 \end{itemize}
 
-The CLI is useful when the user is already working with the generated helper scripts
-or with local Kafka infrastructure from a terminal. It keeps the entire observation
-loop close to the generated runtime.
-
 \subsection{Dashboard}
 
-The browser dashboard is served from \texttt{/dashboard}. It polls the same HTTP
-endpoints that the CLI uses and presents:
-\begin{itemize}
-\item Kafka Streams health,
-\item counts by current state,
-\item latency summaries,
-\item stuck instances,
-\item selected instance details.
-\end{itemize}
-
-The dashboard is intentionally simple. It avoids a separate frontend build and keeps
-the monitoring surface close to the backend implementation. That makes it suitable
-for local architectural exploration, generated-process demos, and small-scale testing.
+Served from \texttt{/dashboard}. Polls the same HTTP endpoints and presents
+health, counts, latency, stuck instances, and instance details. Built as a
+standalone Svelte application (\filepath{monitoring-ui/}) that compiles to
+static assets served by the Quarkus backend.
 
 \subsection{How the interfaces fit together}
 
-The three interfaces are not separate products. They are different views over the same
-materialized state:
+All three interfaces consume the same materialized state:
 \begin{enumerate}
-\item generated or demo events are published to \texttt{process-events},
+\item events are published to \texttt{process-events},
 \item Kafka Streams materializes state and counts,
 \item the HTTP layer exposes that materialized state,
-\item the CLI and dashboard consume the same HTTP surface.
+\item the CLI and dashboard consume the same HTTP API.
 \end{enumerate}
 
-This layering is important because it keeps the monitoring model coherent. The dashboard
-does not contain business logic that differs from the CLI, and the CLI does not bypass
-the query model. The read model remains single-sourced.
-
-\subsection{What this enables in practice}
-
-Taken together, the interfaces support a practical operator and learner workflow:
+The operator workflow is:
 \begin{itemize}
 \item publish a scenario or task outcome,
 \item watch \texttt{process-events},
-\item query one instance in detail,
-\item inspect counts and latency summaries,
-\item switch to the dashboard when a broader view is helpful.
+\item query one instance or inspect counts and latency,
+\item use the dashboard for a broader view.
 \end{itemize}
-
-That workflow is one of the reasons Durga is usable as an exploration environment.
-Without these interfaces, the generated BPMN runtime would be much harder to evaluate
-as a concrete Kafka-based process system.

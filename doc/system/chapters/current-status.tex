@@ -3,44 +3,38 @@
 
 \subsection{Maturity}
 
-Durga is in a strong experimental or prototype state rather than in a finished engine state. The generator is materially capable, the repository now has meaningful regression coverage, and the generated projects are usable for local exploration. At the same time, the project should still be understood as a controlled executable subset rather than a complete BPMN runtime.
+Active prototype with real executable output. The generator is capable and
+regression-covered; generated projects are usable for local exploration.
 
-\subsection{What is solid today}
+\subsection{Solid}
 
-Several parts of the system are now in reasonably good shape:
 \begin{itemize}
-\item the generator has been refactored away from a single large class and a single large template file,
-\item dry-run and generated-project compile tests cover representative BPMN features,
-\item the core runtime contracts (\texttt{ProcessEvent}, \texttt{ProcessState}, \texttt{ScopeCancellationRegistry}) are covered by dedicated unit tests,
-\item the monitoring path is coherent and directly runnable,
-\item cancellation behavior for interrupting boundaries now affects runtime behavior through a plain in-memory registry rather than an unused CDI annotation,
-\item demo and probe tooling are generated as part of the process output,
-\item a GitHub Actions CI pipeline runs the full test suite on every push and pull request,
-\item BPMN sample fixtures have been moved to \filepath{src/test/resources/bpmn/},
-\item \texttt{SendTask}, \texttt{ReceiveTask}, \texttt{ScriptTask} and \texttt{BusinessRuleTask} now generate dedicated handlers instead of silently falling through to generic auto-completing workers,
-\item inclusive gateway (OR) split and join are now supported alongside XOR and AND,
-\item multi-instance loop characteristics are detected and reported in generated summaries.
+\item generator refactored from monolith to multiple templates and helper classes,
+\item dry-run and compile-level tests cover representative BPMN features,
+\item core runtime contracts are unit-tested,
+\item monitoring topology with global-table query model,
+\item interrupting boundary cancellation via in-memory registry,
+\item GitHub Actions CI on push/PR (JDK 21),
+\item \texttt{SendTask}, \texttt{ReceiveTask}, \texttt{ScriptTask}, \texttt{BusinessRuleTask} generate dedicated handlers,
+\item inclusive gateway (OR) split/join,
+\item multi-instance loop characteristics detected and reported,
+\item 6 data pipeline plugins with interface-based dispatch.
 \end{itemize}
 
-\subsection{Important limits}
+\subsection{Limits}
 
-The present limits are mostly about semantics, not build hygiene:
 \begin{itemize}
-\item support is still a BPMN subset,
-\item some advanced scope semantics remain approximated rather than fully modeled,
-\item event subprocess support is deliberately scoped and not yet generalized to all top-level process cases,
-\item query and monitoring behavior are strong enough for local understanding, but not yet a complete production operations surface.
+\item BPMN subset (no complex gateways, no data objects),
+\item advanced scope semantics approximated,
+\item event subprocess semantics scoped, not generalized to all top-level cases,
+\item history retention is intentionally coarse.
 \end{itemize}
 
-\subsection{Likely next decisions}
+\subsection{Open decisions}
 
-The next architectural decisions are not about whether the generator works. They are about where the support boundary should stop:
 \begin{description}
-\item[Top-level event subprocess semantics] It remains an open design choice whether timer, error and escalation event subprocess starts should be given first-class process-level semantics.
-\item[Coverage breadth] Inclusive and complex gateways remain unsupported.
-\item[Runtime fidelity] There is still room to deepen true BPMN scope semantics if the project evolves from exploration tool toward a more complete runtime.
+\item[Top-level event subprocesses] Whether timer, error, and escalation
+  event subprocess starts should have first-class process-level semantics.
+\item[Runtime fidelity] Whether to deepen true BPMN scope semantics as the
+  project evolves.
 \end{description}
-
-\subsection{Practical summary}
-
-Durga is already useful as a technical exploration tool for BPMN-to-Kafka mapping. It is able to generate, run, observe and test a substantial set of workflow constructs locally. That is the right frame for the current manual as well: this document should be read as system documentation for an actively evolving prototype with a real executable surface.

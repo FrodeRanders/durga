@@ -1,26 +1,16 @@
 \section{Testing And Verification}
 \label{sec:TestingVerification}
 
-The repository now has a meaningful regression net around the scaffolder, the monitoring
-path, and the core runtime contracts, even though it is still not a full end-to-end
-production validation environment.
-
 \subsection{Generator verification}
 
-Generator verification currently has three layers:
+Three layers:
 \begin{itemize}
 \item dry-run tests that treat scaffold summaries and previews as a contract,
-\item generation tests that write selected projects to temporary directories and check the
-resulting files and configuration,
+\item generation tests that write projects to temp directories and verify output,
 \item compile-level tests that run Maven on representative generated projects.
 \end{itemize}
 
-This matters because the generator is split across BPMN parsing logic, StringTemplate groups
-and multiple helper generators. Simple unit tests are not enough on their own.
-
-\subsection{Representative sample coverage}
-
-The verification set intentionally spans several BPMN areas, including:
+The verification set spans:
 \begin{itemize}
 \item message and signal events,
 \item timers and boundaries,
@@ -31,39 +21,31 @@ The verification set intentionally spans several BPMN areas, including:
 
 \subsection{Core runtime contract verification}
 
-Runtime contracts are validated through additional unit test coverage:
 \begin{itemize}
 \item \texttt{ProcessEvent} serialization round-trips and compact-constructor inference,
 \item \texttt{ProcessState} serialization round-trips,
 \item \texttt{ScopeCancellationRegistry} cancellation tracking, merging, clearing and null-guard behavior,
-\item expanded \texttt{ProcessStateView} projection tests covering cancellation, escalation,
-process completion, gateway events, multiple concurrent activities, null-activity edges and
-state-key generation.
+\item \texttt{ProcessStateView} projection tests covering cancellation, escalation,
+process completion, gateway events, concurrent activities, and state-key generation.
 \end{itemize}
 
 \subsection{Monitoring verification}
 
-The monitoring side is validated through:
 \begin{itemize}
 \item unit tests around the state-projection model,
 \item local startup and packaging checks,
-\item demo publishers and scenario runners that can drive the monitoring topology without a
-fully generated process runtime.
+\item demo publishers and scenario runners that drive the monitoring topology
+without a full generated process runtime.
 \end{itemize}
 
 \subsection{CI pipeline}
 
-A GitHub Actions CI workflow runs \texttt{mvn verify} on push and pull requests to the main
-branch using JDK 21, ensuring the complete test suite passes on every change.
+GitHub Actions runs \texttt{mvn verify} on push and PR to \texttt{main} using JDK 21.
 
-\subsection{What is not fully covered yet}
+\subsection{Not fully covered}
 
-The remaining verification gaps are mostly at the integrated runtime level:
 \begin{itemize}
 \item full end-to-end process executions across all BPMN features,
-\item broader load or concurrency-oriented behavior,
-\item stronger operational testing of multi-instance monitoring scenarios.
+\item load and concurrency behavior,
+\item multi-instance monitoring scenarios.
 \end{itemize}
-
-For the current project phase, the test strategy is therefore strongest on generator
-correctness and local runtime exploration, and lighter on production-style operational proof.

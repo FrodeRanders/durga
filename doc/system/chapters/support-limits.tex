@@ -1,14 +1,10 @@
 \section{BPMN Support And Limits}
 \label{sec:SupportLimits}
 
-Durga supports a pragmatic BPMN subset that is broad enough for exploration and code
-generation, but not yet a complete BPMN execution engine.
-
 \subsection{Well-supported areas}
 
-The strongest current coverage includes:
 \begin{itemize}
-\item start events and explicit end completion handling,
+\item start events and explicit end completion,
 \item service, user, manual, send, receive, script and business rule tasks,
 \item XOR, inclusive (OR) and parallel gateway routing,
 \item intermediate timer, message and signal events,
@@ -20,25 +16,21 @@ The strongest current coverage includes:
 
 \subsection{Current semantic boundaries}
 
-Some behaviors are supported only to the level needed for explicit generated runtimes, not
-to full BPMN-engine fidelity:
 \begin{itemize}
 \item cancellation propagation is pragmatic rather than globally token-precise,
-\item subprocess scope handling is explicit but still lighter than a full BPMN execution scope manager,
-\item monitoring now includes dedicated current-state indexes and coarse trend buckets, but it is still lighter on long-term analytical history than on current-state inspection,
-\item generated runtimes are optimized for understanding and experimentation rather than minimalism.
+\item subprocess scope handling is explicit but lighter than a full BPMN execution scope manager,
+\item monitoring includes current-state indexes and coarse trend buckets, but is
+  optimized for current-state inspection over long-term analytics,
+\item generated runtimes prioritize inspectability over minimalism.
 \end{itemize}
 
-\subsection{Still outside the current focus}
+\subsection{Outside current scope}
 
-The main areas still outside the project's current center of gravity are:
 \begin{itemize}
 \item full production-grade workflow-engine semantics,
-\item richer compensation and advanced BPMN exception orchestration,
-\item large-scale operational hardening beyond local and exploratory usage,
-\item a generalized multi-node monitoring and query deployment model.
+\item compensation and advanced BPMN exception orchestration,
+\item large-scale operational hardening,
+\item generalized multi-node monitoring and query deployment.
 \end{itemize}
 
-The repository coverage matrix remains the most detailed element-by-element reference, but
-the overall design intent is simple: support enough BPMN to make the Kafka mapping useful,
-while keeping the generated runtime explicit and teachable.
+See \filepath{doc/bpmn-kafka-coverage.md} for the per-element support matrix.
