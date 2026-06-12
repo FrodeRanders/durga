@@ -11,6 +11,7 @@ public class ProcessStateTest {
 
     @Test
     public void shouldRoundTripThroughJson() {
+        System.out.println("TC: round-trips ProcessState through JSON preserving tokens, variables and version");
         List<ProcessState.Token> tokens = List.of(
                 new ProcessState.Token("token-1", "activity-A"),
                 new ProcessState.Token("token-2", "activity-B")
@@ -38,6 +39,7 @@ public class ProcessStateTest {
 
     @Test
     public void shouldHandleEmptyCollections() {
+        System.out.println("TC: round-trips ProcessState with empty tokens and variables collections");
         ProcessState state = new ProcessState("pi-2", List.of(), Map.of(), 0L);
 
         String json = state.toJson();
@@ -51,6 +53,7 @@ public class ProcessStateTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidJson() {
+        System.out.println("TC: throws IllegalArgumentException when parsing invalid JSON");
         ProcessState.fromJson("{invalid");
     }
 }

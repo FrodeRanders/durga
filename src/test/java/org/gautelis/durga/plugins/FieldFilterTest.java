@@ -8,6 +8,7 @@ public class FieldFilterTest {
 
     @Test
     public void shouldKeepWhitelistedFields() {
+        System.out.println("TC: keeps only whitelisted fields and drops all others");
         String input = "{\"a\":1,\"b\":2,\"c\":3}";
         String result = FieldFilter.filter(input, "a,c", null, null);
         assertTrue(result.contains("\"a\":1"));
@@ -17,6 +18,7 @@ public class FieldFilterTest {
 
     @Test
     public void shouldDropBlacklistedFields() {
+        System.out.println("TC: drops blacklisted fields and keeps all others");
         String input = "{\"a\":1,\"b\":2,\"c\":3}";
         String result = FieldFilter.filter(input, null, "b", null);
         assertTrue(result.contains("\"a\":1"));
@@ -26,6 +28,7 @@ public class FieldFilterTest {
 
     @Test
     public void shouldKeepWinsOnConflict() {
+        System.out.println("TC: whitelist takes precedence over blacklist on field conflict");
         String input = "{\"a\":1,\"b\":2}";
         String result = FieldFilter.filter(input, "a", "a,b", null);
         assertTrue(result.contains("\"a\":1"));
@@ -34,6 +37,7 @@ public class FieldFilterTest {
 
     @Test
     public void shouldPassthroughWhenNoFilters() {
+        System.out.println("TC: passes through input unchanged when no whitelist or blacklist is set");
         String input = "{\"a\":1,\"b\":2}";
         assertEquals(input, FieldFilter.filter(input, null, null, null));
         assertEquals(input, FieldFilter.filter(input, "", "", null));
@@ -41,12 +45,14 @@ public class FieldFilterTest {
 
     @Test
     public void shouldPassthroughNonObject() {
+        System.out.println("TC: passes through non-object JSON values unchanged");
         String input = "\"hello\"";
         assertEquals(input, FieldFilter.filter(input, "a", null, null));
     }
 
     @Test
     public void shouldFlattenNestedPrefix() {
+        System.out.println("TC: flattens nested object fields to top level and drops the nesting key");
         String input = "{\"a\":1,\"data\":{\"x\":10,\"y\":20}}";
         String result = FieldFilter.filter(input, null, "data", "data");
         assertTrue(result.contains("\"a\":1"));
@@ -57,6 +63,7 @@ public class FieldFilterTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidJson() {
+        System.out.println("TC: throws IllegalArgumentException on invalid JSON input");
         FieldFilter.filter("not json", "a", null, null);
     }
 }

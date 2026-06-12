@@ -10,6 +10,7 @@ public class KvEnricherTest {
 
     @Test
     public void shouldEnrichByKey() {
+        System.out.println("TC: enriches payload by looking up key field value in inline data map");
         KvEnricher enricher = new KvEnricher("id", Map.of(
                 "001", "{\"name\":\"Alice\",\"tier\":\"gold\"}",
                 "002", "{\"name\":\"Bob\",\"tier\":\"silver\"}"
@@ -23,6 +24,7 @@ public class KvEnricherTest {
 
     @Test
     public void shouldPassthroughOnMissingKey() {
+        System.out.println("TC: passes through unchanged when key field value is not found in inline data");
         KvEnricher enricher = new KvEnricher("id", Map.of("001", "{}"));
         String input = "{\"id\":\"999\",\"amount\":100}";
         assertEquals(input, enricher.enrich(input));
@@ -30,6 +32,7 @@ public class KvEnricherTest {
 
     @Test
     public void shouldPassthroughOnNullKeyField() {
+        System.out.println("TC: passes through unchanged when key field is missing from payload");
         KvEnricher enricher = new KvEnricher("id", Map.of());
         String input = "{\"amount\":100}";
         assertEquals(input, enricher.enrich(input));
@@ -37,12 +40,14 @@ public class KvEnricherTest {
 
     @Test
     public void shouldExposeKeyField() {
+        System.out.println("TC: exposes configured key field name via getter");
         KvEnricher enricher = new KvEnricher("customerId", Map.of());
         assertEquals("customerId", enricher.keyField());
     }
 
     @Test
     public void shouldExposeInlineData() {
+        System.out.println("TC: exposes inline data map via getter");
         Map<String, String> data = Map.of("k", "{}");
         KvEnricher enricher = new KvEnricher("id", data);
         assertEquals(data, enricher.inlineData());
@@ -50,12 +55,14 @@ public class KvEnricherTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidInputJson() {
+        System.out.println("TC: throws IllegalArgumentException when input payload is invalid JSON");
         KvEnricher enricher = new KvEnricher("id", Map.of());
         enricher.enrich("not json");
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidEnrichmentJson() {
+        System.out.println("TC: throws IllegalArgumentException when enrichment data value is invalid JSON");
         KvEnricher enricher = new KvEnricher("id", Map.of("001", "not json"));
         enricher.enrich("{\"id\":\"001\"}");
     }

@@ -133,6 +133,26 @@ SCENARIO=stuck ./setup/demo-monitoring.sh
 SCENARIO=failed ./setup/demo-monitoring.sh
 ```
 
+### Docker demo (continuous feed + monitoring UI)
+
+```bash
+docker compose -f setup/docker-compose.demo.yml up --build
+```
+
+Starts Kafka, the monitoring app with the Svelte dashboard, and a continuous
+feed publisher that exercises the monitoring topology. Open
+`http://localhost:8081` for the dashboard, `http://localhost:8080` for
+Kafka UI.
+
+The feed publishes a complete lifecycle every second with randomised
+processing times, producing live counts, latency, and stuck-instance data.
+
+```bash
+# Customise feed parameters
+FEED_PROCESS_ID=order_fulfillment FEED_INTERVAL_MS=2000 \
+  docker compose -f setup/docker-compose.demo.yml up --build
+```
+
 ## Generated project probes
 
 Every scaffolded project includes producer and observer helpers:

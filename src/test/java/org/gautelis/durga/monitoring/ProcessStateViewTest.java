@@ -10,6 +10,7 @@ import static org.junit.Assert.*;
 public class ProcessStateViewTest {
     @Test
     public void shouldProjectLatestStateAndDurations() {
+        System.out.println("TC: projects latest state, current activity, and activity durations from event sequence");
         ProcessStateView state = ProcessStateView.empty()
                 .apply(new ProcessEvent(
                         "pi-1",
@@ -63,6 +64,7 @@ public class ProcessStateViewTest {
 
     @Test
     public void shouldTrackFailuresAsRetries() {
+        System.out.println("TC: tracks process failure as lifecycle failure state with retry count and error code");
         ProcessStateView state = ProcessStateView.empty()
                 .apply(new ProcessEvent(
                         "pi-2",
@@ -86,6 +88,7 @@ public class ProcessStateViewTest {
 
     @Test
     public void shouldHandleActivityCancelled() {
+        System.out.println("TC: sets lifecycle to cancelled and records duration when activity is cancelled");
         ProcessStateView state = ProcessStateView.empty()
                 .apply(new ProcessEvent(
                         "pi-3", "order_proc", "start", "token-3", "corr-3",
@@ -112,6 +115,7 @@ public class ProcessStateViewTest {
 
     @Test
     public void shouldHandleActivityEscalated() {
+        System.out.println("TC: keeps lifecycle active and records duration when activity escalates");
         ProcessStateView state = ProcessStateView.empty()
                 .apply(new ProcessEvent(
                         "pi-4", "order_proc", "start", "token-4", "corr-4",
@@ -138,6 +142,7 @@ public class ProcessStateViewTest {
 
     @Test
     public void shouldHandleProcessCompletedWithDuration() {
+        System.out.println("TC: sets lifecycle to completed, records completedAt and activity duration");
         ProcessStateView state = ProcessStateView.empty()
                 .apply(new ProcessEvent(
                         "pi-5", "invoice_receipt", "start", "token-5", "corr-5",
@@ -166,6 +171,7 @@ public class ProcessStateViewTest {
 
     @Test
     public void shouldHandleGatewayTaken() {
+        System.out.println("TC: keeps lifecycle active and records duration on gateway_taken event");
         ProcessStateView state = ProcessStateView.empty()
                 .apply(new ProcessEvent(
                         "pi-6", "order_proc", "start", "token-6", "corr-6",
@@ -192,6 +198,7 @@ public class ProcessStateViewTest {
 
     @Test
     public void shouldHandleNullActivityIdGracefully() {
+        System.out.println("TC: handles null activityId without crashing and produces empty durations");
         ProcessStateView state = ProcessStateView.empty()
                 .apply(new ProcessEvent(
                         "pi-7", "order_proc", null, "token-7", "corr-7",
@@ -212,6 +219,7 @@ public class ProcessStateViewTest {
 
     @Test
     public void shouldPreserveStartedAtAcrossEvents() {
+        System.out.println("TC: preserves startedAt timestamp while updating lastUpdatedAt on subsequent events");
         ProcessStateView state = ProcessStateView.empty()
                 .apply(new ProcessEvent(
                         "pi-8", "order_proc", "start", "token-8", "corr-8",
@@ -232,6 +240,7 @@ public class ProcessStateViewTest {
 
     @Test
     public void emptyShouldReturnSaneDefaults() {
+        System.out.println("TC: empty state returns null instance id, unknown state, and empty collections");
         ProcessStateView empty = ProcessStateView.empty();
 
         assertNull(empty.processInstanceId());
@@ -245,6 +254,7 @@ public class ProcessStateViewTest {
 
     @Test
     public void currentStateKeyShouldHandleNulls() {
+        System.out.println("TC: currentStateKey returns unknown:unknown for empty state and process:activity after apply");
         ProcessStateView state = ProcessStateView.empty();
         ProcessStateView withPid = state
                 .apply(new ProcessEvent(
@@ -260,6 +270,7 @@ public class ProcessStateViewTest {
 
     @Test
     public void shouldTrackMultipleConcurrentActivities() {
+        System.out.println("TC: tracks durations for multiple concurrent activities independently");
         ProcessStateView state = ProcessStateView.empty()
                 .apply(new ProcessEvent(
                         "pi-10", "order_proc", "start", "token-10", "corr-10",

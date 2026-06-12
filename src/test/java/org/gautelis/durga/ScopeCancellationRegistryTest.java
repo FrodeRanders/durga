@@ -11,6 +11,7 @@ public class ScopeCancellationRegistryTest {
 
     @Test
     public void shouldTrackCancelledActivities() {
+        System.out.println("TC: tracks cancelled activities per process instance and returns correct isCancelled");
         ScopeCancellationRegistry registry = new ScopeCancellationRegistry();
         registry.cancelScope("pi-1", Set.of("activity-A", "activity-B"));
 
@@ -22,6 +23,7 @@ public class ScopeCancellationRegistryTest {
 
     @Test
     public void shouldClearCancelledActivities() {
+        System.out.println("TC: clears individual cancelled activities while keeping others intact");
         ScopeCancellationRegistry registry = new ScopeCancellationRegistry();
         registry.cancelScope("pi-1", Set.of("activity-A", "activity-B"));
 
@@ -33,6 +35,7 @@ public class ScopeCancellationRegistryTest {
 
     @Test
     public void shouldMergeCancellationsAcrossCalls() {
+        System.out.println("TC: merges cancellation sets across multiple cancelScope calls for the same instance");
         ScopeCancellationRegistry registry = new ScopeCancellationRegistry();
         registry.cancelScope("pi-1", Set.of("activity-A"));
         registry.cancelScope("pi-1", Set.of("activity-B"));
@@ -43,6 +46,7 @@ public class ScopeCancellationRegistryTest {
 
     @Test
     public void shouldRemoveInstanceEntryWhenAllCleared() {
+        System.out.println("TC: removes instance entry when all cancelled activities are cleared");
         ScopeCancellationRegistry registry = new ScopeCancellationRegistry();
         registry.cancelScope("pi-1", Set.of("activity-A"));
 
@@ -53,6 +57,7 @@ public class ScopeCancellationRegistryTest {
 
     @Test
     public void shouldIgnoreNullProcessInstanceId() {
+        System.out.println("TC: ignores null processInstanceId in cancelScope, clearScope and isCancelled");
         ScopeCancellationRegistry registry = new ScopeCancellationRegistry();
         registry.cancelScope(null, Set.of("activity-A"));
         registry.clearScope(null, Set.of("activity-A"));
@@ -62,6 +67,7 @@ public class ScopeCancellationRegistryTest {
 
     @Test
     public void shouldIgnoreBlankProcessInstanceId() {
+        System.out.println("TC: ignores blank processInstanceId in cancelScope, clearScope and isCancelled");
         ScopeCancellationRegistry registry = new ScopeCancellationRegistry();
         registry.cancelScope("   ", Set.of("activity-A"));
         registry.clearScope("   ", Set.of("activity-A"));
@@ -71,6 +77,7 @@ public class ScopeCancellationRegistryTest {
 
     @Test
     public void shouldIgnoreNullActivityIdInIsCancelled() {
+        System.out.println("TC: returns false for null or empty activityId in isCancelled");
         ScopeCancellationRegistry registry = new ScopeCancellationRegistry();
         registry.cancelScope("pi-1", Set.of("activity-A"));
 
@@ -80,6 +87,7 @@ public class ScopeCancellationRegistryTest {
 
     @Test
     public void shouldIgnoreNullOrEmptyActivityIdsInCancelScope() {
+        System.out.println("TC: ignores null or empty activityIds set in cancelScope");
         ScopeCancellationRegistry registry = new ScopeCancellationRegistry();
         registry.cancelScope("pi-1", null);
         registry.cancelScope("pi-1", Set.of());
@@ -89,6 +97,7 @@ public class ScopeCancellationRegistryTest {
 
     @Test
     public void shouldIgnoreNullOrEmptyActivityIdsInClearScope() {
+        System.out.println("TC: ignores null or empty activityIds in clearScope and preserves existing cancellations");
         ScopeCancellationRegistry registry = new ScopeCancellationRegistry();
         registry.cancelScope("pi-1", Set.of("activity-A"));
 

@@ -1,0 +1,12 @@
+FROM eclipse-temurin:21-jdk AS builder
+WORKDIR /build
+COPY . .
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -q package -DskipTests
+
+FROM eclipse-temurin:21-jre-alpine
+RUN addgroup -S durga && adduser -S durga -G durga
+USER durga
+COPY --from=builder /build/target/durga-1.0-SNAPSHOT.jar /app/durga.jar
+ENTRYPOINT ["java", "-cp", "/app/durga.jar", \
+  "org.gautelis.durga.demo.ContinuousFeedPublisher"]

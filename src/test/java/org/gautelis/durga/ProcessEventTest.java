@@ -10,6 +10,7 @@ public class ProcessEventTest {
 
     @Test
     public void shouldRoundTripThroughJsonWithFullConstructor() {
+        System.out.println("TC: round-trips through JSON preserving all fields including payload and error info");
         ProcessEvent event = new ProcessEvent(
                 "pi-1",
                 "invoice_receipt",
@@ -45,6 +46,7 @@ public class ProcessEventTest {
 
     @Test
     public void shouldRoundTripThroughJsonWithCompactConstructor() {
+        System.out.println("TC: round-trips through JSON with compact constructor and inferred event type");
         ProcessEvent event = new ProcessEvent(
                 "pi-2",
                 "invoice_receipt",
@@ -71,6 +73,7 @@ public class ProcessEventTest {
 
     @Test
     public void shouldInferEventTypeFromStatus() {
+        System.out.println("TC: infers correct event type from status for all lifecycle states");
         ProcessEvent started = new ProcessEvent(
                 "pi-3", "proc", "act", "tok", "corr", Map.of(), ProcessEvent.Status.STARTED, null);
         assertEquals(ProcessEvent.EventType.PROCESS_STARTED, started.eventType());
@@ -94,6 +97,7 @@ public class ProcessEventTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidJson() {
+        System.out.println("TC: throws IllegalArgumentException when parsing invalid JSON");
         ProcessEvent.fromJson("{not valid json");
     }
 }

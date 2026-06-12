@@ -8,6 +8,7 @@ public class WindowCounterTest {
 
     @Test
     public void shouldReturnNullUntilWindowCloses() {
+        System.out.println("TC: returns null for messages within the same window before flush");
         WindowCounter counter = new WindowCounter(3600, null);
         String result = counter.accept("{\"a\":1}");
         assertNull(result); // first message opens the window
@@ -17,6 +18,7 @@ public class WindowCounterTest {
 
     @Test
     public void shouldFlushOnRequest() {
+        System.out.println("TC: flush returns summary with totalCount, windowStart and windowEnd");
         WindowCounter counter = new WindowCounter(3600, null);
         counter.accept("{\"a\":1}");
         counter.accept("{\"a\":2}");
@@ -28,6 +30,7 @@ public class WindowCounterTest {
 
     @Test
     public void shouldTrackGroupedCounts() {
+        System.out.println("TC: tracks grouped counts by field value and includes groupCounts in summary");
         WindowCounter counter = new WindowCounter(3600, "type");
         counter.accept("{\"type\":\"click\"}");
         counter.accept("{\"type\":\"view\"}");
@@ -41,6 +44,7 @@ public class WindowCounterTest {
 
     @Test
     public void shouldTrackUnparseableAsErrorGroup() {
+        System.out.println("TC: counts unparseable JSON as _parse_error_ group");
         WindowCounter counter = new WindowCounter(3600, "type");
         counter.accept("not json");
         String summary = counter.flush();
@@ -49,6 +53,7 @@ public class WindowCounterTest {
 
     @Test
     public void shouldGroupNullFieldAsNull() {
+        System.out.println("TC: groups messages with missing groupBy field as _null_");
         WindowCounter counter = new WindowCounter(3600, "type");
         counter.accept("{\"other\":1}");
         String summary = counter.flush();
@@ -57,6 +62,7 @@ public class WindowCounterTest {
 
     @Test
     public void shouldExposeConfig() {
+        System.out.println("TC: exposes windowSeconds and groupBy via getters");
         WindowCounter counter = new WindowCounter(120, "group");
         assertEquals(120, counter.windowSeconds());
         assertEquals("group", counter.groupBy());
@@ -64,6 +70,7 @@ public class WindowCounterTest {
 
     @Test
     public void shouldNotIncludeGroupCountsWhenNoGroupBy() {
+        System.out.println("TC: does not include groupCounts in summary when no groupBy is configured");
         WindowCounter counter = new WindowCounter(60, null);
         counter.accept("{}");
         String summary = counter.flush();
@@ -72,6 +79,7 @@ public class WindowCounterTest {
 
     @Test
     public void shouldExecuteViaPluginInterface() throws Exception {
+        System.out.println("TC: execute via Plugin interface returns null for in-window messages and flush returns summary");
         WindowCounter counter = new WindowCounter();
         String summary = counter.execute("{\"a\":1}", "window=3600");
         assertNull(summary);
@@ -83,6 +91,7 @@ public class WindowCounterTest {
 
     @Test
     public void shouldParseWindowConfigFromExecute() throws Exception {
+        System.out.println("TC: parses window and groupBy parameters from config string in execute");
         WindowCounter counter = new WindowCounter();
         String result = counter.execute("{\"type\":\"click\"}", "window=30 groupBy=type");
         assertNull(result);

@@ -8,6 +8,7 @@ public class ActivityLatencyStatsTest {
 
     @Test
     public void shouldTrackSampleCount() {
+        System.out.println("TC: tracks sample count and total duration sum across added deltas");
         ActivityLatencyStats stats = ActivityLatencyStats.empty();
         stats = stats.add(new ActivityLatencyDelta("p1", "a1", 100, false));
         stats = stats.add(new ActivityLatencyDelta("p1", "a1", 200, false));
@@ -17,6 +18,7 @@ public class ActivityLatencyStatsTest {
 
     @Test
     public void shouldTrackMax() {
+        System.out.println("TC: tracks maximum duration across all added deltas");
         ActivityLatencyStats stats = ActivityLatencyStats.empty();
         stats = stats.add(new ActivityLatencyDelta("p1", "a1", 100, false));
         stats = stats.add(new ActivityLatencyDelta("p1", "a1", 500, false));
@@ -26,6 +28,7 @@ public class ActivityLatencyStatsTest {
 
     @Test
     public void shouldComputePercentiles() {
+        System.out.println("TC: computes p50, p95 and p99 percentiles from sorted samples");
         ActivityLatencyStats stats = ActivityLatencyStats.empty();
         for (int i = 1; i <= 50; i++) {
             stats = stats.add(new ActivityLatencyDelta("p1", "a1", i * 10, false));
@@ -40,6 +43,7 @@ public class ActivityLatencyStatsTest {
 
     @Test
     public void shouldTrackSlaViolations() {
+        System.out.println("TC: counts samples exceeding SLA threshold as violations");
         ActivityLatencyStats stats = ActivityLatencyStats.empty();
         stats = stats.add(ActivityLatencyDelta.of("p1", "a1", 100, 50));
         stats = stats.add(ActivityLatencyDelta.of("p1", "a1", 200, 50));
@@ -49,6 +53,7 @@ public class ActivityLatencyStatsTest {
 
     @Test
     public void shouldNotCountViolationsWhenThresholdZero() {
+        System.out.println("TC: counts no SLA violations when threshold is zero");
         ActivityLatencyStats stats = ActivityLatencyStats.empty();
         stats = stats.add(ActivityLatencyDelta.of("p1", "a1", 999999, 0));
         assertEquals(0L, stats.slaViolationCount());
@@ -56,6 +61,7 @@ public class ActivityLatencyStatsTest {
 
     @Test
     public void shouldIncludePercentilesInSummary() {
+        System.out.println("TC: ActivityLatencySummary includes percentiles, average, max and violation count");
         ActivityLatencyStats stats = ActivityLatencyStats.empty();
         for (int i = 1; i <= 10; i++) {
             stats = stats.add(new ActivityLatencyDelta("p1", "a1", i * 100, false));
@@ -72,6 +78,7 @@ public class ActivityLatencyStatsTest {
 
     @Test
     public void percentileShouldWorkWithSingleSample() {
+        System.out.println("TC: percentile returns the single sample value for any percentile with one sample");
         ActivityLatencyStats stats = ActivityLatencyStats.empty();
         stats = stats.add(new ActivityLatencyDelta("p1", "a1", 42, false));
         assertEquals(42L, stats.percentile(50.0));

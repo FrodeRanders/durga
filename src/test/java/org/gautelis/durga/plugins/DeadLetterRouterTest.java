@@ -10,6 +10,7 @@ public class DeadLetterRouterTest {
 
     @Test
     public void shouldRouteOnFieldValue() {
+        System.out.println("TC: routes to correct topic based on field value matching routes map");
         DeadLetterRouter router = new DeadLetterRouter("status", Map.of(
                 "ok", "success",
                 "error", "failure"
@@ -20,24 +21,28 @@ public class DeadLetterRouterTest {
 
     @Test
     public void shouldFallThroughToDefault() {
+        System.out.println("TC: returns default route when field value does not match any route");
         DeadLetterRouter router = new DeadLetterRouter("status", Map.of("ok", "success"), "default");
         assertEquals("default", router.route("{\"status\":\"pending\"}"));
     }
 
     @Test
     public void shouldFallThroughOnMissingField() {
+        System.out.println("TC: returns default route when routing field is missing from payload");
         DeadLetterRouter router = new DeadLetterRouter("status", Map.of("ok", "success"), "default");
         assertEquals("default", router.route("{\"other\":1}"));
     }
 
     @Test
     public void shouldFallThroughOnInvalidJson() {
+        System.out.println("TC: returns default route when payload is invalid JSON");
         DeadLetterRouter router = new DeadLetterRouter("status", Map.of("ok", "success"), "default");
         assertEquals("default", router.route("not json"));
     }
 
     @Test
     public void shouldExposeConfig() {
+        System.out.println("TC: exposes field, routes map and default route via getters");
         var routes = Map.of("a", "b");
         DeadLetterRouter router = new DeadLetterRouter("field", routes, "fallback");
         assertEquals("field", router.field());
@@ -47,6 +52,7 @@ public class DeadLetterRouterTest {
 
     @Test
     public void shouldRouteNestedField() {
+        System.out.println("TC: routes on nested field value using dot-separated path");
         DeadLetterRouter router = new DeadLetterRouter("event.type", Map.of("click", "clicks_topic"), "other");
         assertEquals("clicks_topic", router.route("{\"event\":{\"type\":\"click\"}}"));
     }
