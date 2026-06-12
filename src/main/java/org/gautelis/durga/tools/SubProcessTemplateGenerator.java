@@ -61,7 +61,7 @@ final class SubProcessTemplateGenerator {
                 // Entry handlers convert "arrive at the subprocess boundary" into "start the
                 // internal subprocess graph" while emitting scope lifecycle for monitoring.
                 ST entryTemplate = group.getInstanceOf("subProcessEntryHandlerClass");
-                entryTemplate.add("packageName", "org.gautelis.durga.generated");
+                entryTemplate.add("packageName", BpmnScaffolder.generatedPackage);
                 entryTemplate.add("className", entryClassName);
                 entryTemplate.add("subProcessId", spec.name);
                 entryTemplate.add("entryChannel", processId + "_" + spec.name + "_input");
@@ -99,7 +99,7 @@ final class SubProcessTemplateGenerator {
             // Completion handlers collapse multiple internal exits back into one subprocess-level
             // completion signal before the outer graph continues.
             ST completionTemplate = group.getInstanceOf("subProcessCompletionHandlerClass");
-            completionTemplate.add("packageName", "org.gautelis.durga.generated");
+            completionTemplate.add("packageName", BpmnScaffolder.generatedPackage);
             completionTemplate.add("className", completionClassName);
             completionTemplate.add("subProcessId", spec.name);
             completionTemplate.add("scopeActivityIds", spec.scopeActivityIds);
@@ -155,7 +155,7 @@ final class SubProcessTemplateGenerator {
                                 ? "eventSubProcessMonitorStartHandlerClass"
                                 : "eventSubProcessStartHandlerClass"
                 );
-                entryTemplate.add("packageName", "org.gautelis.durga.generated");
+                entryTemplate.add("packageName", BpmnScaffolder.generatedPackage);
                 entryTemplate.add("className", entryClassName);
                 entryTemplate.add("subProcessId", spec.name);
                 entryTemplate.add("interrupting", spec.interrupting);
@@ -203,7 +203,7 @@ final class SubProcessTemplateGenerator {
                 continue;
             }
             ST completionTemplate = group.getInstanceOf("eventSubProcessCompletionHandlerClass");
-            completionTemplate.add("packageName", "org.gautelis.durga.generated");
+            completionTemplate.add("packageName", BpmnScaffolder.generatedPackage);
             completionTemplate.add("className", completionClassName);
             completionTemplate.add("subProcessId", spec.name);
             completionTemplate.add("scopeActivityIds", spec.scopeActivityIds);

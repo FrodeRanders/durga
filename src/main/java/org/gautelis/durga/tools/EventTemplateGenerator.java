@@ -48,7 +48,7 @@ final class EventTemplateGenerator {
                 continue;
             }
             ST template = group.getInstanceOf("timerCatchEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", BpmnScaffolder.generatedPackage);
             template.add("className", className);
             template.add("inputChannel", inputChannel.get());
             template.add("outputChannel", output.get().channel);
@@ -95,7 +95,7 @@ final class EventTemplateGenerator {
                 continue;
             }
             ST template = group.getInstanceOf("messageCatchEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", BpmnScaffolder.generatedPackage);
             template.add("className", className);
             template.add("inputChannel", inputChannel.get());
             template.add("messageTopic", spec.topic);
@@ -140,7 +140,7 @@ final class EventTemplateGenerator {
                 continue;
             }
             ST template = group.getInstanceOf("messageThrowEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", BpmnScaffolder.generatedPackage);
             template.add("className", className);
             template.add("inputChannel", inputChannel.get());
             template.add("messageTopic", spec.topic);
@@ -173,7 +173,7 @@ final class EventTemplateGenerator {
             return;
         }
         ST template = group.getInstanceOf("messageEventPublisherClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", BpmnScaffolder.generatedPackage);
         template.add("className", className);
         template.add("processId", processId);
         if (!dryRun) {
@@ -199,7 +199,7 @@ final class EventTemplateGenerator {
             return;
         }
         ST template = group.getInstanceOf("signalEventPublisherClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", BpmnScaffolder.generatedPackage);
         template.add("className", className);
         template.add("processId", processId);
         if (!dryRun) {
@@ -237,7 +237,7 @@ final class EventTemplateGenerator {
                 continue;
             }
             ST template = group.getInstanceOf("signalCatchEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", BpmnScaffolder.generatedPackage);
             template.add("className", className);
             template.add("inputChannel", inputChannel.get());
             template.add("signalTopic", spec.topic);
@@ -282,7 +282,7 @@ final class EventTemplateGenerator {
                 continue;
             }
             ST template = group.getInstanceOf("signalThrowEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", BpmnScaffolder.generatedPackage);
             template.add("className", className);
             template.add("inputChannel", inputChannel.get());
             template.add("signalTopic", spec.topic);
@@ -323,7 +323,7 @@ final class EventTemplateGenerator {
                 continue;
             }
             ST template = group.getInstanceOf("boundaryErrorEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", BpmnScaffolder.generatedPackage);
             template.add("className", className);
             template.add("attachedTaskId", spec.attachedTaskId);
             template.add("outputChannel", output.get().channel);
@@ -364,7 +364,7 @@ final class EventTemplateGenerator {
                 continue;
             }
             ST template = group.getInstanceOf("boundaryEscalationEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", BpmnScaffolder.generatedPackage);
             template.add("className", className);
             template.add("attachedTaskId", spec.attachedTaskId);
             template.add("outputChannel", output.get().channel);
@@ -405,7 +405,7 @@ final class EventTemplateGenerator {
                 continue;
             }
             ST template = group.getInstanceOf("boundaryTimerEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", BpmnScaffolder.generatedPackage);
             template.add("className", className);
             template.add("attachedTaskId", spec.attachedTaskId);
             template.add("outputChannel", output.get().channel);
@@ -448,7 +448,7 @@ final class EventTemplateGenerator {
                 continue;
             }
             ST template = group.getInstanceOf("callActivityHandlerClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", BpmnScaffolder.generatedPackage);
             template.add("className", className);
             template.add("processId", processId);
             template.add("taskId", spec.name);

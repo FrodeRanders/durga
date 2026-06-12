@@ -5,7 +5,9 @@
 
 The generated output contains:
 \begin{itemize}
-\item Java runtime classes under \texttt{src/main/java/org/gautelis/durga/generated/},
+\item operational classes (workers, gateways, orchestrator) in the configured package,
+\item probe and exerciser classes (starter, publishers, watchers, scenario runner)
+in \texttt{<package>.probes},
 \item a generated \texttt{pom.xml},
 \item merged Kafka channel configuration in \texttt{application.yml},
 \item a topic-creation script,

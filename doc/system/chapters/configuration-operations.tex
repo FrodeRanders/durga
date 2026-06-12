@@ -19,7 +19,21 @@ java -jar target/durga-1.0-SNAPSHOT.jar path/to/process.bpmn [flags...]
 
 Available flags: \texttt{--dry-run}, \texttt{--out <dir>},
 \texttt{--transactions}, \texttt{--separate-workers}, \texttt{--strimzi},
-\texttt{--connect}, \texttt{--process-id <id>}.
+\texttt{--connect}, \texttt{--process-id <id>}, \texttt{--package <pkg>},
+\texttt{--retention <hours>}.
+
+\texttt{--retention <hours>} sets Kafka topic retention in hours
+(defaults to 168\,h/7\,days with a warning). Use \texttt{-1} for
+infinite retention. The \texttt{process-events} topic always has
+infinite retention; the \texttt{\%process\%\_state} topic always uses
+compaction. Wired into both \texttt{topics.sh} and Strimzi
+\texttt{topics.yml}. Accepts \texttt{h}, \texttt{d}, \texttt{w},
+\texttt{m} suffixes for hours, days, weeks, or 30-day months.
+
+\texttt{--package <pkg>} sets the Java package for generated code
+(defaults to \texttt{org.gautelis.durga.generated} with a warning).
+Operational classes are placed directly in the package; probe and
+exerciser classes in \texttt{<pkg>.probes}.
 
 \texttt{--process-id <id>} overrides the process identifier read from the
 BPMN file. This is the name used in topic names, consumer group IDs,

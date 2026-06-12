@@ -40,7 +40,7 @@ final class TaskRoutingGenerator {
                 continue;
             }
             ST worker = group.getInstanceOf(BpmnScaffolder.templateForTask(task.kind, transactions));
-            worker.add("packageName", "org.gautelis.durga.generated");
+            worker.add("packageName", BpmnScaffolder.generatedPackage);
             worker.add("className", className);
             worker.add("processId", processId);
             worker.add("taskId", task.name);
@@ -93,7 +93,7 @@ final class TaskRoutingGenerator {
                 continue;
             }
             ST tmpl = group.getInstanceOf("xorGatewayClass");
-            tmpl.add("packageName", "org.gautelis.durga.generated");
+            tmpl.add("packageName", BpmnScaffolder.generatedPackage);
             tmpl.add("className", className);
             tmpl.add("inputChannel", inputChannel.get());
             tmpl.add("outputs", outputs);
@@ -116,7 +116,7 @@ final class TaskRoutingGenerator {
                     continue;
                 }
                 ST tmpl = group.getInstanceOf("andSplitGatewayClass");
-                tmpl.add("packageName", "org.gautelis.durga.generated");
+                tmpl.add("packageName", BpmnScaffolder.generatedPackage);
                 tmpl.add("className", className);
                 tmpl.add("inputChannel", inputChannel.get());
                 tmpl.add("outputs", outputs);
@@ -136,7 +136,7 @@ final class TaskRoutingGenerator {
                     continue;
                 }
                 ST tmpl = group.getInstanceOf("andJoinGatewayClass");
-                tmpl.add("packageName", "org.gautelis.durga.generated");
+                tmpl.add("packageName", BpmnScaffolder.generatedPackage);
                 tmpl.add("className", className);
                 tmpl.add("processId", processId);
                 tmpl.add("outputChannel", output.get().channel);
@@ -167,7 +167,7 @@ final class TaskRoutingGenerator {
                     continue;
                 }
                 ST tmpl = group.getInstanceOf("orSplitGatewayClass");
-                tmpl.add("packageName", "org.gautelis.durga.generated");
+                tmpl.add("packageName", BpmnScaffolder.generatedPackage);
                 tmpl.add("className", className);
                 tmpl.add("inputChannel", inputChannel.get());
                 tmpl.add("outputs", outputs);
@@ -187,7 +187,7 @@ final class TaskRoutingGenerator {
                     continue;
                 }
                 ST tmpl = group.getInstanceOf("orJoinGatewayClass");
-                tmpl.add("packageName", "org.gautelis.durga.generated");
+                tmpl.add("packageName", BpmnScaffolder.generatedPackage);
                 tmpl.add("className", className);
                 tmpl.add("processId", processId);
                 tmpl.add("outputChannel", output.get().channel);
@@ -241,7 +241,7 @@ final class TaskRoutingGenerator {
             return;
         }
         ST tmpl = group.getInstanceOf("orchestratorClass");
-        tmpl.add("packageName", "org.gautelis.durga.generated");
+        tmpl.add("packageName", BpmnScaffolder.generatedPackage);
         tmpl.add("className", className);
         tmpl.add("processId", processId);
         tmpl.add("incomingMethodsBlock", SubProcessTemplateGenerator.buildOrchestratorMethodsBlock(incomingMethods));

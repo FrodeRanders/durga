@@ -461,10 +461,12 @@ final class ParsedArgs {
     final boolean connect;
     final boolean strimzi;
     final String processIdOverride;
+    final String packageName;
+    final String retentionHours;
 
     ParsedArgs(String bpmnPath, String outputDir, boolean dryRun, boolean transactions,
                boolean separateWorkers, boolean connect, boolean strimzi,
-               String processIdOverride) {
+               String processIdOverride, String packageName, String retentionHours) {
         this.bpmnPath = bpmnPath;
         this.outputDir = outputDir;
         this.dryRun = dryRun;
@@ -473,6 +475,8 @@ final class ParsedArgs {
         this.connect = connect;
         this.strimzi = strimzi;
         this.processIdOverride = processIdOverride;
+        this.packageName = packageName;
+        this.retentionHours = retentionHours;
     }
 }
 

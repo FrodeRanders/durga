@@ -37,7 +37,7 @@ For iterative development, keep Kafka running and rebuild the pipeline:
 \begin{verbatim}
 mvn -q clean package -DskipTests
 java -cp target/<project>-all.jar \
-  org.gautelis.durga.generated.<Process>Starter localhost:9094
+  org.gautelis.durga.generated.probes.<Process>Starter localhost:9094
 \end{verbatim}
 
 To test with the monitoring dashboard:

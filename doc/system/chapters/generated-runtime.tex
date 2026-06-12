@@ -2,7 +2,11 @@
 \label{sec:GeneratedRuntime}
 
 Each generated project contains Java classes under
+Operational classes (workers, gateways, orchestrator) are generated under:
 \filepath{src/main/java/org/gautelis/durga/generated/}.
+Probes and exercisers (starter, scenario runner, publishers, watchers) are
+generated under:
+\filepath{src/main/java/org/gautelis/durga/generated/probes/}.
 These classes map BPMN constructs onto Kafka consumers, producers and lifecycle events
 rather than hiding behind an opaque engine.
 

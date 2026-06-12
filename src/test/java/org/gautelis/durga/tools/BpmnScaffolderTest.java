@@ -159,7 +159,7 @@ public class BpmnScaffolderTest {
 
         assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/AwaitReviewResponseMessageCatchService.java")));
         assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/SendReviewRequestMessageThrowService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/InvoiceMessageExchangeMessageEventPublisher.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/probes/InvoiceMessageExchangeMessageEventPublisher.java")));
         assertTrue(Files.exists(outputDir.resolve("send-message-event.sh")));
 
         String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));

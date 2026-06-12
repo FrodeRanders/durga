@@ -71,7 +71,7 @@ spec:
 ---
 }%>>
 
-topicsYml(processId, tasks, timers, messageTopics, callActivities, subProcesses) ::= <<
+topicsYml(processId, tasks, timers, messageTopics, callActivities, subProcesses, retentionMs) ::= <<
 %tasks:{t|
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
@@ -83,6 +83,8 @@ metadata:
 spec:
   partitions: 3
   replicas: 1
+  config:
+    retention.ms: "%retentionMs%"
 ---
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
@@ -94,6 +96,8 @@ metadata:
 spec:
   partitions: 3
   replicas: 1
+  config:
+    retention.ms: "%retentionMs%"
 ---
 }%%timers:{t|
 apiVersion: kafka.strimzi.io/v1beta2
@@ -106,6 +110,8 @@ metadata:
 spec:
   partitions: 3
   replicas: 1
+  config:
+    retention.ms: "%retentionMs%"
 ---
 }%%messageTopics:{t|
 apiVersion: kafka.strimzi.io/v1beta2
@@ -118,6 +124,8 @@ metadata:
 spec:
   partitions: 3
   replicas: 1
+  config:
+    retention.ms: "%retentionMs%"
 ---
 }%%callActivities:{t|
 apiVersion: kafka.strimzi.io/v1beta2
@@ -130,6 +138,8 @@ metadata:
 spec:
   partitions: 3
   replicas: 1
+  config:
+    retention.ms: "%retentionMs%"
 ---
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
@@ -141,6 +151,8 @@ metadata:
 spec:
   partitions: 3
   replicas: 1
+  config:
+    retention.ms: "%retentionMs%"
 ---
 }%%subProcesses:{t|
 apiVersion: kafka.strimzi.io/v1beta2
@@ -153,6 +165,8 @@ metadata:
 spec:
   partitions: 3
   replicas: 1
+  config:
+    retention.ms: "%retentionMs%"
 ---
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
@@ -164,8 +178,23 @@ metadata:
 spec:
   partitions: 3
   replicas: 1
+  config:
+    retention.ms: "%retentionMs%"
 ---
 }%
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: %processId%_state
+  labels:
+    strimzi.io/cluster: my-kafka
+    app: %processId%
+spec:
+  partitions: 3
+  replicas: 1
+  config:
+    cleanup.policy: compact
+---
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
 metadata:
@@ -176,6 +205,8 @@ metadata:
 spec:
   partitions: 3
   replicas: 1
+  config:
+    retention.ms: "%retentionMs%"
 ---
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
@@ -187,4 +218,6 @@ metadata:
 spec:
   partitions: 3
   replicas: 1
+  config:
+    retention.ms: "-1"
 >>

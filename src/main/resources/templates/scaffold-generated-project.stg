@@ -120,11 +120,12 @@ mp:
 }%
 >>
 
-topicsScript(processId, tasks, timers, messageTopics, callActivities, subProcesses) ::= <<
+topicsScript(processId, tasks, timers, messageTopics, callActivities, subProcesses, retentionMs) ::= <<
 #!/usr/bin/env bash
 set -euo pipefail
 
 BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+RETENTION_MS=%retentionMs%
 
 topics=(
   "%processId%_start"
@@ -155,9 +156,14 @@ for topic in "${topics[@]}"; do
     kafka-topics --bootstrap-server "$BOOTSTRAP" \
       --create --if-not-exists --topic "$topic" \
       --config cleanup.policy=compact
+  elif [[ "$RETENTION_MS" == "-1" ]]; then
+    kafka-topics --bootstrap-server "$BOOTSTRAP" \
+      --create --if-not-exists --topic "$topic" \
+      --config retention.ms=-1
   else
     kafka-topics --bootstrap-server "$BOOTSTRAP" \
-      --create --if-not-exists --topic "$topic"
+      --create --if-not-exists --topic "$topic" \
+      --config retention.ms="$RETENTION_MS"
   fi
 done
 >>
@@ -192,7 +198,7 @@ fi
 echo "===> Starting %processId% with profile=$PROFILE, bootstrap=$BOOTSTRAP"
 java -Dquarkus.profile="$PROFILE" \
      -Dkafka.bootstrap.servers="$BOOTSTRAP" \
-     -cp "$JAR" org.gautelis.durga.generated.%starterClass%Starter "$BOOTSTRAP" valid=true
+     -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%Starter "$BOOTSTRAP" valid=true
 >>
 
 demoScenarioScript(processId, starterClass, firstTask, lastTask) ::= <<
@@ -222,7 +228,7 @@ if [[ ! -f "$JAR" ]]; then
 fi
 
 instance_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
-java -cp "$JAR" org.gautelis.durga.generated.%starterClass%DemoScenarioRunner "$BOOTSTRAP" "$SCENARIO" "$instance_id"
+java -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%Runner "$BOOTSTRAP" "$SCENARIO" "$instance_id"
 >>
 
 taskInputScript(processId, starterClass) ::= <<
@@ -249,7 +255,7 @@ if [[ ! -f "$JAR" ]]; then
   exit 1
 fi
 
-java -cp "$JAR" org.gautelis.durga.generated.%starterClass%TaskInputPublisher "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID"
+java -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%TaskInputPublisher "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID"
 >>
 
 taskCompletionScript(processId, starterClass) ::= <<
@@ -276,7 +282,7 @@ if [[ ! -f "$JAR" ]]; then
   exit 1
 fi
 
-java -cp "$JAR" org.gautelis.durga.generated.%starterClass%TaskCompletionPublisher "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID"
+java -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%TaskCompletionPublisher "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID"
 >>
 
 taskFailureScript(processId, starterClass) ::= <<
@@ -303,7 +309,7 @@ if [[ ! -f "$JAR" ]]; then
   exit 1
 fi
 
-java -cp "$JAR" org.gautelis.durga.generated.%starterClass%TaskFailurePublisher "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID"
+java -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%TaskFailurePublisher "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID"
 >>
 
 taskEscalationScript(processId, starterClass) ::= <<
@@ -330,7 +336,7 @@ if [[ ! -f "$JAR" ]]; then
   exit 1
 fi
 
-java -cp "$JAR" org.gautelis.durga.generated.%starterClass%TaskEscalationPublisher "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID"
+java -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%TaskEscalationPublisher "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID"
 >>
 
 callActivityCompletionScript(processId, starterClass) ::= <<
@@ -357,7 +363,7 @@ if [[ ! -f "$JAR" ]]; then
   exit 1
 fi
 
-java -cp "$JAR" org.gautelis.durga.generated.%starterClass%CallActivityCompletionPublisher "$BOOTSTRAP" "$CALL_ACTIVITY_ID" "$INSTANCE_ID"
+java -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%CallActivityCompletionPublisher "$BOOTSTRAP" "$CALL_ACTIVITY_ID" "$INSTANCE_ID"
 >>
 
 messageEventScript(processId, starterClass) ::= <<
@@ -384,7 +390,7 @@ if [[ ! -f "$JAR" ]]; then
   exit 1
 fi
 
-java -cp "$JAR" org.gautelis.durga.generated.%starterClass%MessageEventPublisher "$BOOTSTRAP" "$MESSAGE_TOPIC" "$INSTANCE_ID"
+java -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%MessageEventPublisher "$BOOTSTRAP" "$MESSAGE_TOPIC" "$INSTANCE_ID"
 >>
 
 signalEventScript(processId, starterClass) ::= <<
@@ -411,7 +417,7 @@ if [[ ! -f "$JAR" ]]; then
   exit 1
 fi
 
-java -cp "$JAR" org.gautelis.durga.generated.%starterClass%SignalEventPublisher "$BOOTSTRAP" "$SIGNAL_TOPIC" "$INSTANCE_ID"
+java -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%SignalEventPublisher "$BOOTSTRAP" "$SIGNAL_TOPIC" "$INSTANCE_ID"
 >>
 
 processEventsWatchScript(processId, starterClass) ::= <<
@@ -434,7 +440,7 @@ if [[ ! -f "$JAR" ]]; then
   exit 1
 fi
 
-java -cp "$JAR" org.gautelis.durga.generated.%starterClass%ProcessEventsWatcher \
+java -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%ProcessEventsWatcher \
   "$BOOTSTRAP" "$INSTANCE_ID" "$MAX_RECORDS" "$TIMEOUT_SECONDS"
 >>
 
@@ -464,7 +470,7 @@ if [[ ! -f "$JAR" ]]; then
   exit 1
 fi
 
-java -cp "$JAR" org.gautelis.durga.generated.%starterClass%TaskOutputWatcher \
+java -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%TaskOutputWatcher \
   "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID" "$MAX_RECORDS" "$TIMEOUT_SECONDS"
 >>
 
@@ -1414,7 +1420,7 @@ pomXml(processId, starterClass) ::= <<
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>org.gautelis.durga.generated.%starterClass%Starter</Main-Class>
+                                        <Main-Class>org.gautelis.durga.generated.probes.%starterClass%Starter</Main-Class>
                                         <Java-Util-Logging-Manager>org.jboss.logmanager.LogManager</Java-Util-Logging-Manager>
                                     </manifestEntries>
                                 </transformer>

@@ -61,6 +61,8 @@ import java.util.TreeSet;
  * so the generated project can be studied, modified, and demoed locally.
  */
 public class BpmnScaffolder {
+    static String generatedPackage = "org.gautelis.durga.generated";
+    static String generatedProbesPackage = "org.gautelis.durga.generated.probes";
     /**
      * Generates a project from a BPMN file.
      *
@@ -80,7 +82,29 @@ public class BpmnScaffolder {
         }
 
         Path outputRoot = Path.of(parsed.outputDir);
-        Path javaOutput = outputRoot.resolve("src/main/java/org/gautelis/durga/generated");
+        String pkg = parsed.packageName;
+        if (pkg == null || pkg.isBlank()) {
+            pkg = generatedPackage;
+            System.err.println("Warning: no --package specified, defaulting to " + pkg);
+        }
+        generatedPackage = pkg;
+        generatedProbesPackage = pkg + ".probes";
+        Path javaOutput = outputRoot.resolve("src/main/java/" + pkg.replace('.', '/'));
+
+        String retention = parsed.retentionHours;
+        long retentionMs;
+        if (retention == null || retention.isBlank()) {
+            retentionMs = 168 * 3600 * 1000L; // 7 days
+            System.err.println("Warning: no --retention specified, defaulting to 168h (7 days). "
+                    + "Topics older than this will be deleted. "
+                    + "Use --retention 42h|5d|2w|1m or -1 for infinite.");
+        } else if ("-1".equals(retention)) {
+            retentionMs = -1;
+            System.err.println("Note: retention set to -1 (infinite). Topics will never be deleted.");
+        } else {
+            retentionMs = parseRetention(retention);
+        }
+        Path probesOutput = outputRoot.resolve("src/main/java/" + pkg.replace('.', '/') + "/probes");
         Path coreJavaOutput = outputRoot.resolve("src/main/java/org/gautelis/durga");
         Path mainSourceRoot = Path.of("src/main/java");
 
@@ -207,13 +231,13 @@ public class BpmnScaffolder {
                 processId, taskSpecs, existingSources
         );
 
-        generateStarter(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
-        generateDemoRunner(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId, tasks);
-        generateTaskInputPublisher(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
-        generateTaskCompletionPublisher(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
-        generateTaskFailurePublisher(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
-        generateTaskEscalationPublisher(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
-        generateCallActivityCompletionPublisher(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
+        generateStarter(group, probesOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
+        generateDemoRunner(group, probesOutput, outputRoot, generatedFiles, parsed.dryRun, processId, tasks);
+        generateTaskInputPublisher(group, probesOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
+        generateTaskCompletionPublisher(group, probesOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
+        generateTaskFailurePublisher(group, probesOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
+        generateTaskEscalationPublisher(group, probesOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
+        generateCallActivityCompletionPublisher(group, probesOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
         EventTemplateGenerator.generateTimerHandlers(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId, nodes, timerSpecs);
         EventTemplateGenerator.generateBoundaryTimerHandlers(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId, nodes, boundaryTimerSpecs);
         EventTemplateGenerator.generateBoundaryErrorHandlers(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId, nodes, boundaryErrorSpecs);
@@ -229,10 +253,10 @@ public class BpmnScaffolder {
         SubProcessTemplateGenerator.generateEventSubProcessHandlers(
                 group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId, nodes, eventSubProcessSpecs
         );
-        EventTemplateGenerator.generateMessageEventPublisher(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
-        EventTemplateGenerator.generateSignalEventPublisher(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
-        generateProcessEventsWatcher(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
-        generateTaskOutputWatcher(group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
+        EventTemplateGenerator.generateMessageEventPublisher(group, probesOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
+        EventTemplateGenerator.generateSignalEventPublisher(group, probesOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
+        generateProcessEventsWatcher(group, probesOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
+        generateTaskOutputWatcher(group, probesOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
 
         TaskRoutingGenerator.generateGateways(
                 processId, group, javaOutput, nodes, flowsBySource, xors, ands, ors, existingSources,
@@ -245,7 +269,7 @@ public class BpmnScaffolder {
         List<String> allTimers = combineNames(timers, boundaryTimers);
         List<String> externalTopics = combineNames(messageTopics, signalTopics);
         String yamlPreview = renderYamlPreview(group, processId, tasks, allTimers, externalTopics, callActivities, subProcesses);
-        String topicsPreview = renderTopicsPreview(group, processId, tasks, allTimers, externalTopics, callActivities, subProcesses);
+        String topicsPreview = renderTopicsPreview(group, processId, tasks, allTimers, externalTopics, callActivities, subProcesses, retentionMs);
         String pomPreview = renderPomPreview(group, processId);
         String runLocalPreview = renderRunLocalPreview(group, processId);
         String demoPreview = renderDemoPreview(group, processId, tasks);
@@ -277,6 +301,7 @@ public class BpmnScaffolder {
                 strimziSt.add("messageTopics", messageTopics);
                 strimziSt.add("callActivities", callActivities);
                 strimziSt.add("subProcesses", subProcesses);
+                strimziSt.add("retentionMs", retentionMs);
                 Path topicsYmlPath = outputRoot.resolve("topics.yml");
                 writeFile(topicsYmlPath, strimziSt.render());
                 generatedFiles.add(outputRoot.relativize(topicsYmlPath).toString());
@@ -382,7 +407,7 @@ public class BpmnScaffolder {
                 Path workerPath = javaOutput.resolve(workerClass + ".java");
                 if (!Files.exists(workerPath) && !existingSources.contains(workerClass + ".java")) {
                     ST workerSt = group.getInstanceOf("workerStandaloneClass");
-                    workerSt.add("packageName", "org.gautelis.durga.generated");
+                    workerSt.add("packageName", generatedPackage);
                     workerSt.add("className", toClassName(task));
                     workerSt.add("processId", processId);
                     workerSt.add("taskId", task);
@@ -395,7 +420,7 @@ public class BpmnScaffolder {
             Path bootstrapPath = javaOutput.resolve(bootstrapClass + ".java");
             if (!Files.exists(bootstrapPath) && !existingSources.contains(bootstrapClass + ".java")) {
                 ST bootstrapSt = group.getInstanceOf("workerBootstrapMain");
-                bootstrapSt.add("packageName", "org.gautelis.durga.generated");
+                bootstrapSt.add("packageName", generatedPackage);
                 bootstrapSt.add("className", bootstrapClass);
                 bootstrapSt.add("processId", processId);
                 bootstrapSt.add("tasks", tasks);
@@ -548,6 +573,8 @@ public class BpmnScaffolder {
         boolean strimzi = false;
         String outputDir = null;
         String processIdOverride = null;
+        String packageName = null;
+        String retentionHours = null;
         List<String> positional = new ArrayList<>();
 
         for (int i = 0; i < args.length; i++) {
@@ -576,6 +603,18 @@ public class BpmnScaffolder {
                     return null;
                 }
                 processIdOverride = args[++i];
+            } else if ("--package".equals(arg)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Missing value for --package");
+                    return null;
+                }
+                packageName = args[++i];
+            } else if ("--retention".equals(arg)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Missing value for --retention");
+                    return null;
+                }
+                retentionHours = args[++i];
             } else {
                 positional.add(arg);
             }
@@ -590,7 +629,7 @@ public class BpmnScaffolder {
         if (outputDir == null) {
             outputDir = positional.size() > 1 ? positional.get(1) : "generated";
         }
-        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi, processIdOverride);
+        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi, processIdOverride, packageName, retentionHours);
     }
 
     private static String normalize(String value) {
@@ -1568,7 +1607,7 @@ public class BpmnScaffolder {
                 continue;
             }
             ST template = group.getInstanceOf("timerCatchEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", generatedProbesPackage);
             template.add("className", className);
             template.add("inputChannel", inputChannel.get());
             template.add("outputChannel", output.get().channel);
@@ -1610,7 +1649,7 @@ public class BpmnScaffolder {
                 continue;
             }
             ST template = group.getInstanceOf("messageCatchEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", generatedProbesPackage);
             template.add("className", className);
             template.add("inputChannel", inputChannel.get());
             template.add("messageTopic", spec.topic);
@@ -1652,7 +1691,7 @@ public class BpmnScaffolder {
                 continue;
             }
             ST template = group.getInstanceOf("messageThrowEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", generatedProbesPackage);
             template.add("className", className);
             template.add("inputChannel", inputChannel.get());
             template.add("messageTopic", spec.topic);
@@ -1682,7 +1721,7 @@ public class BpmnScaffolder {
             return;
         }
         ST template = group.getInstanceOf("messageEventPublisherClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
         if (!dryRun) {
@@ -1705,7 +1744,7 @@ public class BpmnScaffolder {
             return;
         }
         ST template = group.getInstanceOf("signalEventPublisherClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
         if (!dryRun) {
@@ -1740,7 +1779,7 @@ public class BpmnScaffolder {
                 continue;
             }
             ST template = group.getInstanceOf("signalCatchEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", generatedProbesPackage);
             template.add("className", className);
             template.add("inputChannel", inputChannel.get());
             template.add("signalTopic", spec.topic);
@@ -1782,7 +1821,7 @@ public class BpmnScaffolder {
                 continue;
             }
             ST template = group.getInstanceOf("signalThrowEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", generatedProbesPackage);
             template.add("className", className);
             template.add("inputChannel", inputChannel.get());
             template.add("signalTopic", spec.topic);
@@ -1823,7 +1862,7 @@ public class BpmnScaffolder {
                 continue;
             }
             ST template = group.getInstanceOf("boundaryErrorEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", generatedProbesPackage);
             template.add("className", className);
             template.add("attachedTaskId", spec.attachedTaskId);
             template.add("outputChannel", output.get().channel);
@@ -1864,7 +1903,7 @@ public class BpmnScaffolder {
                 continue;
             }
             ST template = group.getInstanceOf("boundaryEscalationEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", generatedProbesPackage);
             template.add("className", className);
             template.add("attachedTaskId", spec.attachedTaskId);
             template.add("outputChannel", output.get().channel);
@@ -1905,7 +1944,7 @@ public class BpmnScaffolder {
                 continue;
             }
             ST template = group.getInstanceOf("boundaryTimerEventClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", generatedProbesPackage);
             template.add("className", className);
             template.add("attachedTaskId", spec.attachedTaskId);
             template.add("outputChannel", output.get().channel);
@@ -1948,7 +1987,7 @@ public class BpmnScaffolder {
                 continue;
             }
             ST template = group.getInstanceOf("callActivityHandlerClass");
-            template.add("packageName", "org.gautelis.durga.generated");
+            template.add("packageName", generatedProbesPackage);
             template.add("className", className);
             template.add("processId", processId);
             template.add("taskId", spec.name);
@@ -1993,7 +2032,8 @@ public class BpmnScaffolder {
             List<String> timers,
             List<String> messageTopics,
             List<String> callActivities,
-            List<String> subProcesses
+            List<String> subProcesses,
+            long retentionMs
     ) {
         ST topicsScript = group.getInstanceOf("topicsScript");
         topicsScript.add("processId", processId);
@@ -2002,6 +2042,7 @@ public class BpmnScaffolder {
         topicsScript.add("messageTopics", messageTopics);
         topicsScript.add("callActivities", callActivities);
         topicsScript.add("subProcesses", subProcesses);
+        topicsScript.add("retentionMs", retentionMs);
         return topicsScript.render();
     }
 
@@ -2166,7 +2207,7 @@ public class BpmnScaffolder {
             return;
         }
         ST template = group.getInstanceOf("starterClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
         if (!dryRun) {
@@ -2184,13 +2225,14 @@ public class BpmnScaffolder {
             String processId,
             List<String> tasks
     ) {
-        String className = toClassName(processId) + "DemoScenarioRunner";
-        Path outputFile = javaOutput.resolve(className + ".java");
+        String className = toClassName(processId) + "Runner";
+        Path probesDir = javaOutput.resolve("probes");
+        Path outputFile = probesDir.resolve(className + ".java");
         if (Files.exists(outputFile)) {
             return;
         }
         ST template = group.getInstanceOf("demoScenarioRunnerClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
         template.add("firstTask", tasks.isEmpty() ? "start" : tasks.getFirst());
@@ -2215,7 +2257,7 @@ public class BpmnScaffolder {
             return;
         }
         ST template = group.getInstanceOf("taskInputPublisherClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
         if (!dryRun) {
@@ -2238,7 +2280,7 @@ public class BpmnScaffolder {
             return;
         }
         ST template = group.getInstanceOf("taskCompletionPublisherClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
         if (!dryRun) {
@@ -2261,7 +2303,7 @@ public class BpmnScaffolder {
             return;
         }
         ST template = group.getInstanceOf("taskFailurePublisherClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
         if (!dryRun) {
@@ -2284,7 +2326,7 @@ public class BpmnScaffolder {
             return;
         }
         ST template = group.getInstanceOf("taskEscalationPublisherClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
         if (!dryRun) {
@@ -2307,7 +2349,7 @@ public class BpmnScaffolder {
             return;
         }
         ST template = group.getInstanceOf("callActivityCompletionPublisherClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
         if (!dryRun) {
@@ -2330,7 +2372,7 @@ public class BpmnScaffolder {
             return;
         }
         ST template = group.getInstanceOf("processEventsWatcherClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
         if (!dryRun) {
@@ -2353,7 +2395,7 @@ public class BpmnScaffolder {
             return;
         }
         ST template = group.getInstanceOf("taskOutputWatcherClass");
-        template.add("packageName", "org.gautelis.durga.generated");
+        template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
         if (!dryRun) {
@@ -2488,6 +2530,26 @@ public class BpmnScaffolder {
 
     private static String escapeJava(String value) {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private static long parseRetention(String value) {
+        value = value.trim().toLowerCase();
+
+        long multiplier;
+        if (value.endsWith("h")) {
+            multiplier = 3600_000L;
+        } else if (value.endsWith("d")) {
+            multiplier = 24 * 3600_000L;
+        } else if (value.endsWith("w")) {
+            multiplier = 7 * 24 * 3600_000L;
+        } else if (value.endsWith("m")) {
+            multiplier = 30 * 24 * 3600_000L;
+        } else {
+            throw new IllegalArgumentException(
+                "Invalid retention format: '" + value + "'. Use 42h, 5d, 2w, 1m, or -1.");
+        }
+        value = value.substring(0, value.length() - 1);
+        return Long.parseLong(value) * multiplier;
     }
 
     private static List<String> collectTerminalOutputs(Map<String, NodeInfo> nodes) {
