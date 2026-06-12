@@ -41,6 +41,36 @@ echo ""
 curl -s "${CONNECT_URL}/connectors/%processId%-sink/status"
 >>
 
+kedaScalers(processId, tasks) ::= <<
+%tasks:{t|
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: %processId%-%t%
+  labels:
+    app: %processId%
+    task: %t%
+spec:
+  scaleTargetRef:
+    name: %processId%-%t%
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka-broker:9092
+        consumerGroup: %processId%_%t%_worker
+        topic: %processId%_%t%_input
+        lagThreshold: "100"
+    - type: prometheus
+      metadata:
+        serverAddress: http://durga-monitoring:8081
+        metricName: durga_activity_latency_ms
+        threshold: "30000"
+        query: durga_activity_latency_ms{pct="p95",process_id="%processId%",activity_id="%t%"\}
+---
+}%>>
+
 topicsYml(processId, tasks, timers, messageTopics, callActivities, subProcesses) ::= <<
 %tasks:{t|
 apiVersion: kafka.strimzi.io/v1beta2

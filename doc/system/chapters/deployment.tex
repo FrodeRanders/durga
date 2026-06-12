@@ -204,15 +204,122 @@ The generated \texttt{k8s.yml} provides:
 \item Exec-based liveness and readiness probes.
 \end{itemize}
 
-Scaling is done via \texttt{kubectl scale} or the replicas field:
+\subsection{Scaling}
+
+Workers scale horizontally via Kafka consumer groups. Adding pods increases
+concurrency up to the partition count of the input topic. Three mechanisms
+are available, from simple to sophisticated.
+
+\subsubsection{Manual scaling}
 
 \begin{verbatim}
-kubectl scale deployment/<processId> --replicas=4
+kubectl scale deployment/<processId>-<taskId> --replicas=4
 \end{verbatim}
 
-Maximum parallelism per consumer group is bounded by the number of Kafka
-partitions for each topic. Configure partitions in \texttt{topics.sh} before
-provisioning, then scale workers up to the partition count.
+Suitable for development and staging. The operator watches consumer lag
+(via Kafka UI or CLI) and adjusts replicas.
+
+\subsubsection{KEDA autoscaling (volume-based)}
+
+When \texttt{--strimzi} or \texttt{--separate-workers} is active, the
+scaffolder generates \texttt{keda-scalers.yml} with one
+\texttt{ScaledObject} per worker. Each has dual triggers --- Kafka consumer
+lag as the primary signal, and Prometheus latency as a quality-of-service
+safety net:
+
+\begin{verbatim}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: invoice_receipt-review_invoice
+spec:
+  scaleTargetRef:
+    name: invoice_receipt-review_invoice
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka-broker:9092
+        consumerGroup: invoice_receipt_review_invoice_worker
+        topic: invoice_receipt_review_invoice_input
+        lagThreshold: "100"
+    - type: prometheus
+      metadata:
+        serverAddress: http://durga-monitoring:8081
+        metricName: durga_activity_latency_ms
+        threshold: "30000"
+        query: durga_activity_latency_ms{pct="p95",
+          process_id="invoice_receipt",
+          activity_id="review_invoice"}
+\end{verbatim}
+
+The Kafka trigger scales on message backlog (volume). The Prometheus trigger
+scales when processing latency degrades despite low lag --- for example, when
+a worker is bottlenecked on an external service or database.
+
+\subsubsection{Custom metrics with Prometheus Adapter + HPA (Kubernetes-native)}
+
+An alternative for environments without KEDA: Prometheus scrapes
+\texttt{/api/metrics}, the Prometheus Adapter exposes custom metrics to
+the K8s metrics API, and an HPA scales the Deployment.
+
+\begin{verbatim}
+# ServiceMonitor (prometheus-operator)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: durga-monitoring
+spec:
+  selector:
+    matchLabels: { app: durga-monitoring }
+  endpoints:
+    - path: /api/metrics
+      interval: 15s
+---
+# Prometheus Adapter rule (in its ConfigMap)
+- seriesQuery: 'durga_activity_latency_ms{pct="p95"}'
+  name:
+    matches: "durga_activity_latency_ms"
+    as: "activity_latency_p95_ms"
+---
+# HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: review-invoice-latency
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: invoice_receipt-review_invoice
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+    - type: Pods
+      pods:
+        metric:
+          name: activity_latency_p95_ms
+        target:
+          type: AverageValue
+          averageValue: "30000"
+\end{verbatim}
+
+\subsubsection{Metrics reference}
+
+The monitoring app exposes at \texttt{/api/metrics}:
+
+\begin{description}
+\item[\texttt{durga\_activity\_latency\_ms}] Gauge. Labels: \texttt{pct}
+  (p50, p95, p99, avg), \texttt{process\_id}, \texttt{activity\_id}.
+  Value is milliseconds.
+\item[\texttt{durga\_activity\_samples}] Gauge. Labels: \texttt{process\_id},
+  \texttt{activity\_id}. Total completed samples.
+\item[\texttt{durga\_activity\_sla\_violations}] Counter. Labels:
+  \texttt{process\_id}, \texttt{activity\_id}. Count exceeding the
+  configured SLA threshold.
+\item[\texttt{durga\_streams\_state}] Gauge. 1 if RUNNING, 0 otherwise.
+\end{description}
 
 \subsection{Monitoring in production}
 

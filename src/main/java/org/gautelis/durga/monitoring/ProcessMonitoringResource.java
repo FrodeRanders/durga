@@ -95,4 +95,52 @@ public class ProcessMonitoringResource {
             return Response.status(503).entity(Map.of("error", "state store not queryable yet")).build();
         }
     }
+
+    @GET
+    @Path("/metrics")
+    @Produces("text/plain; version=0.0.4")
+    public Response metrics() {
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("# HELP durga_activity_latency_ms Activity latency in milliseconds\n");
+            sb.append("# TYPE durga_activity_latency_ms gauge\n");
+            sb.append("# HELP durga_activity_samples Activity sample count\n");
+            sb.append("# TYPE durga_activity_samples gauge\n");
+            sb.append("# HELP durga_activity_sla_violations SLA threshold violations\n");
+            sb.append("# TYPE durga_activity_sla_violations counter\n");
+
+            var allCounts = state.queryService().allCounts();
+            for (var count : allCounts) {
+                String processId = count.processId();
+                if (processId == null || processId.isEmpty()) continue;
+
+                var summaryList = state.queryService().latencyForProcess(processId);
+                for (ActivityLatencySummary s : summaryList) {
+                    String labels = String.format(
+                            "process_id=\"%s\",activity_id=\"%s\"",
+                            s.processId(), s.activityId());
+                    sb.append(String.format(
+                            "durga_activity_latency_ms{pct=\"50\",%s} %d\n", labels, s.p50DurationMs()));
+                    sb.append(String.format(
+                            "durga_activity_latency_ms{pct=\"95\",%s} %d\n", labels, s.p95DurationMs()));
+                    sb.append(String.format(
+                            "durga_activity_latency_ms{pct=\"99\",%s} %d\n", labels, s.p99DurationMs()));
+                    sb.append(String.format(
+                            "durga_activity_latency_ms{pct=\"avg\",%s} %d\n", labels, s.averageDurationMs()));
+                    sb.append(String.format(
+                            "durga_activity_samples{%s} %d\n", labels, s.sampleCount()));
+                    sb.append(String.format(
+                            "durga_activity_sla_violations{%s} %d\n", labels, s.slaViolationCount()));
+                }
+            }
+            sb.append("# HELP durga_streams_state Kafka Streams state (1=running)\n");
+            sb.append("# TYPE durga_streams_state gauge\n");
+            sb.append(String.format("durga_streams_state %d\n",
+                    "RUNNING".equals(state.streams().state().name()) ? 1 : 0));
+
+            return Response.ok(sb.toString()).build();
+        } catch (Exception e) {
+            return Response.status(503).entity("# error: " + e.getMessage()).build();
+        }
+    }
 }

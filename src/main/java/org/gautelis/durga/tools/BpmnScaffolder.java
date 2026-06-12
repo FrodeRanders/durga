@@ -278,6 +278,15 @@ public class BpmnScaffolder {
                 generatedFiles.add(outputRoot.relativize(topicsYmlPath).toString());
             }
 
+            if (parsed.strimzi || parsed.separateWorkers) {
+                ST kedaSt = group.getInstanceOf("kedaScalers");
+                kedaSt.add("processId", processId);
+                kedaSt.add("tasks", tasks);
+                Path kedaPath = outputRoot.resolve("keda-scalers.yml");
+                writeFile(kedaPath, kedaSt.render());
+                generatedFiles.add(outputRoot.relativize(kedaPath).toString());
+            }
+
             Path pomPath = outputRoot.resolve("pom.xml");
             writeFile(pomPath, pomPreview);
             generatedFiles.add(outputRoot.relativize(pomPath).toString());
