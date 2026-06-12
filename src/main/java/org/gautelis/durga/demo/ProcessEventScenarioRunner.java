@@ -29,7 +29,7 @@ public final class ProcessEventScenarioRunner {
      *             {@code <bootstrapServers> <scenario> <processId> <activity1,activity2,...> <businessKey>}
      */
     public static void main(String[] args) {
-        String bootstrapServers = args.length > 0 ? args[0] : "localhost:9094";
+        String bootstrapServers = args.length > 0 ? args[0] : bootstrapServersDefault();
         String scenario = args.length > 1 ? args[1] : "happy";
         String processId = args.length > 2 ? args[2] : "invoice_receipt";
         String activitiesArg = args.length > 3 ? args[3] : "register_invoice,review_invoice,notify_requester";
@@ -195,5 +195,9 @@ public final class ProcessEventScenarioRunner {
             throw new IllegalArgumentException("At least one activity must be provided");
         }
         return activities;
+    }
+
+    private static String bootstrapServersDefault() {
+        return System.getProperty("kafka.bootstrap.servers", "localhost:9094");
     }
 }

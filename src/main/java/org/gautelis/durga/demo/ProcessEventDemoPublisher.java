@@ -28,7 +28,7 @@ public final class ProcessEventDemoPublisher {
      * @param args optional {@code <bootstrapServers> <processId> <activity1,activity2,...> <businessKey>}
      */
     public static void main(String[] args) {
-        String bootstrapServers = args.length > 0 ? args[0] : "localhost:9094";
+        String bootstrapServers = args.length > 0 ? args[0] : bootstrapServersDefault();
         String processId = args.length > 1 ? args[1] : "invoice_receipt";
         String activitiesArg = args.length > 2 ? args[2] : "register_invoice,review_invoice,notify_requester";
         String businessKey = args.length > 3 ? args[3] : "demo-" + UUID.randomUUID();
@@ -130,5 +130,9 @@ public final class ProcessEventDemoPublisher {
             throw new IllegalArgumentException("At least one activity must be provided");
         }
         return activities;
+    }
+
+    private static String bootstrapServersDefault() {
+        return System.getProperty("kafka.bootstrap.servers", "localhost:9094");
     }
 }

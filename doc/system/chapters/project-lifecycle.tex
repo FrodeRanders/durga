@@ -1,8 +1,7 @@
 \section{Generated Project Lifecycle}
 \label{sec:ProjectLifecycle}
 
-Durga-generated projects are meant to be used iteratively rather than as one-off code dumps.
-The intended lifecycle is:
+Generated projects are used iteratively, not as one-off code dumps:
 
 \begin{enumerate}
 \item model a BPMN process,
@@ -13,24 +12,13 @@ The intended lifecycle is:
 \item revise the BPMN model and regenerate.
 \end{enumerate}
 
-\subsection{Why regeneration matters}
-
-The BPMN model is still the primary design artifact. Generated Java and scripts are useful
-and often worth extending, but the center of gravity remains the process model. That is why
-the manual repeatedly treats regeneration as part of normal development rather than as an
-exception.
-
 \subsection{Two modes of use}
 
-There are two common ways to use a generated project:
 \begin{itemize}
-\item as a learning scaffold, where the main value is seeing how BPMN maps onto Kafka,
-\item as a starting point for a real process implementation, where the generated code becomes
-a base that is then extended, completed and hardened.
+\item as a learning scaffold, where the value is seeing how BPMN maps onto Kafka,
+\item as a starting point for a real implementation, where the generated code becomes a
+base that is extended, completed and hardened.
 \end{itemize}
 
-\subsection{Practical implication}
-
-Because of that lifecycle, generated output needs to be readable, runnable and observable.
-Durga therefore treats helper scripts, summaries and monitoring support as first-class parts
-of the generated project, not as secondary extras.
+The BPMN model remains the primary design artifact. Generated output is readable, runnable
+and observable by design.

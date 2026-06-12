@@ -18,7 +18,7 @@ public final class ProcessMonitoringApp {
      * @param args optional {@code <bootstrapServers> <applicationId> <httpPort>}
      */
     public static void main(String[] args) {
-        String bootstrapServers = args.length > 0 ? args[0] : "localhost:9094";
+        String bootstrapServers = args.length > 0 ? args[0] : bootstrapServersDefault();
         String applicationId = args.length > 1 ? args[1] : "durga-monitoring";
         int httpPort = args.length > 2 ? Integer.parseInt(args[2]) : 8081;
         ProcessMonitoringTopology.MonitoringTopics topics = ProcessMonitoringTopology.MonitoringTopics.defaults();
@@ -44,5 +44,9 @@ public final class ProcessMonitoringApp {
             streams.close();
             throw new IllegalStateException("Failed to start process monitoring HTTP server", e);
         }
+    }
+
+    private static String bootstrapServersDefault() {
+        return System.getProperty("kafka.bootstrap.servers", "localhost:9094");
     }
 }

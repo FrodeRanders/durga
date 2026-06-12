@@ -11,9 +11,12 @@ Several parts of the system are now in reasonably good shape:
 \begin{itemize}
 \item the generator has been refactored away from a single large class and a single large template file,
 \item dry-run and generated-project compile tests cover representative BPMN features,
+\item the core runtime contracts (\texttt{ProcessEvent}, \texttt{ProcessState}, \texttt{ScopeCancellationRegistry}) are covered by dedicated unit tests,
 \item the monitoring path is coherent and directly runnable,
-\item cancellation behavior for interrupting boundaries now affects runtime behavior rather than only the lifecycle stream,
-\item demo and probe tooling are generated as part of the process output.
+\item cancellation behavior for interrupting boundaries now affects runtime behavior through a plain in-memory registry rather than an unused CDI annotation,
+\item demo and probe tooling are generated as part of the process output,
+\item a GitHub Actions CI pipeline runs the full test suite on every push and pull request,
+\item BPMN sample fixtures have been moved to \filepath{src/test/resources/bpmn/}.
 \end{itemize}
 
 \subsection{Important limits}

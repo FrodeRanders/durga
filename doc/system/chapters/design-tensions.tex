@@ -1,30 +1,24 @@
 \section{Known Design Tensions}
 \label{sec:DesignTensions}
 
-Durga sits in a deliberate set of tensions. These are not accidental shortcomings; they are the
-result of choosing explicitness and inspectability over hiding complexity behind an engine.
-
 \subsection{Explicitness versus compactness}
 
-The generated runtime is larger and more verbose than a hidden workflow runtime would be. That
-cost is accepted because the system is easier to inspect, teach and debug when the BPMN-to-Kafka
-mapping is visible.
+The generated runtime is larger than a hidden workflow runtime would be. This is accepted
+because the BPMN-to-Kafka mapping is visible, making the system easier to inspect and debug.
 
 \subsection{BPMN fidelity versus pragmatic Kafka mapping}
 
-Durga aims to support useful BPMN semantics, but it does so through explicit Kafka-oriented
-handlers and topics rather than through a full traditional BPMN engine. That means some semantics
-are intentionally pragmatic rather than exhaustive.
+BPMN semantics are projected through explicit Kafka handlers and topics rather than a full
+engine. Some semantics are intentionally pragmatic rather than exhaustive.
 
 \subsection{Regeneration versus local customization}
 
-Generated projects invite local edits, but regeneration remains important. This creates a normal
-tension between treating the output as disposable scaffolding and treating it as an evolving code
-base. The project currently resolves that by keeping the BPMN model primary and the generated
-runtime explicit.
+Generated projects invite local edits, but the BPMN model remains the primary artifact.
+When the model changes substantially, regeneration with re-application of focused logic
+changes is preferred over manual rewiring of the generated topology.
 
 \subsection{Exploration versus production hardening}
 
-The repository is already strong enough for serious architectural exploration, but not every part
-of the system is optimized for hardened production operation. The current center of gravity remains
-clarity, runnable demos, and generator correctness.
+The system is strong enough for architectural exploration, but not every part is optimized
+for hardened production operation. The current focus remains clarity, runnable demos, and
+generator correctness.

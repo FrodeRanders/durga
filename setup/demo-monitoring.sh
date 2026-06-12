@@ -53,7 +53,7 @@ publish_output=$(java -cp target/durga-1.0-SNAPSHOT.jar \
   "${ACTIVITIES}")
 
 echo "${publish_output}"
-instance_id="${publish_output##*=}"
+instance_id=$(echo "${publish_output}" | grep -oE 'instanceId=([^[:space:]]+)' | cut -d= -f2)
 
 sleep 2
 

@@ -1,7 +1,5 @@
 package org.gautelis.durga;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
@@ -11,7 +9,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * In-memory cancellation registry used by generated handlers to suppress late normal-flow work
  * after interrupting boundaries or event subprocesses have taken over a scope.
  */
-@ApplicationScoped
 public class ScopeCancellationRegistry {
     // Generated handlers use this as a lightweight in-memory suppression registry so interrupting
     // boundaries and event subprocesses can block late normal-flow progress in the same runtime.

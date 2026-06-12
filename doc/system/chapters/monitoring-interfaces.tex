@@ -30,8 +30,10 @@ The main endpoints are:
 \item \texttt{/instances/\{processInstanceId\}} for the latest instance view,
 \item \texttt{/processes/\{processId\}/counts} for process-specific current-state counts,
 \item \texttt{/processes/\{processId\}/latency} for activity latency summaries,
+\item \texttt{/processes/\{processId\}/trends} for bucketed history of starts, completions and failures,
 \item \texttt{/counts} for the global state-count view,
-\item \texttt{/stuck} for stuck-instance detection.
+\item \texttt{/stuck} for stuck-instance detection,
+\item \texttt{/dashboard} serving a lightweight browser dashboard that polls the same query surface.
 \end{itemize}
 
 The service is intentionally narrow. It is not trying to be a full workflow management

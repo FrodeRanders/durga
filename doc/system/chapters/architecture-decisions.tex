@@ -1,18 +1,11 @@
 \section{Architecture Decisions}
 \label{sec:ArchitectureDecisions}
 
-Durga is not only a generator. It is a generator with a fairly opinionated runtime shape.
-Several choices were made deliberately because they improve inspectability and make the
-system easier to discuss, test and evolve.
-
 \subsection{Canonical lifecycle stream}
 
-The most important decision is the shared \texttt{process-events} topic. Execution topics
-carry work between generated handlers, but they are not treated as the authoritative query
-surface. Durga instead emits normalized lifecycle events and builds state projections from
-that stream.
-
-This was chosen because:
+The shared \texttt{process-events} topic carries normalized lifecycle events. Execution topics
+carry work between generated handlers, but they are not the authoritative query surface.
+State projections are built from lifecycle events because:
 \begin{itemize}
 \item execution topics represent transport history, not current truth,
 \item process instance state must be queryable independently of routing topology,
@@ -22,26 +15,21 @@ lifecycle events than from task-topic inspection.
 
 \subsection{Visible generated runtime}
 
-Durga generates many explicit classes instead of one hidden execution engine. That is a
-tradeoff: the output is more verbose, but it is also far easier to inspect. This supports
-the project goal of making BPMN-to-Kafka mapping concrete rather than magical.
+Durga generates many explicit classes instead of a single hidden execution engine. The output
+is more verbose, but far easier to inspect — making BPMN-to-Kafka mapping concrete.
 
-\subsection{Generated helper scripts as product surface}
+\subsection{Generated helper scripts}
 
-The helper scripts are deliberate, not incidental. A BPMN scaffolding tool is difficult to
-evaluate if the user must write custom producers and consumers before seeing anything happen.
-Durga therefore generates probes, scenario runners and manual interaction scripts together
-with the runtime.
+Generated probes, scenario runners and manual interaction scripts let users exercise the
+runtime without writing custom producers and consumers.
 
 \subsection{Kafka Streams as the default read model}
 
-The monitoring side uses Kafka Streams because it fits the core question well: consume one
-canonical stream and materialize queryable state from it. The current implementation is not
-trying to solve every production reporting problem; it is solving the local and architectural
-read-model problem directly.
+The monitoring side consumes one canonical stream and materializes queryable state. It solves
+the local architectural read-model problem directly rather than every production reporting
+problem.
 
 \subsection{Scope-aware subprocess handling}
 
-Subprocess support could have been left as simple flattening. Durga started that way, but
-then moved toward explicit subprocess entry and completion services because scope behavior
-matters once cancellation, failure, escalation and event subprocesses are introduced.
+Subprocess support uses explicit entry and completion services because scope boundaries
+matter when cancellation, failure, escalation and event subprocesses are involved.

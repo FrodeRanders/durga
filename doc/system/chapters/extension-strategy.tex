@@ -1,17 +1,12 @@
 \section{Generated Code Extension Strategy}
 \label{sec:ExtensionStrategy}
 
-Durga-generated code is meant to be a starting point, not an untouchable artifact. The safe
-engineering posture is:
-\begin{itemize}
-\item treat the BPMN model as the primary design source,
-\item treat generated code as scaffolding that is expected to be completed and adapted,
-\item keep custom logic easy to identify so regeneration does not become confusing.
-\end{itemize}
+Generated code is a starting point. The BPMN model is the primary design source; generated
+code is scaffolding expected to be completed and adapted.
 
-\subsection{What is usually edited}
+\subsection{What is edited}
 
-The most common edits in generated projects are:
+Common edits in generated projects:
 \begin{itemize}
 \item task business logic,
 \item XOR decision conditions,
@@ -20,9 +15,9 @@ The most common edits in generated projects are:
 \item operational configuration values.
 \end{itemize}
 
-\subsection{What should remain conceptually generated}
+\subsection{What should remain generated}
 
-The following areas are usually best kept close to the generated structure:
+Keep these close to the generated structure:
 \begin{itemize}
 \item topic and channel topology,
 \item lifecycle event emission shape,
@@ -31,9 +26,8 @@ The following areas are usually best kept close to the generated structure:
 \item monitoring-facing event semantics.
 \end{itemize}
 
-\subsection{Practical recommendation}
+\subsection{Regeneration strategy}
 
-In practice, the easiest way to keep a generated project healthy is to preserve the overall
-generated runtime structure while filling in task-specific behavior. If the BPMN model changes
-substantially, prefer regeneration and re-application of focused logic changes over ad hoc
-manual rewiring of the generated topology.
+Preserve the overall generated runtime structure while filling in task-specific behavior.
+When the BPMN model changes substantially, regenerate and re-apply focused logic changes
+rather than manually rewiring the generated topology.

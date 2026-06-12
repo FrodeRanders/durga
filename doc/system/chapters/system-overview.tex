@@ -1,43 +1,41 @@
 \section{System Overview}
 \label{sec:SystemOverview}
 
-At a high level, Durga has three centers:
+Durga has three centers:
 \begin{itemize}
 \item a BPMN parsing and generation pipeline,
 \item a generated Kafka-oriented process runtime,
-\item a monitoring and reporting path built around canonical process lifecycle events.
+\item a monitoring and reporting path built around canonical lifecycle events.
 \end{itemize}
 
 \subsection{Repository-level components}
 
-The repository contains both the generator and reusable runtime support:
 \begin{description}
-\item[Scaffolder] The main entry point parses a BPMN model and renders a generated project. The orchestration entry point is \texttt{tools.org.gautelis.durga.BpmnScaffolder}.
-\item[Generation support] Model extraction and template coordination are factored across helper classes such as:
-\begin{compressed_itemize}
-\item \texttt{BpmnModelSupport},
-\item \texttt{TaskRoutingGenerator},
-\item \texttt{EventTemplateGenerator},
-\item \texttt{SubProcessTemplateGenerator},
-\item \texttt{GeneratedProjectSupport}.
-\end{compressed_itemize}
-\item[Templates] StringTemplate groups under \texttt{src/main/resources/templates/} define the generated Java classes, scripts, YAML, Maven build files and shared runtime helpers.
-\item[Monitoring runtime] A separate Kafka Streams topology consumes canonical process lifecycle events and materializes state, counts, latency summaries and stuck-instance views.
+\item[Scaffolder] Parses a BPMN model and renders a generated project (entry point:
+\texttt{org.gautelis.durga.tools.BpmnScaffolder}).
+\item[Generation support] Model extraction and template coordination: \texttt{BpmnModelSupport},
+\texttt{TaskRoutingGenerator}, \texttt{EventTemplateGenerator},
+\texttt{SubProcessTemplateGenerator}, \texttt{GeneratedProjectSupport}.
+\item[Templates] StringTemplate groups under \texttt{src/main/resources/templates/} define
+generated Java classes, scripts, YAML, Maven build files and shared runtime helpers.
+\item[Monitoring runtime] A Kafka Streams topology consumes canonical lifecycle events and
+materializes state, counts, latency summaries and stuck-instance views.
 \end{description}
 
 \subsection{Generated runtime shape}
 
-For each BPMN process, Durga generates a small standalone project with:
+Each generated project contains:
 \begin{itemize}
 \item worker and routing services,
 \item a starter,
 \item a process orchestrator,
-\item explicit helpers for user/manual task completion and failure testing,
+\item helpers for user/manual task completion and failure testing,
 \item generated Kafka topic configuration,
 \item sample payloads and runnable scenario scripts.
 \end{itemize}
 
-The runtime style is pragmatic rather than minimal. Topics and handlers are made deliberately visible so that users can inspect how BPMN concepts are projected onto Kafka channels and lifecycle events.
+Topics and handlers are deliberately visible so that BPMN concepts are projected concretely
+onto Kafka channels and lifecycle events.
 
 \begin{figure}[!ht]
     \centering
@@ -58,19 +56,14 @@ The runtime style is pragmatic rather than minimal. Topics and handlers are made
         \draw[->, thick] (generated) -- (events);
         \draw[->, thick] (events) -- (monitoring);
     \end{tikzpicture}
-    \caption{High-level Durga flow from BPMN model to generated runtime and monitoring projections}
+    \caption{High-level flow from BPMN model to generated runtime and monitoring projections}
     \label{fig:DurgaOverview}
 \end{figure}
 
 \subsection{Canonical event model}
 
-The generated execution topics are not the only runtime surface. Durga also emits a shared canonical lifecycle stream on \texttt{process-events}. That stream is the observability backbone for:
-\begin{itemize}
-\item latest state per process instance,
-\item counts by current state,
-\item latency summaries,
-\item stuck-instance detection,
-\item dashboards and query endpoints.
-\end{itemize}
-
-This split is deliberate. Topic-per-task or topic-per-edge wiring may be useful for execution visibility, but the monitoring model depends on explicit projections rather than on raw topic inspection.
+The shared canonical stream on \texttt{process-events} is the observability backbone for
+latest state per instance, counts by current state, latency summaries, stuck-instance
+detection, dashboards and query endpoints. Execution topics may be useful for routing
+visibility, but the monitoring model depends on explicit projections rather than raw topic
+inspection.

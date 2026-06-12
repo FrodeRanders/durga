@@ -3,7 +3,7 @@
 
 \subsection{Chosen example}
 
-The simplest useful walkthrough model in the repository is \filepath{src/main/resources/bpmn/invoice_receipt.bpmn}. It contains a start event, service work, a review step, an approval or rejection path, and a final notification step. That makes it a good reference model because it is small, but still representative of the core generator path.
+The simplest useful walkthrough model in the repository is \filepath{src/test/resources/bpmn/invoice_receipt.bpmn}. It contains a start event, service work, a review step, an approval or rejection path, and a final notification step. That makes it a good reference model because it is small, but still representative of the core generator path.
 
 \subsection{Generation step}
 
@@ -15,7 +15,7 @@ The normal way to generate the project is:
 
 For this walkthrough, use the repository sample:
 \begin{quote}
-\filepath{src/main/resources/bpmn/invoice_receipt.bpmn}
+\filepath{src/test/resources/bpmn/invoice_receipt.bpmn}
 \end{quote}
 
 By default the output is written under \texttt{generated/}. The generated project contains Java sources, a Maven build, Kafka topic declarations, helper scripts and a generated README.

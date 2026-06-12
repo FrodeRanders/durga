@@ -2,7 +2,7 @@
 <Configuration state="WARN">
 
     <Properties>
-        <Property name="log-path">.</Property>
+        <Property name="log-path">target</Property>
     </Properties>
 
     <!-- Appenders (writing to file in various ways) -->

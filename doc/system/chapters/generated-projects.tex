@@ -3,7 +3,7 @@
 
 \subsection{Generated files}
 
-Each generated project includes more than Java sources. The generated output normally contains:
+The generated output contains:
 \begin{itemize}
 \item Java runtime classes under \texttt{src/main/java/org/gautelis/durga/generated/},
 \item a generated \texttt{pom.xml},
@@ -11,12 +11,12 @@ Each generated project includes more than Java sources. The generated output nor
 \item a topic-creation script,
 \item sample payload data in \texttt{task-payloads.json},
 \item a generated README,
-\item runnable helper scripts for demos, inputs, completions, failures, escalations and observers.
+\item helper scripts for demos, inputs, completions, failures, escalations and observers.
 \end{itemize}
 
 \subsection{Helper scripts}
 
-The helper layer is part of the product surface, not just developer convenience. Generated projects include scripts such as:
+Generated scripts include:
 \begin{itemize}
 \item \texttt{demo-scenario.sh},
 \item \texttt{send-task-input.sh},
@@ -30,11 +30,8 @@ The helper layer is part of the product surface, not just developer convenience.
 \item \texttt{watch-task-output.sh}.
 \end{itemize}
 
-That generated probe surface is important because it allows users to understand the runtime model without writing extra producers or Kafka CLI commands from scratch.
-
 \subsection{Development workflow}
 
-The intended workflow around a generated project is:
 \begin{enumerate}
 \item generate the project from a BPMN model,
 \item inspect \texttt{summary.json}, topic config and helper scripts,
@@ -43,5 +40,3 @@ The intended workflow around a generated project is:
 \item observe progress through \texttt{process-events} and the monitoring views,
 \item adjust the BPMN model and regenerate.
 \end{enumerate}
-
-This workflow is particularly useful when exploring BPMN-to-Kafka tradeoffs, because the generated runtime remains concrete and observable rather than abstract.

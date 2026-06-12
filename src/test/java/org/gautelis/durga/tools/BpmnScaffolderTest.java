@@ -16,7 +16,7 @@ import static org.junit.Assert.assertTrue;
 public class BpmnScaffolderTest {
     @Test
     public void dryRunIncludesMessageEventArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_message_exchange.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_message_exchange.bpmn");
 
         assertTrue(output.contains("Process: invoice_message_exchange"));
         assertTrue(output.contains("Message events: [await_review_response, send_review_request]"));
@@ -27,7 +27,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesNestedSubProcessArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_nested_subprocess.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_nested_subprocess.bpmn");
 
         assertTrue(output.contains("Embedded subprocesses: [review_scope, approval_scope]"));
         assertTrue(output.contains("ReviewScopeSubProcessEntryService"));
@@ -38,7 +38,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesSubProcessBoundaryErrorArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_subprocess_error.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_subprocess_error.bpmn");
 
         assertTrue(output.contains("Boundary events: [review_scope_error]"));
         assertTrue(output.contains("ReviewScopeErrorBoundaryErrorService"));
@@ -48,7 +48,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesTimerArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_receipt_reminder.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_receipt_reminder.bpmn");
 
         assertTrue(output.contains("Timers: [wait_before_notify]"));
         assertTrue(output.contains("WaitBeforeNotifyTimerService"));
@@ -57,7 +57,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesBoundaryEscalationArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_review_escalation.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_review_escalation.bpmn");
 
         assertTrue(output.contains("Boundary events: [review_escalation]"));
         assertTrue(output.contains("ReviewEscalationBoundaryEscalationService"));
@@ -66,7 +66,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesNonInterruptingBoundaryTimerArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_review_reminder_non_interrupting.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_review_reminder_non_interrupting.bpmn");
 
         assertTrue(output.contains("Boundary events: [review_reminder]"));
         assertTrue(output.contains("ReviewReminderBoundaryTimerService"));
@@ -75,7 +75,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesNonInterruptingSubProcessBoundaryTimerArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_subprocess_reminder_non_interrupting.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_subprocess_reminder_non_interrupting.bpmn");
 
         assertTrue(output.contains("Boundary events: [review_scope_reminder]"));
         assertTrue(output.contains("Embedded subprocesses: [review_scope]"));
@@ -85,7 +85,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesSignalArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_signal_exchange.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_signal_exchange.bpmn");
 
         assertTrue(output.contains("Signal events: [await_review_signal, send_review_signal]"));
         assertTrue(output.contains("AwaitReviewSignalSignalCatchService"));
@@ -95,7 +95,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesCallActivityArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_call_activity.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_call_activity.bpmn");
 
         assertTrue(output.contains("Call activities: [validate_invoice_process]"));
         assertTrue(output.contains("ValidateInvoiceProcessCallActivityService"));
@@ -105,7 +105,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesEventSubProcessArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_event_subprocess_message.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_event_subprocess_message.bpmn");
 
         assertTrue(output.contains("Event subprocesses: [manager_notification_scope]"));
         assertTrue(output.contains("ManagerNotificationScopeEventSubProcessStartService"));
@@ -115,7 +115,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesInterruptingEventSubProcessArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_event_subprocess_interrupting_message.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_event_subprocess_interrupting_message.bpmn");
 
         assertTrue(output.contains("Event subprocesses: [invoice_cancellation_scope]"));
         assertTrue(output.contains("InvoiceCancellationScopeEventSubProcessStartService"));
@@ -125,7 +125,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesTimerEventSubProcessArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_event_subprocess_timer.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_event_subprocess_timer.bpmn");
 
         assertTrue(output.contains("Event subprocesses: [review_reminder_scope]"));
         assertTrue(output.contains("ReviewReminderScopeEventSubProcessStartService"));
@@ -135,7 +135,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesErrorEventSubProcessArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_event_subprocess_error.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_event_subprocess_error.bpmn");
 
         assertTrue(output.contains("Event subprocesses: [review_error_scope]"));
         assertTrue(output.contains("ReviewErrorScopeEventSubProcessStartService"));
@@ -144,7 +144,7 @@ public class BpmnScaffolderTest {
 
     @Test
     public void dryRunIncludesEscalationEventSubProcessArtifacts() throws Exception {
-        String output = runDryRun("src/main/resources/bpmn/invoice_event_subprocess_escalation.bpmn");
+        String output = runDryRun("src/test/resources/bpmn/invoice_event_subprocess_escalation.bpmn");
 
         assertTrue(output.contains("Event subprocesses: [review_escalation_scope]"));
         assertTrue(output.contains("ReviewEscalationScopeEventSubProcessStartService"));
@@ -155,7 +155,7 @@ public class BpmnScaffolderTest {
     public void generationWritesMessageEventProjectArtifacts() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-message-project-");
 
-        runGeneration("src/main/resources/bpmn/invoice_message_exchange.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_message_exchange.bpmn", outputDir);
 
         assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/AwaitReviewResponseMessageCatchService.java")));
         assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/SendReviewRequestMessageThrowService.java")));
@@ -171,7 +171,7 @@ public class BpmnScaffolderTest {
     public void generationWritesNestedSubProcessProjectArtifacts() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-subprocess-project-");
 
-        runGeneration("src/main/resources/bpmn/invoice_nested_subprocess.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_nested_subprocess.bpmn", outputDir);
 
         assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewScopeSubProcessEntryService.java")));
         assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewScopeSubProcessCompletionService.java")));
@@ -187,7 +187,7 @@ public class BpmnScaffolderTest {
     public void generationWritesNonInterruptingBoundaryTimerWithoutCancellation() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-non-interrupting-boundary-project-");
 
-        runGeneration("src/main/resources/bpmn/invoice_review_reminder_non_interrupting.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_review_reminder_non_interrupting.bpmn", outputDir);
 
         Path boundaryHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewReminderBoundaryTimerService.java");
         assertTrue(Files.exists(boundaryHandler));
@@ -201,7 +201,7 @@ public class BpmnScaffolderTest {
     public void generationWritesNonInterruptingSubProcessBoundaryTimerWithoutCancellation() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-non-interrupting-subprocess-boundary-project-");
 
-        runGeneration("src/main/resources/bpmn/invoice_subprocess_reminder_non_interrupting.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_subprocess_reminder_non_interrupting.bpmn", outputDir);
 
         Path boundaryHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewScopeReminderBoundaryTimerService.java");
         assertTrue(Files.exists(boundaryHandler));
@@ -215,7 +215,7 @@ public class BpmnScaffolderTest {
     public void generationWritesEventSubProcessProjectArtifacts() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-event-subprocess-project-");
 
-        runGeneration("src/main/resources/bpmn/invoice_event_subprocess_message.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_event_subprocess_message.bpmn", outputDir);
 
         assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ManagerNotificationScopeEventSubProcessStartService.java")));
         assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ManagerNotificationScopeEventSubProcessCompletionService.java")));
@@ -228,7 +228,7 @@ public class BpmnScaffolderTest {
     public void generationWritesInterruptingEventSubProcessCancellation() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-interrupting-event-subprocess-project-");
 
-        runGeneration("src/main/resources/bpmn/invoice_event_subprocess_interrupting_message.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_event_subprocess_interrupting_message.bpmn", outputDir);
 
         Path startHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/InvoiceCancellationScopeEventSubProcessStartService.java");
         assertTrue(Files.exists(startHandler));
@@ -244,7 +244,7 @@ public class BpmnScaffolderTest {
     public void generationWritesTimerEventSubProcessProjectArtifacts() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-timer-event-subprocess-project-");
 
-        runGeneration("src/main/resources/bpmn/invoice_event_subprocess_timer.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_event_subprocess_timer.bpmn", outputDir);
 
         Path startHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewReminderScopeEventSubProcessStartService.java");
         assertTrue(Files.exists(startHandler));
@@ -258,7 +258,7 @@ public class BpmnScaffolderTest {
     public void generationWritesErrorEventSubProcessProjectArtifacts() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-error-event-subprocess-project-");
 
-        runGeneration("src/main/resources/bpmn/invoice_event_subprocess_error.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_event_subprocess_error.bpmn", outputDir);
 
         Path startHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewErrorScopeEventSubProcessStartService.java");
         assertTrue(Files.exists(startHandler));
@@ -272,7 +272,7 @@ public class BpmnScaffolderTest {
     public void generationWritesEscalationEventSubProcessProjectArtifacts() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-escalation-event-subprocess-project-");
 
-        runGeneration("src/main/resources/bpmn/invoice_event_subprocess_escalation.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_event_subprocess_escalation.bpmn", outputDir);
 
         Path startHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewEscalationScopeEventSubProcessStartService.java");
         assertTrue(Files.exists(startHandler));
@@ -286,7 +286,7 @@ public class BpmnScaffolderTest {
     public void generatedMessageEventProjectCompiles() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-message-compile-");
 
-        runGeneration("src/main/resources/bpmn/invoice_message_exchange.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_message_exchange.bpmn", outputDir);
         runGeneratedMavenTest(outputDir);
     }
 
@@ -294,7 +294,7 @@ public class BpmnScaffolderTest {
     public void generatedNestedSubProcessProjectCompiles() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-subprocess-compile-");
 
-        runGeneration("src/main/resources/bpmn/invoice_nested_subprocess.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_nested_subprocess.bpmn", outputDir);
         runGeneratedMavenTest(outputDir);
     }
 
@@ -302,7 +302,7 @@ public class BpmnScaffolderTest {
     public void generatedBoundaryTimerProjectCompiles() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-boundary-timer-compile-");
 
-        runGeneration("src/main/resources/bpmn/invoice_review_deadline.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_review_deadline.bpmn", outputDir);
         runGeneratedMavenTest(outputDir);
     }
 
@@ -310,7 +310,7 @@ public class BpmnScaffolderTest {
     public void generatedNonInterruptingBoundaryTimerProjectCompiles() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-non-interrupting-boundary-compile-");
 
-        runGeneration("src/main/resources/bpmn/invoice_review_reminder_non_interrupting.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_review_reminder_non_interrupting.bpmn", outputDir);
         runGeneratedMavenTest(outputDir);
     }
 
@@ -318,7 +318,7 @@ public class BpmnScaffolderTest {
     public void generatedNonInterruptingSubProcessBoundaryTimerProjectCompiles() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-non-interrupting-subprocess-boundary-compile-");
 
-        runGeneration("src/main/resources/bpmn/invoice_subprocess_reminder_non_interrupting.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_subprocess_reminder_non_interrupting.bpmn", outputDir);
         runGeneratedMavenTest(outputDir);
     }
 
@@ -326,7 +326,7 @@ public class BpmnScaffolderTest {
     public void generatedEventSubProcessProjectCompiles() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-event-subprocess-compile-");
 
-        runGeneration("src/main/resources/bpmn/invoice_event_subprocess_message.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_event_subprocess_message.bpmn", outputDir);
         runGeneratedMavenTest(outputDir);
     }
 
@@ -334,7 +334,7 @@ public class BpmnScaffolderTest {
     public void generatedInterruptingEventSubProcessProjectCompiles() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-interrupting-event-subprocess-compile-");
 
-        runGeneration("src/main/resources/bpmn/invoice_event_subprocess_interrupting_message.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_event_subprocess_interrupting_message.bpmn", outputDir);
         runGeneratedMavenTest(outputDir);
     }
 
@@ -342,7 +342,7 @@ public class BpmnScaffolderTest {
     public void generatedTimerEventSubProcessProjectCompiles() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-timer-event-subprocess-compile-");
 
-        runGeneration("src/main/resources/bpmn/invoice_event_subprocess_timer.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_event_subprocess_timer.bpmn", outputDir);
         runGeneratedMavenTest(outputDir);
     }
 
@@ -350,7 +350,7 @@ public class BpmnScaffolderTest {
     public void generatedErrorEventSubProcessProjectCompiles() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-error-event-subprocess-compile-");
 
-        runGeneration("src/main/resources/bpmn/invoice_event_subprocess_error.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_event_subprocess_error.bpmn", outputDir);
         runGeneratedMavenTest(outputDir);
     }
 
@@ -358,7 +358,7 @@ public class BpmnScaffolderTest {
     public void generatedEscalationEventSubProcessProjectCompiles() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-escalation-event-subprocess-compile-");
 
-        runGeneration("src/main/resources/bpmn/invoice_event_subprocess_escalation.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_event_subprocess_escalation.bpmn", outputDir);
         runGeneratedMavenTest(outputDir);
     }
 
@@ -366,7 +366,7 @@ public class BpmnScaffolderTest {
     public void generatedCallActivityProjectCompiles() throws Exception {
         Path outputDir = Files.createTempDirectory("durga-call-activity-compile-");
 
-        runGeneration("src/main/resources/bpmn/invoice_call_activity.bpmn", outputDir);
+        runGeneration("src/test/resources/bpmn/invoice_call_activity.bpmn", outputDir);
         runGeneratedMavenTest(outputDir);
     }
 

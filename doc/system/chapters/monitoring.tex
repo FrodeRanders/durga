@@ -3,13 +3,17 @@
 
 \subsection{Canonical process-events topic}
 
-Durga emits a normalized lifecycle event stream on the shared topic \texttt{process-events}. This stream is intended to be the observability backbone of the system. Generated workers, gateways, subprocess handlers, boundary handlers and helper publishers all emit lifecycle events describing process progress, waiting states, completion, failure, escalation and cancellation.
+Durga emits normalized lifecycle events on the shared topic \texttt{process-events}. Generated
+workers, gateways, subprocess handlers, boundary handlers and helper publishers all emit
+events describing process progress, waiting states, completion, failure, escalation and
+cancellation.
 
-This design separates execution transport from queryable state. The generated execution topics remain useful for routing and local inspection, but the monitoring model depends on projections built from explicit lifecycle events rather than on direct counting of messages in task topics.
+This separates execution transport from queryable state. Execution topics remain useful for
+routing, but the monitoring model depends on projections built from explicit lifecycle events.
 
 \subsection{Kafka Streams topology}
 
-The repository contains a Kafka Streams monitoring topology that consumes \texttt{process-events} and materializes:
+A Kafka Streams monitoring topology consumes \texttt{process-events} and materializes:
 \begin{itemize}
 \item latest process state by instance,
 \item counts by current state,
@@ -17,11 +21,14 @@ The repository contains a Kafka Streams monitoring topology that consumes \textt
 \item stuck-instance views.
 \end{itemize}
 
-The main entry point is \texttt{org.gautelis.durga.monitoring.ProcessMonitoringApp}. The projected instance model is represented by \texttt{ProcessStateView}. The query side is exposed both through a small HTTP service and through a CLI client.
+The main entry point is \texttt{org.gautelis.durga.monitoring.ProcessMonitoringApp}. The
+projected instance model is \texttt{ProcessStateView}. The query side is exposed through an
+HTTP service and a CLI client.
 
 \subsection{Query surface}
 
-The monitoring service exposes endpoints for health, instance lookup, counts, latency and stuck instances. A lightweight dashboard is also provided. This gives Durga a useful local loop:
+The monitoring service exposes endpoints for health, instance lookup, counts, latency,
+stuck instances and a lightweight dashboard. The local operator loop is:
 \begin{enumerate}
 \item generate a process,
 \item publish scenarios or task inputs,
@@ -29,7 +36,3 @@ The monitoring service exposes endpoints for health, instance lookup, counts, la
 \item query current state and latency,
 \item iterate on the BPMN model or generated runtime.
 \end{enumerate}
-
-\subsection{Operational significance}
-
-This monitoring path matters because Durga is not just a code generator. It is also a learning and exploration surface. The generated helpers and the Streams-based monitoring path make it possible to understand how process instances move through the generated graph, which states accumulate, where latency emerges, and where cancellation or timeout behavior changes the normal flow.
