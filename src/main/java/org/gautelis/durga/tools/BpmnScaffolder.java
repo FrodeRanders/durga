@@ -265,6 +265,19 @@ public class BpmnScaffolder {
             writeFile(topicsPath, topicsPreview);
             generatedFiles.add(outputRoot.relativize(topicsPath).toString());
 
+            if (parsed.strimzi) {
+                ST strimziSt = group.getInstanceOf("topicsYml");
+                strimziSt.add("processId", processId);
+                strimziSt.add("tasks", tasks);
+                strimziSt.add("timers", allTimers);
+                strimziSt.add("messageTopics", messageTopics);
+                strimziSt.add("callActivities", callActivities);
+                strimziSt.add("subProcesses", subProcesses);
+                Path topicsYmlPath = outputRoot.resolve("topics.yml");
+                writeFile(topicsYmlPath, strimziSt.render());
+                generatedFiles.add(outputRoot.relativize(topicsYmlPath).toString());
+            }
+
             Path pomPath = outputRoot.resolve("pom.xml");
             writeFile(pomPath, pomPreview);
             generatedFiles.add(outputRoot.relativize(pomPath).toString());
@@ -348,6 +361,83 @@ public class BpmnScaffolder {
             Path payloadPath = outputRoot.resolve("task-payloads.json");
             writeFile(payloadPath, payloadPreview);
             generatedFiles.add(outputRoot.relativize(payloadPath).toString());
+        }
+
+        if (parsed.separateWorkers && !parsed.dryRun) {
+            for (String task : tasks) {
+                String workerClass = toClassName(task) + "Standalone";
+                Path workerPath = javaOutput.resolve(workerClass + ".java");
+                if (!Files.exists(workerPath) && !existingSources.contains(workerClass + ".java")) {
+                    ST workerSt = group.getInstanceOf("workerStandaloneClass");
+                    workerSt.add("packageName", "org.gautelis.durga.generated");
+                    workerSt.add("className", toClassName(task));
+                    workerSt.add("processId", processId);
+                    workerSt.add("taskId", task);
+                    writeFile(workerPath, workerSt.render());
+                    generatedFiles.add(outputRoot.relativize(workerPath).toString());
+                }
+            }
+
+            String bootstrapClass = toClassName(processId) + "WorkerBootstrap";
+            Path bootstrapPath = javaOutput.resolve(bootstrapClass + ".java");
+            if (!Files.exists(bootstrapPath) && !existingSources.contains(bootstrapClass + ".java")) {
+                ST bootstrapSt = group.getInstanceOf("workerBootstrapMain");
+                bootstrapSt.add("packageName", "org.gautelis.durga.generated");
+                bootstrapSt.add("className", bootstrapClass);
+                bootstrapSt.add("processId", processId);
+                bootstrapSt.add("tasks", tasks);
+                writeFile(bootstrapPath, bootstrapSt.render());
+                generatedFiles.add(outputRoot.relativize(bootstrapPath).toString());
+            }
+
+            for (String task : tasks) {
+                Path wDockerfile = outputRoot.resolve("Dockerfile." + task);
+                ST wDfSt = group.getInstanceOf("perWorkerDockerfile");
+                wDfSt.add("processId", processId);
+                wDfSt.add("taskId", task);
+                writeFile(wDockerfile, wDfSt.render());
+                generatedFiles.add(outputRoot.relativize(wDockerfile).toString());
+
+                Path wK8s = outputRoot.resolve("k8s." + task + ".yml");
+                ST wK8sSt = group.getInstanceOf("perWorkerK8s");
+                wK8sSt.add("processId", processId);
+                wK8sSt.add("taskId", task);
+                writeFile(wK8s, wK8sSt.render());
+                generatedFiles.add(outputRoot.relativize(wK8s).toString());
+            }
+        }
+
+        if (parsed.connect && !parsed.dryRun) {
+            Path connectDir = outputRoot.resolve("connect");
+            try {
+                Files.createDirectories(connectDir);
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to create connect directory", e);
+            }
+
+            List<String> outputTopics = collectTerminalOutputs(nodes);
+
+            ST sourceSt = group.getInstanceOf("connectSourceConfig");
+            sourceSt.add("processId", processId);
+            sourceSt.add("intakeTopic", !tasks.isEmpty());
+            sourceSt.add("messageTopics", messageTopics);
+            Path sourcePath = connectDir.resolve("connect-source.json");
+            writeFile(sourcePath, sourceSt.render());
+            generatedFiles.add(outputRoot.relativize(sourcePath).toString());
+
+            ST sinkSt = group.getInstanceOf("connectSinkConfig");
+            sinkSt.add("processId", processId);
+            sinkSt.add("outputTopics", outputTopics);
+            sinkSt.add("externalTopics", messageTopics);
+            Path sinkPath = connectDir.resolve("connect-sink.json");
+            writeFile(sinkPath, sinkSt.render());
+            generatedFiles.add(outputRoot.relativize(sinkPath).toString());
+
+            Path connectScriptPath = outputRoot.resolve("connect.sh");
+            ST scriptSt = group.getInstanceOf("connectScript");
+            scriptSt.add("processId", processId);
+            writeFile(connectScriptPath, scriptSt.render());
+            generatedFiles.add(outputRoot.relativize(connectScriptPath).toString());
         }
 
         List<String> boundaryEvents = combineNames(combineNames(boundaryTimers, boundaryErrors), boundaryEscalations);
@@ -435,11 +525,14 @@ public class BpmnScaffolder {
 
     private static ParsedArgs parseArgs(String[] args) {
         if (args.length == 0) {
-            System.err.println("Usage: BpmnScaffolder <path-to-bpmn.xml> [output-dir] [--out <dir>] [--dry-run] [--transactions]");
+            System.err.println("Usage: BpmnScaffolder <path-to-bpmn.xml> [output-dir] [--out <dir>] [--dry-run] [--transactions] [--separate-workers]");
             return null;
         }
         boolean dryRun = false;
         boolean transactions = false;
+        boolean separateWorkers = false;
+        boolean connect = false;
+        boolean strimzi = false;
         String outputDir = null;
         List<String> positional = new ArrayList<>();
 
@@ -449,6 +542,12 @@ public class BpmnScaffolder {
                 dryRun = true;
             } else if ("--transactions".equals(arg)) {
                 transactions = true;
+            } else if ("--separate-workers".equals(arg)) {
+                separateWorkers = true;
+            } else if ("--connect".equals(arg)) {
+                connect = true;
+            } else if ("--strimzi".equals(arg)) {
+                strimzi = true;
             } else if (arg.startsWith("--out=")) {
                 outputDir = arg.substring("--out=".length());
             } else if ("--out".equals(arg)) {
@@ -471,7 +570,7 @@ public class BpmnScaffolder {
         if (outputDir == null) {
             outputDir = positional.size() > 1 ? positional.get(1) : "generated";
         }
-        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions);
+        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi);
     }
 
     private static String normalize(String value) {
@@ -2261,7 +2360,8 @@ public class BpmnScaffolder {
                 "/templates/scaffold.stg",
                 "/templates/scaffold-events.stg",
                 "/templates/scaffold-subprocess.stg",
-                "/templates/scaffold-generated-project.stg"
+                "/templates/scaffold-generated-project.stg",
+                "/templates/scaffold-connect.stg"
         );
     }
 
@@ -2370,4 +2470,19 @@ public class BpmnScaffolder {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
+    private static List<String> collectTerminalOutputs(Map<String, NodeInfo> nodes) {
+        List<String> outputs = new ArrayList<>();
+        for (NodeInfo node : nodes.values()) {
+            if (node.type == NodeType.END) {
+                continue;
+            }
+            for (String targetId : node.outgoingIds) {
+                NodeInfo target = nodes.get(targetId);
+                if (target != null && target.type == NodeType.END) {
+                    outputs.add(node.name + "_output");
+                }
+            }
+        }
+        return outputs;
+    }
 }

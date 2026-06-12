@@ -1,7 +1,7 @@
 \section{System Overview}
 \label{sec:SystemOverview}
 
-Durga has three centers:
+Durga has three parts:
 \begin{itemize}
 \item a BPMN parsing and generation pipeline,
 \item a generated Kafka-oriented process runtime,
@@ -11,9 +11,9 @@ Durga has three centers:
 \subsection{Repository-level components}
 
 \begin{description}
-\item[Scaffolder] Parses a BPMN model and renders a generated project (entry point:
+\item[Scaffolder] Parses a BPMN model and renders a generated project \\ (entry point:
 \texttt{org.gautelis.durga.tools.BpmnScaffolder}).
-\item[Generation support] Model extraction and template coordination: \texttt{BpmnModelSupport},
+\item[Generation support] Model extraction and template coordination: \texttt{BpmnModelSupport}, \\
 \texttt{TaskRoutingGenerator}, \texttt{EventTemplateGenerator},
 \texttt{SubProcessTemplateGenerator}, \texttt{GeneratedProjectSupport}.
 \item[Templates] StringTemplate groups under \texttt{src/main/resources/templates/} define

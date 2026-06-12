@@ -1,0 +1,21 @@
+id: kafka-connect-sink
+name: Kafka Connect Sink
+version: 1.0.0
+category: connect
+status: stable
+description: >
+  Generates Kafka Connect sink connector configuration for pipeline output
+  topics. Sink connectors write from Kafka to external systems (data
+  warehouses, object stores, search indexes, APIs).
+
+config:
+  connectorClass:
+    type: string
+    required: true
+    description: Fully qualified Kafka Connect connector class (e.g. io.confluent.connect.s3.S3SinkConnector)
+  tasksMax:
+    type: integer
+    default: 1
+
+implementation:
+  class: org.gautelis.durga.tools.BpmnScaffolder

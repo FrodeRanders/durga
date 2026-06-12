@@ -1,0 +1,104 @@
+\section{Supervision and Fault Tolerance}
+\label{sec:Supervision}
+
+Durga runtime components communicate through Kafka topics, which act as
+durable mailboxes. This architecture enables an Erlang/OTP--like supervision
+model: workers can crash and restart independently without losing messages.
+
+\subsection{Architecture}
+
+\begin{itemize}
+\item Every worker consumes from a dedicated Kafka topic (its inbox) and
+      produces to downstream topics.
+\item Kafka persists messages for a configurable retention period. A crashed
+      worker's unconsumed messages remain in its topic.
+\item Consumer group rebalancing shifts partitions to surviving instances when
+      a worker pod exits.
+\item The scaffolder's \texttt{--separate-workers} flag generates one
+      Kubernetes Deployment per BPMN task, giving each worker its own
+      fault domain.
+\end{itemize}
+
+\subsection{Per-worker isolation}
+
+When \texttt{--separate-workers} is enabled:
+
+\begin{verbatim}
+java -jar target/durga-1.0-SNAPSHOT.jar \
+  src/test/resources/bpmn/invoice_receipt.bpmn --separate-workers
+\end{verbatim}
+
+Each generated project includes:
+
+\begin{itemize}
+\item \texttt{RegisterInvoiceStandalone.java}, \texttt{ReviewInvoiceStandalone.java},
+      \texttt{NotifyRequesterStandalone.java} --- one standalone worker per BPMN
+      task, each with its own Kafka consumer/producer and poll loop.
+\item \texttt{InvoiceReceiptWorkerBootstrap.java} --- entry point that reads
+      the \texttt{WORKER\_ID} environment variable and starts the matching
+      worker.
+\item \texttt{Dockerfile.<task>} --- per-worker Docker image building from
+      the same JAR, with \texttt{WORKER\_ID} pre-set.
+\item \texttt{k8s.<task>.yml} --- per-worker Kubernetes Deployment with
+      isolated resource limits, health probes, and \texttt{WORKER\_ID}
+      environment variable.
+\end{itemize}
+
+\subsection{Supervision policies}
+
+\begin{longtable}{|>{\raggedright\arraybackslash}p{0.22\textwidth}|>{\raggedright\arraybackslash}p{0.70\textwidth}|}
+\hline
+\rowcolor[gray]{0.9}\textbf{Policy} & \textbf{Implementation} \\
+\hline
+Crash recovery & Kafka consumer offset tracking. Worker restarts replay from
+last committed offset. \\
+\hline
+Fault isolation & Per-worker Deployments. One worker's OOM does not affect
+others. \\
+\hline
+Health signals & Exec-based liveness/readiness probes per pod (check process
+alive). Extendable to application-level health via
+\texttt{quarkus-smallrye-health}. \\
+\hline
+Scaling & \texttt{kubectl scale} per Deployment. Bounded by topic partition
+count. \\
+\hline
+Dead letter & Plugin executor routes failures to \texttt{\%task\%\_dlq}
+topic. Standalone workers log errors and continue. \\
+\hline
+Backpressure & Kafka consumer group throttles ingestion. Consumer lag
+available via JMX metrics. \\
+\hline
+\end{longtable}
+
+\subsection{Recovery guarantees}
+
+\begin{description}
+\item[Message durability] Messages are not lost on worker crash. Kafka
+      retains them until consumed and committed.
+\item[At-most-once vs at-least-once] Standalone workers commit after
+      processing (\texttt{commitSync}). The poll loop catches and logs
+      errors without crashing. Plugin-generated executors route failures
+      to the DLQ. The architecture provides at-least-once delivery with
+      idempotent output being the operator's responsibility.
+\item[Process continuity] If the starter crashes, the process never starts
+      (one-shot job, retried by K8s). If a worker crashes, Kafka consumer
+      group rebalancing reassigns its partitions. If the final orchestrator
+      crashes, the process remains in-flight until a new orchestrator pod
+      picks up.
+\end{description}
+
+\subsection{Limitations}
+
+\begin{itemize}
+\item Worker state is external (Kafka). In-memory state such as running
+      aggregations or cancellation registrations is lost on crash.
+\item The \texttt{--separate-workers} model generates poll-loop workers
+      rather than Quarkus CDI beans. These trade CDI features
+      (dependency injection, reactive messaging) for isolated fault
+      domains and smaller per-pod memory footprints.
+\item Cross-worker coordination (AND joins, subprocess completion) relies
+      on the \texttt{ProcessStateStore}, which is itself a Kafka
+      consumer. Its crash characteristics are the same as any other
+      worker.
+\end{itemize}

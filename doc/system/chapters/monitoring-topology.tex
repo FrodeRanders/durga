@@ -18,19 +18,19 @@ Execution topics show how work is routed. The monitoring topology answers:
 
 \subsection{Topology structure}
 
-The entry point is \texttt{ProcessMonitoringTopology.buildTopology()}. It consumes
+The entry point is \texttt{ProcessMonitoringTopology.buildTopology()}. It consumes \\
 \texttt{process-events}, filters null keys and values, and forks the stream into
 five parallel sub-topologies, each with a dedicated local state store:
 
 \begin{description}
 \item[Instance state] Aggregates events into \texttt{ProcessStateView} per instance.
-Materialized in \texttt{process-state-store}, output to \texttt{process-state}.
+Materialized in \\ \texttt{process-state-store}, output to \texttt{process-state}.
 A filtered subset (active instances) is output to \texttt{process-active-state}.
 \item[State counts] Regroups state views by \texttt{processId:state} key and counts
 instances. Materialized in \texttt{process-state-counts-store}, output to
 \texttt{process-state-counts}.
 \item[Activity latency] Feeds events through a custom \texttt{ActivityLatencyProcessor}
-that records \texttt{ACTIVITY\_ENTERED} timestamps in a persistent key-value store
+that records \\ \texttt{ACTIVITY\_ENTERED} timestamps in a persistent key-value store
 (\texttt{process-activity-entry-store}) and, on later completion or termination events,
 emits duration deltas. These deltas are aggregated into rolling \texttt{ActivityLatencyStats}
 per activity, then mapped to \texttt{ActivityLatencySummary} and output to
@@ -74,17 +74,17 @@ The topology maintains ten state stores:
 
 The five local stores drive computation — aggregation, counting, and temporal joins.
 The five global stores serve queries. The output topics (\texttt{process-state},
-\texttt{process-state-counts}, \texttt{process-active-state}, \texttt{process-latency},
+\texttt{process-state-counts}, \\ \texttt{process-active-state}, \texttt{process-latency},
 \texttt{process-trends}) decouple computation from query access: any monitoring instance
 can spin up and receive a full read replica without recomputing.
 
 \subsection{Latency computation}
 
 Activity latency uses a temporal join pattern without windowed stream-stream joins.
-The \texttt{ActivityLatencyProcessor} stores each \texttt{ACTIVITY\_ENTERED} event's
+The \\ \texttt{ActivityLatencyProcessor} stores each \texttt{ACTIVITY\_ENTERED} event's
 timestamp under the key \texttt{instanceId:activityId} in the persistent
 \texttt{process-activity-entry-store}. When a later \texttt{ACTIVITY\_COMPLETED},
-\texttt{ACTIVITY\_ESCALATED}, \texttt{ACTIVITY\_CANCELLED}, \texttt{GATEWAY\_TAKEN},
+\texttt{ACTIVITY\_ESCALATED}, \texttt{ACTIVITY\_CANCELLED}, \texttt{GATEWAY\_TAKEN}, \\ 
 \texttt{PROCESS\_COMPLETED}, or \texttt{PROCESS\_FAILED} event arrives for the same
 key, the processor computes the duration and emits an \texttt{ActivityLatencyDelta}.
 
@@ -111,7 +111,7 @@ required, since global tables replicate the entire content to every monitoring i
 \subsection{Relationship to demos}
 
 Repository-level demo publishers and scenario runners emit synthetic lifecycle
-events directly to \texttt{process-events}, making the monitoring subsystem
+events directly to \\ \texttt{process-events}, making the monitoring subsystem
 independently testable without a full generated process runtime.
 
 \subsection{Current shape}

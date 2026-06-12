@@ -917,6 +917,118 @@ public class %className% {
 }
 >>
 
+workerStandaloneClass(packageName, className, processId, taskId) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.gautelis.durga.ProcessEvent;
+
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+public class %className%Standalone {
+    private final AtomicBoolean running = new AtomicBoolean(true);
+
+    public void run(String bootstrap) {
+        Properties consumerProps = new Properties();
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "%processId%_%taskId%_worker");
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaConsumer\<String, String> consumer = new KafkaConsumer\<\>(consumerProps);
+             KafkaProducer\<String, String> producer = new KafkaProducer\<\>(producerProps)) {
+
+            consumer.subscribe(java.util.Collections.singletonList("%processId%_%taskId%_input"));
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                running.set(false);
+                consumer.wakeup();
+            }));
+
+            while (running.get()) {
+                ConsumerRecords\<String, String> records = consumer.poll(Duration.ofSeconds(1));
+                for (ConsumerRecord\<String, String> record : records) {
+                    try {
+                        ProcessEvent inputEvent = ProcessEvent.fromJson(record.value());
+                        Map\<String, Object> payload = new HashMap\<\>();
+                        if (inputEvent.payload() != null) {
+                            payload.putAll(inputEvent.payload());
+                        }
+                        payload.put("worker", "%taskId%");
+
+                        ProcessEvent outputEvent = new ProcessEvent(
+                                inputEvent.processInstanceId(),
+                                inputEvent.processId(),
+                                "%taskId%",
+                                inputEvent.tokenId(),
+                                inputEvent.correlationId(),
+                                payload,
+                                ProcessEvent.Status.COMPLETED,
+                                null,
+                                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                                inputEvent.processVersion(),
+                                inputEvent.businessKey(),
+                                null
+                        );
+
+                        producer.send(new ProducerRecord\<\>("%processId%_%taskId%_output",
+                                inputEvent.processInstanceId(), outputEvent.toJson()));
+                        producer.send(new ProducerRecord\<\>("process-events",
+                                inputEvent.processInstanceId(), outputEvent.toJson()));
+                        producer.flush();
+                        consumer.commitSync();
+                    } catch (Exception e) {
+                        System.err.println("Worker %taskId% error: " + e.getMessage());
+                    }
+                }
+            }
+        }
+    }
+}
+>>
+
+workerBootstrapMain(packageName, className, processId, tasks) ::= <<
+package %packageName%;
+
+public class %className% {
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0]
+                : System.getenv().getOrDefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9094");
+        String workerId = System.getenv("WORKER_ID");
+        if (workerId == null) {
+            System.err.println("WORKER_ID env var required");
+            System.exit(1);
+        }
+        switch (workerId) {
+%tasks:{t|
+            case "%t%" -> new %t%Standalone().run(bootstrap);
+}%
+            default -> {
+                System.err.println("Unknown WORKER_ID: " + workerId);
+                System.exit(1);
+            }
+        }
+    }
+}
+>>
+
 pluginExecutorClass(packageName, className, processId, taskId, taskType, pluginRef, pluginConfig, pluginImplClass) ::= <<
 package %packageName%;
 

@@ -23,3 +23,11 @@ plugins:
     version: 1.0.0
     category: aggregate
     path: aggregate/window-counter.yml
+  - id: kafka-connect-source
+    version: 1.0.0
+    category: connect
+    path: connect/source.yml
+  - id: kafka-connect-sink
+    version: 1.0.0
+    category: connect
+    path: connect/sink.yml

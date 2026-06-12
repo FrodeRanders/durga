@@ -1,0 +1,21 @@
+id: kafka-connect-source
+name: Kafka Connect Source
+version: 1.0.0
+category: connect
+status: stable
+description: >
+  Generates Kafka Connect source connector configuration for pipeline intake
+  topics. Source connectors read from external systems (databases, files,
+  HTTP endpoints) and publish to Kafka for the pipeline to consume.
+
+config:
+  connectorClass:
+    type: string
+    required: true
+    description: Fully qualified Kafka Connect connector class (e.g. io.confluent.connect.jdbc.JdbcSourceConnector)
+  tasksMax:
+    type: integer
+    default: 1
+
+implementation:
+  class: org.gautelis.durga.tools.BpmnScaffolder

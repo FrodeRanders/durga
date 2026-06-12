@@ -46,6 +46,9 @@ public final class ProcessMonitoringTopology {
     private static final String LOCAL_ACTIVITY_ENTRY_STORE = "process-activity-entry-store";
     private static final String LOCAL_TRENDS_STORE = "process-trends-store";
 
+    private static final long SLA_THRESHOLD_MS =
+            Long.parseLong(System.getProperty("durga.sla.threshold.ms", "0"));
+
     private ProcessMonitoringTopology() {
     }
 
@@ -271,7 +274,8 @@ public final class ProcessMonitoringTopology {
             }
             entryStore.delete(key);
             long durationMs = Math.max(0L, ChronoUnit.MILLIS.between(Instant.parse(enteredAt), Instant.parse(event.timestamp())));
-            ActivityLatencyDelta sample = new ActivityLatencyDelta(event.processId(), event.activityId(), durationMs);
+            ActivityLatencyDelta sample = ActivityLatencyDelta.of(
+                    event.processId(), event.activityId(), durationMs, SLA_THRESHOLD_MS);
             context.forward(record.withKey(sample.key()).withValue(sample));
         }
 

@@ -457,12 +457,19 @@ final class ParsedArgs {
     final String outputDir;
     final boolean dryRun;
     final boolean transactions;
+    final boolean separateWorkers;
+    final boolean connect;
+    final boolean strimzi;
 
-    ParsedArgs(String bpmnPath, String outputDir, boolean dryRun, boolean transactions) {
+    ParsedArgs(String bpmnPath, String outputDir, boolean dryRun, boolean transactions,
+               boolean separateWorkers, boolean connect, boolean strimzi) {
         this.bpmnPath = bpmnPath;
         this.outputDir = outputDir;
         this.dryRun = dryRun;
         this.transactions = transactions;
+        this.separateWorkers = separateWorkers;
+        this.connect = connect;
+        this.strimzi = strimzi;
     }
 }
 

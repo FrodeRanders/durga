@@ -1,0 +1,133 @@
+\section{Kafka Connect Integration}
+\label{sec:Connect}
+
+Kafka Connect handles data acquisition. Durga owns the topic topology;
+Connect owns the I/O to external systems. The scaffolder's \texttt{--connect}
+flag generates ready-to-deploy connector configurations for the pipeline's
+intake and output topics.
+
+\subsection{Architecture}
+
+\begin{figure}[!ht]
+    \centering
+    \begin{tikzpicture}[node distance=16mm,>=latex]
+        \tikzstyle{box}=[draw=iptoMuted, rounded corners=2pt, line width=0.8pt, align=center, minimum width=30mm, minimum height=10mm, fill=white]
+        \tikzstyle{accentbox}=[box, fill=iptoAccent!12]
+        \tikzstyle{ext}=[draw=iptoMuted!50, rounded corners=2pt, line width=0.6pt, align=center, minimum width=28mm, minimum height=9mm, fill=white, dashed]
+        \node[ext] (extsrc) {External system\\source};
+        \node[box, right=18mm of extsrc] (connsrc) {Connect\\source};
+        \node[box, right=14mm of connsrc] (intake) {intake\\topic};
+        \node[box, right=14mm of intake] (pipeline) {Durga\\pipeline};
+        \node[box, right=14mm of pipeline] (output) {output\\topic};
+        \node[box, right=14mm of output] (connsink) {Connect\\sink};
+        \node[ext, right=18mm of connsink] (extsink) {External system\\sink};
+
+        \node[box, below=12mm of connsrc] (msgsrc) {Connect\\source};
+        \node[ext, left=18mm of msgsrc] (extmsg) {External\\message};
+        \node[box, right=14mm of msgsrc] (msgtopic) {message\\topic};
+        \node[accentbox, right=14mm of msgtopic] (pipe) {Pipeline\\receive};
+
+        \draw[->, thick] (extsrc) -- (connsrc);
+        \draw[->, thick] (connsrc) -- (intake);
+        \draw[->, thick] (intake) -- (pipeline);
+        \draw[->, thick] (pipeline) -- (output);
+        \draw[->, thick] (output) -- (connsink);
+        \draw[->, thick] (connsink) -- (extsink);
+
+        \draw[->, thick] (extmsg) -- (msgsrc);
+        \draw[->, thick] (msgsrc) -- (msgtopic);
+        \draw[->, thick] (msgtopic) -- (pipe);
+    \end{tikzpicture}
+    \caption{Kafka Connect integration: sources feed intake topics, sinks consume output topics}
+    \label{fig:DurgaConnect}
+\end{figure}
+
+\subsection{Enabling}
+
+\begin{verbatim}
+java -jar target/durga-1.0-SNAPSHOT.jar \
+  path/to/process.bpmn --connect
+\end{verbatim}
+
+This adds a \filepath{connect/} directory to the generated project:
+
+\begin{verbatim}
+connect/connect-source.json
+connect/connect-sink.json
+connect.sh
+\end{verbatim}
+
+\subsection{Source connectors}
+
+\texttt{connect-source.json} contains connector configuration for:
+\begin{itemize}
+\item the process start topic (\texttt{\%processId\%\_start}),
+\item message catch and receive task topics.
+\end{itemize}
+
+The user fills in the connector class and system-specific settings:
+
+\begin{verbatim}
+{
+  "name": "invoice_receipt-source",
+  "config": {
+    "connector.class": "...",
+    "tasks.max": "1",
+    "invoice_receipt_start": {
+      "kafka.topic": "invoice_receipt_start"
+    }
+  }
+}
+\end{verbatim}
+
+\subsection{Sink connectors}
+
+\texttt{connect-sink.json} contains connector configuration for:
+\begin{itemize}
+\item terminal task outputs,
+\item the canonical \texttt{process-events} topic (for auditing or replication),
+\item message throw and send task topics.
+\end{itemize}
+
+\subsection{Deploying}
+
+The generated \texttt{connect.sh} posts both configs to the Connect REST API:
+
+\begin{verbatim}
+CONNECT_URL=http://kafka-connect:8083 ./connect.sh
+\end{verbatim}
+
+Connector status can be checked with:
+
+\begin{verbatim}
+curl http://kafka-connect:8083/connectors/invoice_receipt-source/status
+curl http://kafka-connect:8083/connectors/invoice_receipt-sink/status
+\end{verbatim}
+
+\subsection{Common connector classes}
+
+\begin{longtable}{|>{\raggedright\arraybackslash}p{0.42\textwidth}|>{\raggedright\arraybackslash}p{0.50\textwidth}|}
+\hline
+\rowcolor[gray]{0.9}\textbf{Connector} & \textbf{Use case} \\
+\hline
+\texttt{DebeziumSourceConnector} & CDC from PostgreSQL, MySQL, MongoDB \\
+\texttt{JdbcSourceConnector} & Polling queries from relational databases \\
+\texttt{S3SinkConnector} & Flush to S3-compatible object stores \\
+\texttt{ElasticsearchSinkConnector} & Index to Elasticsearch \\
+\texttt{HttpSinkConnector} & POST to REST APIs \\
+\texttt{JdbcSinkConnector} & Write to relational databases \\
+\texttt{BigQuerySinkConnector} & Load into Google BigQuery \\
+\hline
+\end{longtable}
+
+\subsection{Limitations}
+
+\begin{itemize}
+\item Connector configs are generated as stubs. The user must fill in
+      connector-specific settings (connection URLs, credentials, table names,
+      bucket names).
+\item The scaffolder does not validate connector configs against a live
+      Connect instance.
+\item Single Message Transform (SMT) chains are not generated. The user
+      adds transforms in the connector config as needed.
+\end{itemize}

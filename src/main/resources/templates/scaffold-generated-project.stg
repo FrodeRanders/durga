@@ -1912,3 +1912,70 @@ services:
       interval: 10s
       retries: 10
 >>
+perWorkerDockerfile(processId, taskId) ::= <<
+FROM eclipse-temurin:21-jre-alpine
+RUN addgroup -S durga && adduser -S durga -G durga
+USER durga
+COPY target/*-all.jar /app/pipeline.jar
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD pgrep -f pipeline.jar || exit 1
+ENV WORKER_ID=%taskId%
+ENTRYPOINT ["java", "-Xms64m", "-Xmx256m", \
+  "-Dkafka.bootstrap.servers=${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}", \
+  "-jar", "/app/pipeline.jar"]
+LABEL durga.process=%processId% durga.task=%taskId%
+>>
+
+perWorkerK8s(processId, taskId) ::= <<
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: %processId%-%taskId%
+  labels:
+    app: %processId%
+    task: %taskId%
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: %processId%
+      task: %taskId%
+  template:
+    metadata:
+      labels:
+        app: %processId%
+        task: %taskId%
+    spec:
+      containers:
+        - name: worker
+          image: %processId%:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: WORKER_ID
+              value: "%taskId%"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-broker:9092"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          livenessProbe:
+            exec:
+              command:
+                - pgrep
+                - "-f"
+                - "pipeline.jar"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command:
+                - pgrep
+                - "-f"
+                - "pipeline.jar"
+            initialDelaySeconds: 10
+            periodSeconds: 15
+>>

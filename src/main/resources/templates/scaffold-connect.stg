@@ -1,0 +1,160 @@
+connectSourceConfig(processId, intakeTopic, messageTopics) ::= <<
+{
+  "name": "%processId%-source",
+  "config": {
+    "connector.class": "",
+    "tasks.max": "1",
+    "_comment": "Fill in connector.class and connector-specific config."
+  }
+}
+>>
+
+connectSinkConfig(processId, outputTopics, externalTopics) ::= <<
+{
+  "name": "%processId%-sink",
+  "config": {
+    "connector.class": "",
+    "tasks.max": "1",
+    "topics": "process-events",
+    "_comment": "Fill in connector.class and connector-specific config."
+  }
+}
+>>
+
+connectScript(processId) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+CONNECT_URL=${CONNECT_URL:-http://localhost:8083}
+echo "===> Posting source connector for %processId%"
+curl -s -X POST -H "Content-Type: application/json" \
+  -d @connect/connect-source.json \
+  "${CONNECT_URL}/connectors" || echo "(already exists?)"
+echo ""
+echo "===> Posting sink connector for %processId%"
+curl -s -X POST -H "Content-Type: application/json" \
+  -d @connect/connect-sink.json \
+  "${CONNECT_URL}/connectors" || echo "(already exists?)"
+echo ""
+echo "===> Connector status"
+curl -s "${CONNECT_URL}/connectors/%processId%-source/status"
+echo ""
+curl -s "${CONNECT_URL}/connectors/%processId%-sink/status"
+>>
+
+topicsYml(processId, tasks, timers, messageTopics, callActivities, subProcesses) ::= <<
+%tasks:{t|
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: %processId%_%t%_input
+  labels:
+    strimzi.io/cluster: my-kafka
+    app: %processId%
+spec:
+  partitions: 3
+  replicas: 1
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: %processId%_%t%_output
+  labels:
+    strimzi.io/cluster: my-kafka
+    app: %processId%
+spec:
+  partitions: 3
+  replicas: 1
+---
+}%%timers:{t|
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: %processId%_%t%_input
+  labels:
+    strimzi.io/cluster: my-kafka
+    app: %processId%
+spec:
+  partitions: 3
+  replicas: 1
+---
+}%%messageTopics:{t|
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: %t%
+  labels:
+    strimzi.io/cluster: my-kafka
+    app: %processId%
+spec:
+  partitions: 3
+  replicas: 1
+---
+}%%callActivities:{t|
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: %processId%_%t%_call
+  labels:
+    strimzi.io/cluster: my-kafka
+    app: %processId%
+spec:
+  partitions: 3
+  replicas: 1
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: %processId%_%t%_reply
+  labels:
+    strimzi.io/cluster: my-kafka
+    app: %processId%
+spec:
+  partitions: 3
+  replicas: 1
+---
+}%%subProcesses:{t|
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: %processId%_%t%_input
+  labels:
+    strimzi.io/cluster: my-kafka
+    app: %processId%
+spec:
+  partitions: 3
+  replicas: 1
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: %processId%_%t%_output
+  labels:
+    strimzi.io/cluster: my-kafka
+    app: %processId%
+spec:
+  partitions: 3
+  replicas: 1
+---
+}%
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: %processId%_start
+  labels:
+    strimzi.io/cluster: my-kafka
+    app: %processId%
+spec:
+  partitions: 3
+  replicas: 1
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: process-events
+  labels:
+    strimzi.io/cluster: my-kafka
+    app: %processId%
+spec:
+  partitions: 3
+  replicas: 1
+>>
