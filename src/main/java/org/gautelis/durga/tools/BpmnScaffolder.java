@@ -89,7 +89,11 @@ public class BpmnScaffolder {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("No <process> element found."));
 
-        String processId = normalize(process.getId() != null ? process.getId() : "process");
+        String processId = normalize(
+                parsed.processIdOverride != null
+                        ? parsed.processIdOverride
+                        : (process.getId() != null ? process.getId() : "process")
+        );
         Map<String, NodeInfo> nodes = new LinkedHashMap<>();
         Map<String, List<FlowInfo>> flowsBySource = new LinkedHashMap<>();
         List<EventSubProcessSpec> eventSubProcessSpecs = collectEventSubProcessSpecs(model, nodes);
@@ -534,7 +538,7 @@ public class BpmnScaffolder {
 
     private static ParsedArgs parseArgs(String[] args) {
         if (args.length == 0) {
-            System.err.println("Usage: BpmnScaffolder <path-to-bpmn.xml> [output-dir] [--out <dir>] [--dry-run] [--transactions] [--separate-workers]");
+            System.err.println("Usage: BpmnScaffolder <path-to-bpmn.xml> [--out <dir>] [--process-id <id>] [--dry-run] [--transactions] [--separate-workers] [--strimzi] [--connect]");
             return null;
         }
         boolean dryRun = false;
@@ -543,6 +547,7 @@ public class BpmnScaffolder {
         boolean connect = false;
         boolean strimzi = false;
         String outputDir = null;
+        String processIdOverride = null;
         List<String> positional = new ArrayList<>();
 
         for (int i = 0; i < args.length; i++) {
@@ -565,6 +570,12 @@ public class BpmnScaffolder {
                     return null;
                 }
                 outputDir = args[++i];
+            } else if ("--process-id".equals(arg)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Missing value for --process-id");
+                    return null;
+                }
+                processIdOverride = args[++i];
             } else {
                 positional.add(arg);
             }
@@ -579,7 +590,7 @@ public class BpmnScaffolder {
         if (outputDir == null) {
             outputDir = positional.size() > 1 ? positional.get(1) : "generated";
         }
-        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi);
+        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi, processIdOverride);
     }
 
     private static String normalize(String value) {

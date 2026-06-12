@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+JAR="target/durga-1.0-SNAPSHOT.jar"
+BPMN="${1:?Usage: durga <path-to-bpmn.bpmn> [--dry-run] [--out <dir>] [--transactions] [--separate-workers] [--strimzi] [--connect]}"
+shift
+
+if [[ ! -f "$JAR" ]]; then
+    echo "Building..."
+    mvn -q package -DskipTests
+fi
+
+exec java -jar "$JAR" "$BPMN" "$@"

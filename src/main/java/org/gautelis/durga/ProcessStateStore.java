@@ -32,8 +32,9 @@ public class ProcessStateStore implements AutoCloseable {
      *
      * @param bootstrapServers Kafka bootstrap server list
      * @param topic compacted topic used for process state snapshots
+     * @param processId process identifier, used as the consumer group suffix
      */
-    public ProcessStateStore(String bootstrapServers, String topic) {
+    public ProcessStateStore(String bootstrapServers, String topic, String processId) {
         this.topic = topic;
 
         Properties producerProps = new Properties();
@@ -44,7 +45,7 @@ public class ProcessStateStore implements AutoCloseable {
 
         Properties consumerProps = new Properties();
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "process-state-reader");
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "durga-" + processId);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");

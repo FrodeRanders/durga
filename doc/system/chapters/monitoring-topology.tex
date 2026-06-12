@@ -97,8 +97,8 @@ sum, min, and max — then mapped to \texttt{ActivityLatencySummary} for output.
 The topology is configured with \texttt{AT\_LEAST\_ONCE} semantics. This trades
 exactly-once guarantees for higher throughput and lower latency. State views may
 transiently reflect duplicate or stale updates, which is acceptable for a monitoring
-read model. The state directory is configured to \filepath{target/kafka-streams-state}
-— suitable for local development, but should be made configurable for production use.
+read model. The state directory defaults to \filepath{target/kafka-streams-state}
+and can be overridden via the \texttt{durga.streams.state.dir} system property.
 
 \subsection{Query access pattern}
 

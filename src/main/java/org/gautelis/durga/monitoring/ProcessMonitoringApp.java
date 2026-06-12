@@ -40,7 +40,8 @@ public final class ProcessMonitoringApp {
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG,
                 org.apache.kafka.common.serialization.Serdes.StringSerde.class);
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE);
-        props.put(StreamsConfig.STATE_DIR_CONFIG, "target/kafka-streams-state");
+        props.put(StreamsConfig.STATE_DIR_CONFIG,
+                System.getProperty("durga.streams.state.dir", "target/kafka-streams-state"));
 
         KafkaStreams streams = new KafkaStreams(
                 ProcessMonitoringTopology.buildTopology(topics), props);
@@ -48,7 +49,8 @@ public final class ProcessMonitoringApp {
                 new ProcessMonitoringQueryService(streams, topics);
 
         streams.start();
-        System.out.println("Monitoring topology started (state dir: target/kafka-streams-state)");
+        System.out.println("Monitoring topology started (state dir: "
+                + props.getProperty(StreamsConfig.STATE_DIR_CONFIG) + ")");
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             streams.close();

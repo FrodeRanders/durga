@@ -27,16 +27,24 @@ Endpoints:
 
 \subsection{CLI client}
 
-\texttt{ProcessMonitoringClient} provides terminal access for development and
-exploration:
+The repository includes a convenience script at \filepath{durga-monitor}:
 
-\begin{itemize}
-\item \texttt{health},
-\item \texttt{instance <processInstanceId>},
-\item \texttt{counts [processId]},
-\item \texttt{latency <processId>},
-\item \texttt{stuck [processId] [olderThanSeconds]}.
-\end{itemize}
+\begin{verbatim}
+./durga-monitor health
+./durga-monitor counts invoice_receipt
+./durga-monitor latency invoice_receipt
+./durga-monitor stuck invoice_receipt 300
+./durga-monitor instance <processInstanceId>
+\end{verbatim}
+
+Defaults to \texttt{http://localhost:8081}. Override with
+\texttt{DURGA\_URL}. Equivalent to:
+
+\begin{verbatim}
+java -cp target/durga-1.0-SNAPSHOT.jar \
+  org.gautelis.durga.monitoring.ProcessMonitoringClient \
+  http://localhost:8081 <command>
+\end{verbatim}
 
 \subsection{Dashboard}
 

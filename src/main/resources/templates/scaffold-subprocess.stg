@@ -718,7 +718,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     private final ProcessStateStore stateStore =
-            new ProcessStateStore("localhost:9094", "%processId%_state");
+            new ProcessStateStore("localhost:9094", "%processId%_state", "%processId%");
 
     @Inject
     @Channel("process-events")

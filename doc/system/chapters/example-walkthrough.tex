@@ -9,6 +9,12 @@ start, service work, review, approve/reject, notify.
 \subsection{Generation}
 
 \begin{verbatim}
+./durga src/test/resources/bpmn/invoice_receipt.bpmn
+\end{verbatim}
+
+Or directly:
+
+\begin{verbatim}
 mvn -q clean package
 java -jar target/durga-1.0-SNAPSHOT.jar \
   src/test/resources/bpmn/invoice_receipt.bpmn

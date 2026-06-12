@@ -32,6 +32,10 @@ Consistent names make it easier to:
 
 \subsection{Practical guidance}
 
-For the cleanest generated output, BPMN ids should be stable, readable and explicit. If BPMN
-models use unclear or heavily tool-generated ids, the generated Kafka and Java output becomes
-harder to read as well.
+For the cleanest generated output, BPMN ids should be stable, readable and
+explicit. If BPMN models use unclear or heavily tool-generated ids, the
+generated Kafka and Java output becomes harder to read as well.
+
+If the BPMN tool changes element identifiers between edits, pin the process
+id with \texttt{--process-id <id>} to keep topic names, consumer groups,
+and class names stable across regenerations.

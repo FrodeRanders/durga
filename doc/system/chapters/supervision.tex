@@ -24,8 +24,7 @@ model: workers can crash and restart independently without losing messages.
 When \texttt{--separate-workers} is enabled:
 
 \begin{verbatim}
-java -jar target/durga-1.0-SNAPSHOT.jar \
-  src/test/resources/bpmn/invoice_receipt.bpmn --separate-workers
+./durga src/test/resources/bpmn/invoice_receipt.bpmn --separate-workers
 \end{verbatim}
 
 Each generated project includes:

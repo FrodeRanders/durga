@@ -1,6 +1,33 @@
 \section{Configuration And Operations}
 \label{sec:ConfigurationOperations}
 
+\subsection{Scaffolder invocation}
+
+The repository includes a convenience script at \filepath{durga}:
+
+\begin{verbatim}
+./durga path/to/process.bpmn [flags...]
+\end{verbatim}
+
+It auto-builds the JAR if missing and passes all arguments through to the
+scaffolder. Equivalent to:
+
+\begin{verbatim}
+mvn -q package -DskipTests
+java -jar target/durga-1.0-SNAPSHOT.jar path/to/process.bpmn [flags...]
+\end{verbatim}
+
+Available flags: \texttt{--dry-run}, \texttt{--out <dir>},
+\texttt{--transactions}, \texttt{--separate-workers}, \texttt{--strimzi},
+\texttt{--connect}, \texttt{--process-id <id>}.
+
+\texttt{--process-id <id>} overrides the process identifier read from the
+BPMN file. This is the name used in topic names, consumer group IDs,
+generated class names, and the \texttt{durga-<id>} consumer group prefix
+for the \texttt{ProcessStateStore}. Pinning the process ID keeps Kafka
+group coordination stable if the BPMN tool regenerates with different
+element identifiers.
+
 \subsection{Local runtime baseline}
 
 The normal local environment consists of:

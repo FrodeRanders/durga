@@ -460,9 +460,11 @@ final class ParsedArgs {
     final boolean separateWorkers;
     final boolean connect;
     final boolean strimzi;
+    final String processIdOverride;
 
     ParsedArgs(String bpmnPath, String outputDir, boolean dryRun, boolean transactions,
-               boolean separateWorkers, boolean connect, boolean strimzi) {
+               boolean separateWorkers, boolean connect, boolean strimzi,
+               String processIdOverride) {
         this.bpmnPath = bpmnPath;
         this.outputDir = outputDir;
         this.dryRun = dryRun;
@@ -470,6 +472,7 @@ final class ParsedArgs {
         this.separateWorkers = separateWorkers;
         this.connect = connect;
         this.strimzi = strimzi;
+        this.processIdOverride = processIdOverride;
     }
 }
 
