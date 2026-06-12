@@ -36,11 +36,26 @@ final class TaskSpec {
     final String id;
     final String name;
     final TaskKind kind;
+    final String pluginRef;
+    final String pluginConfig;
+    final String pluginImplClass;
 
     TaskSpec(String id, String name, TaskKind kind) {
+        this(id, name, kind, null, null, null);
+    }
+
+    TaskSpec(String id, String name, TaskKind kind, String pluginRef, String pluginConfig) {
+        this(id, name, kind, pluginRef, pluginConfig, null);
+    }
+
+    TaskSpec(String id, String name, TaskKind kind, String pluginRef, String pluginConfig,
+             String pluginImplClass) {
         this.id = id;
         this.name = name;
         this.kind = kind;
+        this.pluginRef = pluginRef;
+        this.pluginConfig = pluginConfig;
+        this.pluginImplClass = pluginImplClass;
     }
 }
 
@@ -56,6 +71,7 @@ enum TaskKind {
     SCRIPT("scriptTask"),
     BUSINESS_RULE("businessRuleTask"),
     CALL("callActivity"),
+    PLUGIN("pluginTask"),
     GENERIC("task");
 
     final String bpmnType;

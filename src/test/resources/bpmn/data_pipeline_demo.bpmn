@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  id="Definitions_1"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="data_pipeline_demo" name="Data Pipeline Demo" isExecutable="true">
+
+    <bpmn:startEvent id="StartEvent_1" name="Pipeline Start">
+      <bpmn:outgoing>Flow_to_transform</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="transform_data" name="Transform Data">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="json-transform" />
+          <camunda:property name="pluginConfig" value="name, email, data.amount:total" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_to_transform</bpmn:incoming>
+      <bpmn:outgoing>Flow_transform_to_filter</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="filter_fields" name="Filter Fields">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="field-filter" />
+          <camunda:property name="pluginConfig" value="keep=name,email,total" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_transform_to_filter</bpmn:incoming>
+      <bpmn:outgoing>Flow_filter_to_enrich</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="enrich_data" name="Enrich Data">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="kv-enricher" />
+          <camunda:property name="pluginConfig" value="keyField=email" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_filter_to_enrich</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_end</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_1" name="Pipeline End">
+      <bpmn:incoming>Flow_to_end</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_to_transform" sourceRef="StartEvent_1" targetRef="transform_data" />
+    <bpmn:sequenceFlow id="Flow_transform_to_filter" sourceRef="transform_data" targetRef="filter_fields" />
+    <bpmn:sequenceFlow id="Flow_filter_to_enrich" sourceRef="filter_fields" targetRef="enrich_data" />
+    <bpmn:sequenceFlow id="Flow_to_end" sourceRef="enrich_data" targetRef="EndEvent_1" />
+
+  </bpmn:process>
+
+</bpmn:definitions>

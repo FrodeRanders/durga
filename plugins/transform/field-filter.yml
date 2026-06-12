@@ -1,0 +1,36 @@
+id: field-filter
+name: Field Filter
+version: 1.0.0
+category: transform
+status: stable
+description: >
+  Whitelist or blacklist JSON fields. If `keep` is set, only matching fields
+  are retained. If `drop` is set, matching fields are removed. `keep` wins
+  on conflict.
+
+input:
+  schema:
+    type: object
+    description: JSON payload to filter
+
+output:
+  schema:
+    type: object
+    description: Filtered JSON payload
+
+config:
+  keep:
+    type: string
+    required: false
+    description: Comma-separated field names to retain
+  drop:
+    type: string
+    required: false
+    description: Comma-separated field names to remove
+  flattenPrefix:
+    type: string
+    required: false
+    description: If set, hoist nested fields under this prefix to top level
+
+implementation:
+  class: org.gautelis.durga.plugins.FieldFilter

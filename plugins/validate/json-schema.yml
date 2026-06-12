@@ -1,0 +1,23 @@
+id: json-schema-validator
+name: JSON Schema Validator
+version: 1.0.0
+category: validate
+status: planned
+description: >
+  Validates input payloads against a JSON Schema. Routes valid messages
+  to the normal output channel and invalid messages to a separate invalid
+  channel or dead-letter topic.
+
+config:
+  schema:
+    type: string
+    required: true
+    description: JSON Schema to validate against (inline or file path)
+  onInvalid:
+    type: enum
+    values: [dlq, skip, fail]
+    default: dlq
+  invalidChannel:
+    type: string
+    required: false
+    description: Topic for invalid messages (defaults to %taskId%_invalid)

@@ -35,6 +35,8 @@ import org.camunda.bpm.model.bpmn.instance.TimeDate;
 import org.camunda.bpm.model.bpmn.instance.TimeDuration;
 import org.camunda.bpm.model.bpmn.instance.TimerEventDefinition;
 import org.camunda.bpm.model.bpmn.instance.UserTask;
+import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperties;
+import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperty;
 import org.camunda.bpm.model.xml.instance.ModelElementInstance;
 
 import java.io.File;
@@ -559,7 +561,9 @@ public class BpmnScaffolder {
 
     private static List<TaskSpec> collectTaskSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
         Map<String, TaskSpec> taskSpecs = new LinkedHashMap<>();
-        registerTaskSpecs(model.getModelElementsByType(ServiceTask.class), TaskKind.SERVICE, taskSpecs, nodes);
+
+        PluginRegistry pluginRegistry = loadPluginRegistry();
+
         registerTaskSpecs(model.getModelElementsByType(UserTask.class), TaskKind.USER, taskSpecs, nodes);
         registerTaskSpecs(model.getModelElementsByType(ManualTask.class), TaskKind.MANUAL, taskSpecs, nodes);
         registerTaskSpecs(model.getModelElementsByType(SendTask.class), TaskKind.SEND, taskSpecs, nodes);
@@ -570,8 +574,26 @@ public class BpmnScaffolder {
             String name = normalize(nameOrId(callActivity.getName(), callActivity.getId()));
             taskSpecs.put(callActivity.getId(), new TaskSpec(callActivity.getId(), name, TaskKind.CALL));
         }
+
+        for (ServiceTask task : model.getModelElementsByType(ServiceTask.class)) {
+            if (taskSpecs.containsKey(task.getId())) {
+                continue;
+            }
+            TaskSpec pluginSpec = resolvePluginTask(task, pluginRegistry);
+            if (pluginSpec != null) {
+                String name = normalize(nameOrId(task.getName(), task.getId()));
+                taskSpecs.put(task.getId(), pluginSpec);
+                nodes.put(task.getId(), new NodeInfo(task.getId(), name, NodeType.TASK, TaskKind.PLUGIN));
+            } else {
+                registerTaskSpec(task, TaskKind.SERVICE, taskSpecs, nodes);
+            }
+        }
+
         for (Task task : model.getModelElementsByType(Task.class)) {
             if (taskSpecs.containsKey(task.getId())) {
+                continue;
+            }
+            if (task instanceof ServiceTask) {
                 continue;
             }
             String name = normalize(nameOrId(task.getName(), task.getId()));
@@ -581,6 +603,71 @@ public class BpmnScaffolder {
             nodes.put(task.getId(), new NodeInfo(task.getId(), name, NodeType.TASK, TaskKind.GENERIC));
         }
         return new ArrayList<>(taskSpecs.values());
+    }
+
+    private static PluginRegistry loadPluginRegistry() {
+        Path pluginDir = Path.of("plugins");
+        if (Files.exists(pluginDir)) {
+            try {
+                return PluginRegistry.load(pluginDir);
+            } catch (IOException e) {
+                System.err.println("Warning: failed to load plugin registry: " + e.getMessage());
+            }
+        }
+        java.net.URL catalogUrl = BpmnScaffolder.class.getResource("/plugins/catalog.yml");
+        if (catalogUrl != null) {
+            try {
+                return PluginRegistry.load(catalogUrl);
+            } catch (IOException e) {
+                System.err.println("Warning: failed to load plugin registry from classpath: " + e.getMessage());
+            }
+        }
+        return new PluginRegistry();
+    }
+
+    private static TaskSpec resolvePluginTask(ServiceTask task, PluginRegistry registry) {
+        String pluginId = null;
+        String pluginConfig = null;
+        if (task.getExtensionElements() != null) {
+            CamundaProperties props = task.getExtensionElements()
+                    .getElementsQuery()
+                    .filterByType(CamundaProperties.class)
+                    .singleResult();
+            if (props != null && props.getCamundaProperties() != null) {
+                for (CamundaProperty prop : props.getCamundaProperties()) {
+                    String name = prop.getCamundaName();
+                    String value = prop.getCamundaValue();
+                    if ("plugin".equals(name)) {
+                        pluginId = value;
+                    } else if ("pluginConfig".equals(name)) {
+                        pluginConfig = value;
+                    }
+                }
+            }
+        }
+        if (pluginId == null || pluginId.isBlank()) {
+            return null;
+        }
+        if (!registry.contains(pluginId)) {
+            System.err.println("Warning: plugin '" + pluginId + "' not found in registry for task "
+                    + task.getId() + ", falling back to generic worker");
+            return null;
+        }
+        PluginDescriptor desc = registry.get(pluginId);
+        String name = normalize(nameOrId(task.getName(), task.getId()));
+        return new TaskSpec(task.getId(), name, TaskKind.PLUGIN, pluginId, pluginConfig,
+                desc.implementation.className);
+    }
+
+    private static void registerTaskSpec(
+            Task task,
+            TaskKind kind,
+            Map<String, TaskSpec> taskSpecs,
+            Map<String, NodeInfo> nodes
+    ) {
+        String name = normalize(nameOrId(task.getName(), task.getId()));
+        taskSpecs.put(task.getId(), new TaskSpec(task.getId(), name, kind));
+        nodes.put(task.getId(), new NodeInfo(task.getId(), name, NodeType.TASK, kind));
     }
 
     private static List<TimerSpec> collectTimerSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
@@ -1284,6 +1371,9 @@ public class BpmnScaffolder {
         if (kind == TaskKind.BUSINESS_RULE) {
             return "businessRuleTaskHandlerClass";
         }
+        if (kind == TaskKind.PLUGIN) {
+            return "pluginExecutorClass";
+        }
         return transactions ? "transactionalWorkerClass" : "workerClass";
     }
 
@@ -1296,6 +1386,7 @@ public class BpmnScaffolder {
             case RECEIVE -> "ReceiveTaskService";
             case SCRIPT -> "ScriptTaskService";
             case BUSINESS_RULE -> "BusinessRuleTaskService";
+            case PLUGIN -> "PluginExecutor";
             case SERVICE, GENERIC -> transactions ? "TransactionalWorker" : "WorkerService";
         };
     }

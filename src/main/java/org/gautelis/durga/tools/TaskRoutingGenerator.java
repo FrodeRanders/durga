@@ -45,6 +45,11 @@ final class TaskRoutingGenerator {
             worker.add("processId", processId);
             worker.add("taskId", task.name);
             worker.add("taskType", task.kind.bpmnType);
+            if (task.pluginRef != null) {
+                worker.add("pluginRef", task.pluginRef);
+                worker.add("pluginConfig", task.pluginConfig != null ? task.pluginConfig : ".");
+                worker.add("pluginImplClass", task.pluginImplClass);
+            }
             if (!dryRun) {
                 BpmnScaffolder.writeFile(outputFile, worker.render());
             }

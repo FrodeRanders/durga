@@ -1,0 +1,44 @@
+id: kv-enricher
+name: KV Enricher
+version: 1.0.0
+category: enrich
+status: experimental
+description: >
+  Enriches a JSON payload by looking up a key field value in an inline
+  key-value data store and shallow-merging the result. Future versions
+  will support Kafka-topic-based and HTTP-based enrichment sources.
+
+input:
+  schema:
+    type: object
+    description: JSON payload with a key field to look up
+
+output:
+  schema:
+    type: object
+    description: Enriched JSON payload
+
+config:
+  keyField:
+    type: string
+    required: true
+    description: Dot-notation path to the lookup key field
+  source:
+    type: enum
+    values: [inline, kafka_topic, http]
+    default: inline
+  inlineData:
+    type: object
+    required: false
+    description: Map of key values to enrichment JSON objects (inline mode)
+  mergeStrategy:
+    type: enum
+    values: [shallow, deep, prefix]
+    default: shallow
+  errorStrategy:
+    type: enum
+    values: [skip, dlq, fail]
+    default: skip
+
+implementation:
+  class: org.gautelis.durga.plugins.KvEnricher

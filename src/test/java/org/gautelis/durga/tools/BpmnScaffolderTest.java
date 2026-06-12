@@ -427,4 +427,25 @@ public class BpmnScaffolderTest {
                 process.exitValue()
         );
     }
+
+    @Test
+    public void dryRunIncludesPluginExecutorArtifacts() throws Exception {
+        String output = runDryRun("src/test/resources/bpmn/data_pipeline_demo.bpmn");
+        assertTrue(output.contains("Tasks: [transform_data, filter_fields, enrich_data]"));
+        assertTrue(output.contains("TransformDataPluginExecutor"));
+        assertTrue(output.contains("FilterFieldsPluginExecutor"));
+        assertTrue(output.contains("EnrichDataPluginExecutor"));
+    }
+
+    @Test
+    public void generatedDataPipelineProjectContainsPluginExecutors() throws Exception {
+        Path outputDir = Files.createTempDirectory("durga-pipeline-test-");
+        runGeneration("src/test/resources/bpmn/data_pipeline_demo.bpmn", outputDir);
+        Path transformFile = outputDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/TransformDataPluginExecutor.java");
+        assertTrue(Files.exists(transformFile));
+        String content = Files.readString(transformFile);
+        assertTrue(content.contains("import org.gautelis.durga.plugins.Plugin"));
+        assertTrue(content.contains("plugin.execute(payload"));
+    }
 }

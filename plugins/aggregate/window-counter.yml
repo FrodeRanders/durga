@@ -1,0 +1,31 @@
+id: window-counter
+name: Window Counter
+version: 1.0.0
+category: aggregate
+status: experimental
+description: >
+  Counts messages within a time window and emits a summary record when
+  the window closes. Supports optional grouping by a field value.
+
+input:
+  schema:
+    type: object
+    description: Message to count
+
+output:
+  schema:
+    type: object
+    description: Window summary (emitted on window close)
+
+config:
+  windowSeconds:
+    type: integer
+    required: true
+    description: Window duration in seconds
+  groupBy:
+    type: string
+    required: false
+    description: Dot-notation path to a grouping field
+
+implementation:
+  class: org.gautelis.durga.plugins.WindowCounter

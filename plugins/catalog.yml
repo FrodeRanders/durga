@@ -1,0 +1,26 @@
+plugins:
+  - id: json-transform
+    version: 1.0.0
+    category: transform
+    path: transform/json-transform.yml
+  - id: field-filter
+    version: 1.0.0
+    category: transform
+    path: transform/field-filter.yml
+  - id: json-schema-validator
+    version: 1.0.0
+    category: validate
+    path: validate/json-schema.yml
+    status: planned
+  - id: kv-enricher
+    version: 1.0.0
+    category: enrich
+    path: enrich/kv-enricher.yml
+  - id: field-router
+    version: 1.0.0
+    category: route
+    path: route/field-router.yml
+  - id: window-counter
+    version: 1.0.0
+    category: aggregate
+    path: aggregate/window-counter.yml

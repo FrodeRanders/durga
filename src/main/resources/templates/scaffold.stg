@@ -916,3 +916,88 @@ public class %className% {
     }
 }
 >>
+
+pluginExecutorClass(packageName, className, processId, taskId, taskType, pluginRef, pluginConfig, pluginImplClass) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+import org.gautelis.durga.plugins.Plugin;
+import %pluginImplClass%;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter\<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%processId%_%taskId%_output")
+    Emitter\<String> outputEmitter;
+
+    @Inject
+    @Channel("%processId%_%taskId%_dlq")
+    Emitter\<String> dlqEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    private final Plugin plugin = new %pluginImplClass%();
+
+    @Incoming("%processId%_%taskId%_input")
+    public CompletionStage\<Void> handle(Message\<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+        try {
+            String payload = inputEvent.payload() != null
+                    ? new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
+                    : "{}";
+            String output = plugin.execute(payload, "%pluginConfig%");
+            ProcessEvent outputEvent = new ProcessEvent(
+                    inputEvent.processInstanceId(),
+                    inputEvent.processId(),
+                    "%taskId%",
+                    inputEvent.tokenId(),
+                    inputEvent.correlationId(),
+                    inputEvent.payload(),
+                    ProcessEvent.Status.COMPLETED,
+                    null,
+                    ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                    inputEvent.processVersion(),
+                    inputEvent.businessKey(),
+                    null
+            );
+            outputEmitter.send(outputEvent.toJson());
+            processEventsEmitter.send(outputEvent.toJson());
+        } catch (Exception e) {
+            String error = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
+                    msg.getPayload(), "%pluginRef%", e.getMessage());
+            dlqEmitter.send(error);
+            processEventsEmitter.send(new ProcessEvent(
+                    inputEvent.processInstanceId(),
+                    inputEvent.processId(),
+                    "%taskId%",
+                    inputEvent.tokenId(),
+                    inputEvent.correlationId(),
+                    inputEvent.payload(),
+                    ProcessEvent.Status.FAILED,
+                    new ProcessEvent.ErrorInfo(e.getMessage(), "PLUGIN_FAILED"),
+                    ProcessEvent.EventType.PROCESS_FAILED,
+                    inputEvent.processVersion(),
+                    inputEvent.businessKey(),
+                    null
+            ).toJson());
+        }
+        return msg.ack();
+    }
+}
+>>

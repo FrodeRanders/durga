@@ -1,0 +1,107 @@
+\section{Plugin Architecture}
+\label{sec:PluginArchitecture}
+
+Durga supports a plugin-driven data pipeline model where BPMN \texttt{ServiceTask}
+elements can be annotated with \texttt{camunda:plugin} attributes that resolve to
+registered, governed data processing components.
+
+\subsection{Plugin registry}
+
+Plugins are defined by YAML descriptors under \filepath{plugins/} and indexed by
+\filepath{plugins/catalog.yml}. Each descriptor declares:
+
+\begin{itemize}
+\item \texttt{id} --- unique plugin identifier (used in \texttt{camunda:plugin}),
+\item \texttt{name} / \texttt{version} --- human-readable identifier,
+\item \texttt{category} --- governed taxonomy (transform, validate, enrich, route, aggregate, sink),
+\item \texttt{status} --- lifecycle state (experimental, stable, deprecated, retired),
+\item \texttt{implementation} --- Java class implementing
+\filepath{org.gautelis.durga.plugins.Plugin},
+\item \texttt{config} --- typed configuration schema (field types, defaults, allowed values).
+\end{itemize}
+
+\subsection{Governed categories}
+
+Each plugin category enforces a contract: topic naming, lifecycle events, and error
+channel conventions. The scaffolder validates that generated executors follow the
+category contract.
+
+\begin{longtable}{|>{\raggedright\arraybackslash}p{0.22\textwidth}|>{\raggedright\arraybackslash}p{0.70\textwidth}|}
+\hline
+\rowcolor[gray]{0.9}\textbf{Category} & \textbf{Contract} \\
+\hline
+\textbf{transform} & 1:1 input$\to$output, ACTIVITY\_COMPLETED, dlq on failure \\
+\textbf{validate} & Output + invalid branch, ACTIVITY\_ESCALATED on invalid \\
+\textbf{enrich} & Input$\to$enriched output, may block on external lookup \\
+\textbf{route} & Input$\to$N downstream channels, GATEWAY\_TAKEN lifecycle \\
+\textbf{aggregate} & Windowed counting, ACTIVITY\_ENTERED on window start \\
+\textbf{sink} & Terminal output, no downstream routing \\
+\hline
+\end{longtable}
+
+\subsection{Plugin interface}
+
+All plugins implement \filepath{org.gautelis.durga.plugins.Plugin}:
+
+\begin{quote}
+\shellcmd{String execute(String payload, String config) throws Exception}
+\end{quote}
+
+Generated executor classes instantiate the plugin at field level and call
+\texttt{plugin.execute(payload, config)} for each message. The config string
+comes from the BPMN \texttt{camunda:pluginConfig} property.
+
+\subsection{Reference implementations}
+
+The repository ships with five reference plugins that form the initial
+standard library:
+
+\begin{description}
+\item[JSON Transform] Dot-notation field remapping.
+\item[Field Filter] Whitelist/blacklist with flatten.
+\item[KV Enricher] Inline key-value lookup and merge.
+\item[Field Router] Value-based routing to named channels.
+\item[Window Counter] Time-window counting with grouping.
+\end{description}
+
+\subsection{BPMN binding}
+
+Plugin-annotated tasks use Camunda extension properties on \texttt{ServiceTask}
+elements:
+
+\begin{verbatim}
+<bpmn:serviceTask id="transform" name="Transform Data">
+  <bpmn:extensionElements>
+    <camunda:properties>
+      <camunda:property name="plugin" value="json-transform" />
+      <camunda:property name="pluginConfig" value="name, email" />
+    </camunda:properties>
+  </bpmn:extensionElements>
+</bpmn:serviceTask>
+\end{verbatim}
+
+Without a \texttt{camunda:plugin} attribute, \texttt{ServiceTask} elements fall
+back to the existing generic worker generation.
+
+\subsection{Generated executor}
+
+The scaffolder resolves the plugin descriptor, validates it against the registry,
+and generates a concrete executor class using the \texttt{pluginExecutorClass}
+template. The executor:
+
+\begin{itemize}
+\item imports the plugin implementation class and the \texttt{Plugin} interface,
+\item instantiates the plugin as a private field,
+\item delegates each incoming message to \texttt{plugin.execute()},
+\item emits \texttt{ACTIVITY\_COMPLETED} on success,
+\item routes failures to a dead-letter topic (\texttt{\%task\%\_dlq}) with structured error records,
+\item respects \texttt{ScopeCancellationRegistry} for interrupting boundary support.
+\end{itemize}
+
+\subsection{Current limitations}
+
+\begin{itemize}
+\item Plugin descriptors are read from the filesystem or classpath at scaffold time --- there is no runtime plugin discovery or hot-reload.
+\item Config validation at scaffold time is not yet implemented --- invalid configs are caught at runtime by the generated executor.
+\item The plugin catalog must be maintained manually; there is no registry publishing or version-resolution tooling.
+\end{itemize}

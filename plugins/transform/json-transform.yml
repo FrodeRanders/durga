@@ -1,0 +1,35 @@
+id: json-transform
+name: JSON Transform
+version: 1.0.0
+category: transform
+status: stable
+description: >
+  Applies dot-notation field remapping to transform one JSON structure
+  into another. Supports field copying, field renaming (via colon syntax),
+  and literal value injection.
+
+input:
+  schema:
+    type: object
+    description: JSON payload to transform
+
+output:
+  schema:
+    type: object
+    description: Transformed JSON payload
+
+config:
+  expression:
+    type: string
+    required: true
+    description: >
+      Comma-separated field mappings. Syntax: field1, field2:dest2, name:literalValue.
+      Fields not mentioned are dropped. Use "." to passthrough unchanged.
+    default: "."
+  errorStrategy:
+    type: enum
+    values: [skip, dlq, fail]
+    default: dlq
+
+implementation:
+  class: org.gautelis.durga.plugins.JsonTransform

@@ -1,0 +1,35 @@
+id: field-router
+name: Field Router
+version: 1.0.0
+category: route
+status: experimental
+description: >
+  Routes messages to named output channels based on a field value.
+  Maps field values to downstream topic suffixes.
+
+input:
+  schema:
+    type: object
+    description: JSON payload with a routing field
+
+output:
+  schema:
+    type: string
+    description: Route key (channel suffix)
+
+config:
+  field:
+    type: string
+    required: true
+    description: Dot-notation path to the routing field
+  routes:
+    type: object
+    required: true
+    description: Map of field values to channel names
+  defaultRoute:
+    type: string
+    required: true
+    description: Fallback channel when no route matches
+
+implementation:
+  class: org.gautelis.durga.plugins.DeadLetterRouter
