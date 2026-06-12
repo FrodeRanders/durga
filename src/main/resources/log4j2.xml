@@ -2,7 +2,7 @@
 <Configuration state="WARN">
 
     <Properties>
-        <Property name="log-path">target</Property>
+        <Property name="log-path">${sys:log-path:-target}</Property>
     </Properties>
 
     <!-- Appenders (writing to file in various ways) -->
