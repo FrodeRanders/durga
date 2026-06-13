@@ -36,8 +36,9 @@ Output lands in `generated/` by default:
 
 Flags:
 
-- `--dry-run` — print `summary.json`, `topics.sh`, and YAML without writing files
+- `--dry-run` — print `summary.json`, `topics.sh`, connect configs, and application YAML without writing files
 - `--out <dir>` — custom output directory
+- `--connect` — generate Kafka Connect source/sink connector configs and a deployment script under `connect/`
 - `--transactions` — generate transactional workers using Kafka producer/consumer APIs
 
 The generator skips existing files in `src/main/java/`, merges new channels into
@@ -73,7 +74,10 @@ java -jar target/durga-1.0-SNAPSHOT.jar src/test/resources/bpmn/<model>.bpmn
 | `invoice_event_subprocess_interrupting_message.bpmn` | Interrupting message-start event subprocess |
 | `invoice_event_subprocess_timer.bpmn` | Timer-start event subprocess |
 | `invoice_event_subprocess_error.bpmn` | Error-start event subprocess |
-| `invoice_event_subprocess_escalation.bpmn` | Escalation-start event subprocess |
+| `data_pipeline_demo.bpmn` | Plugin-annotated pipeline (json-transform, field-filter, kv-enricher) |
+| `order_events_pipeline.bpmn` | 8-plugin order pipeline with XOR gateway; use `--connect` for source/sink |
+| `log_processing_pipeline.bpmn` | Regex, template, flatten, validate, mask; use `--connect` |
+| `custom_activity_demo.bpmn` | Custom activity with contract interface + delegating worker |
 
 ## Monitoring
 

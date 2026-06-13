@@ -488,4 +488,123 @@ public class BpmnScaffolderTest {
         assertTrue(content.contains("import org.gautelis.durga.plugins.Plugin"));
         assertTrue(content.contains("plugin.execute(payload"));
     }
+
+    @Test
+    public void dryRunIncludesConnectArtifacts() throws Exception {
+        System.out.println("TC: dry-run with --connect shows source and sink configs with populated topic lists");
+        String output = runDryRunWithConnect("src/test/resources/bpmn/order_events_pipeline.bpmn");
+        assertTrue("connect-source.json missing", output.contains("connect-source.json"));
+        assertTrue("connect-sink.json missing", output.contains("connect-sink.json"));
+        assertTrue("source topics not populated", output.contains("order_events_pipeline_start"));
+        assertTrue("sink topics not populated", output.contains("process-events"));
+        assertTrue("connector class placeholder missing", output.contains("<fill in connector class>"));
+    }
+
+    @Test
+    public void generationWritesConnectFiles() throws Exception {
+        System.out.println("TC: --connect generates source/sink configs and deploy script with correct topic lists");
+        Path outputDir = Files.createTempDirectory("durga-connect-test-");
+        runGenerationWithConnect("src/test/resources/bpmn/order_events_pipeline.bpmn", outputDir);
+
+        Path sourceJson = outputDir.resolve("connect/connect-source.json");
+        Path sinkJson = outputDir.resolve("connect/connect-sink.json");
+        Path connectScript = outputDir.resolve("connect.sh");
+
+        assertTrue("connect-source.json not created", Files.exists(sourceJson));
+        assertTrue("connect-sink.json not created", Files.exists(sinkJson));
+        assertTrue("connect.sh not created", Files.exists(connectScript));
+
+        String sourceContent = Files.readString(sourceJson);
+        assertTrue("source missing start topic", sourceContent.contains("order_events_pipeline_start"));
+        assertTrue("source missing connector.class", sourceContent.contains("connector.class"));
+
+        String sinkContent = Files.readString(sinkJson);
+        assertTrue("sink missing process-events", sinkContent.contains("process-events"));
+        assertTrue("sink missing terminal output topic",
+                sinkContent.contains("order_events_pipeline_normalize_timestamp_output")
+                || sinkContent.contains("order_events_pipeline_mask_pii_low_value_output"));
+        assertTrue("sink missing connector.class", sinkContent.contains("connector.class"));
+    }
+
+    @Test
+    public void generationWritesDataPipelineProject() throws Exception {
+        System.out.println("TC: order events pipeline generates workers for all 8 plugin-annotated tasks");
+        Path outputDir = Files.createTempDirectory("durga-order-pipeline-");
+        runGeneration("src/test/resources/bpmn/order_events_pipeline.bpmn", outputDir);
+
+        assertTrue(Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/NormalizeOrderPluginExecutor.java")));
+        assertTrue(Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/CoerceTypesPluginExecutor.java")));
+        assertTrue(Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/EnrichHighValuePluginExecutor.java")));
+        assertTrue(Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/XorRouteByAmountService.java")));
+
+        Path xorFile = outputDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/XorRouteByAmountService.java");
+        String xorContent = Files.readString(xorFile);
+        assertTrue("XOR missing amount > 1000 condition",
+                xorContent.contains("amount > 1000") || xorContent.contains("> 1000"));
+    }
+
+    @Test
+    public void generationWritesLogProcessingProject() throws Exception {
+        System.out.println("TC: log processing pipeline generates workers for all plugin types");
+        Path outputDir = Files.createTempDirectory("durga-log-pipeline-");
+        runGeneration("src/test/resources/bpmn/log_processing_pipeline.bpmn", outputDir);
+
+        assertTrue(Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/ExtractLogFieldsPluginExecutor.java")));
+        assertTrue(Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/CoerceLogTypesPluginExecutor.java")));
+        assertTrue(Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/FormatMessagePluginExecutor.java")));
+        assertTrue(Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/FlattenForIndexPluginExecutor.java")));
+        assertTrue(Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/MaskIpAddressPluginExecutor.java")));
+    }
+
+    private static String runDryRunWithConnect(String relativeBpmnPath) throws Exception {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        PrintStream captureStream = new PrintStream(captured, true, StandardCharsets.UTF_8);
+        try {
+            System.setOut(captureStream);
+            System.setErr(captureStream);
+            BpmnScaffolder.main(new String[]{
+                    "--dry-run",
+                    "--connect",
+                    Path.of(relativeBpmnPath).toAbsolutePath().toString()
+            });
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+            captureStream.close();
+        }
+        return captured.toString(StandardCharsets.UTF_8);
+    }
+
+    private static void runGenerationWithConnect(String relativeBpmnPath, Path outputDir) throws Exception {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        PrintStream captureStream = new PrintStream(captured, true, StandardCharsets.UTF_8);
+        try {
+            System.setOut(captureStream);
+            System.setErr(captureStream);
+            BpmnScaffolder.main(new String[]{
+                    Path.of(relativeBpmnPath).toAbsolutePath().toString(),
+                    "--out",
+                    outputDir.toAbsolutePath().toString(),
+                    "--connect"
+            });
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+            captureStream.close();
+        }
+    }
 }

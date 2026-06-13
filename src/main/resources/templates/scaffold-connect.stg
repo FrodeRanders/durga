@@ -1,23 +1,24 @@
-connectSourceConfig(processId, intakeTopic, messageTopics) ::= <<
+connectSourceConfig(processId, sourceTopics) ::= <<
 {
   "name": "%processId%-source",
   "config": {
-    "connector.class": "",
+    "connector.class": "<fill in connector class>",
     "tasks.max": "1",
-    "_comment": "Fill in connector.class and connector-specific config."
-  }
+    "topics": "%sourceTopics%"
+  },
+  "_comment": "Fill in connector.class and provider-specific config (connection.url, table.whitelist, etc.). The topics field lists the Kafka topics this source writes to."
 }
 >>
 
-connectSinkConfig(processId, outputTopics, externalTopics) ::= <<
+connectSinkConfig(processId, sinkTopics) ::= <<
 {
   "name": "%processId%-sink",
   "config": {
-    "connector.class": "",
+    "connector.class": "<fill in connector class>",
     "tasks.max": "1",
-    "topics": "process-events",
-    "_comment": "Fill in connector.class and connector-specific config."
-  }
+    "topics": "%sinkTopics%"
+  },
+  "_comment": "Fill in connector.class and provider-specific config (connection.url, s3.bucket.name, etc.). The topics field lists the Kafka topics this sink reads from."
 }
 >>
 
@@ -25,20 +26,38 @@ connectScript(processId) ::= <<
 #!/usr/bin/env bash
 set -euo pipefail
 CONNECT_URL=${CONNECT_URL:-http://localhost:8083}
+
 echo "===> Posting source connector for %processId%"
-curl -s -X POST -H "Content-Type: application/json" \
+HTTP_CODE=$(curl -s -o /dev/null -w "\%{http_code}" -X POST \
+  -H "Content-Type: application/json" \
   -d @connect/connect-source.json \
-  "${CONNECT_URL}/connectors" || echo "(already exists?)"
-echo ""
+  "${CONNECT_URL}/connectors" || true)
+if [ "$HTTP_CODE" = "201" ]; then
+  echo "  Created"
+elif [ "$HTTP_CODE" = "409" ]; then
+  echo "  Already exists (HTTP 409)"
+else
+  echo "  Unexpected response: HTTP ${HTTP_CODE}"
+fi
+
 echo "===> Posting sink connector for %processId%"
-curl -s -X POST -H "Content-Type: application/json" \
+HTTP_CODE=$(curl -s -o /dev/null -w "\%{http_code}" -X POST \
+  -H "Content-Type: application/json" \
   -d @connect/connect-sink.json \
-  "${CONNECT_URL}/connectors" || echo "(already exists?)"
+  "${CONNECT_URL}/connectors" || true)
+if [ "$HTTP_CODE" = "201" ]; then
+  echo "  Created"
+elif [ "$HTTP_CODE" = "409" ]; then
+  echo "  Already exists (HTTP 409)"
+else
+  echo "  Unexpected response: HTTP ${HTTP_CODE}"
+fi
+
+echo "===> Source connector status"
+curl -s "${CONNECT_URL}/connectors/%processId%-source/status" | python3 -m json.tool 2>/dev/null || true
 echo ""
-echo "===> Connector status"
-curl -s "${CONNECT_URL}/connectors/%processId%-source/status"
-echo ""
-curl -s "${CONNECT_URL}/connectors/%processId%-sink/status"
+echo "===> Sink connector status"
+curl -s "${CONNECT_URL}/connectors/%processId%-sink/status" | python3 -m json.tool 2>/dev/null || true
 >>
 
 kedaScalers(processId, tasks) ::= <<

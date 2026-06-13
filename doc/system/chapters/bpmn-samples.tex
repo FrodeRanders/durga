@@ -80,6 +80,18 @@ Embedded event subprocess with error start. Demonstrates start-on-failure semant
 \filepath{invoice_event_subprocess_escalation.bpmn} &
 Embedded event subprocess with escalation start. Demonstrates start-on-escalation semantics within a subprocess scope. \\
 \hline
+\filepath{data_pipeline_demo.bpmn} &
+Minimal data pipeline with three plugin-annotated tasks: JSON Transform, Field Filter, and KV Enricher. The simplest plugin catalog example. \\
+\hline
+\filepath{order_events_pipeline.bpmn} &
+Realistic order event pipeline with 8 plugin tasks (transform, coerce, filter, enrich, validate, UUID-inject, timestamp-normalize, PII-mask) and an XOR gateway routing by amount using runtime-evaluated conditions. Designed to be used with \texttt{--connect} for source/sink generation. \\
+\hline
+\filepath{log_processing_pipeline.bpmn} &
+Log processing pipeline demonstrating regex extraction, type coercion, string templating, JSON flattening, schema validation, and PII masking in a single linear flow. Also designed for \texttt{--connect} source/sink integration. \\
+\hline
+\filepath{custom_activity_demo.bpmn} &
+Custom activity round-trip example. A ServiceTask annotated with \texttt{camunda:plugin="custom"} triggers contract interface generation and delegating worker creation for hand-written implementations. \\
+\hline
 \end{longtable}
 
 Taken together, the sample set functions as a compact executable coverage matrix. When a new BPMN function

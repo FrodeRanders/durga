@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Definitions_1"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <!--
+    Log Processing Pipeline — demonstrates regex-extract, string-template, and
+    json-flatten plugins along with Kafka Connect integration.
+
+    Source (file/syslog) → Regex extract → Template → Flatten → Sink (Elasticsearch)
+  -->
+
+  <bpmn:process id="log_processing_pipeline" name="Log Processing Pipeline" isExecutable="true">
+
+    <bpmn:startEvent id="StartEvent_1" name="Ingest logs">
+      <bpmn:outgoing>Flow_to_regex</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="extract_fields" name="Extract Log Fields">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="regex-extract" />
+          <camunda:property name="pluginConfig" value="source=raw;pattern=(?&lt;ip&gt;\d+\.\d+\.\d+\.\d+)\s+\S+\s+\S+\s+\[(?&lt;timestamp&gt;[^\]]+)\]\s+&quot;(?&lt;method&gt;\w+)\s+(?&lt;path&gt;[^\s]+)[^&quot;]*&quot;\s+(?&lt;status&gt;\d+)\s+(?&lt;bytes&gt;\d+);target=parsed" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_to_regex</bpmn:incoming>
+      <bpmn:outgoing>Flow_regex_to_coerce</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="coerce_log_types" name="Coerce Log Types">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="type-coercer" />
+          <camunda:property name="pluginConfig" value="parsed.status:int, parsed.bytes:int" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_regex_to_coerce</bpmn:incoming>
+      <bpmn:outgoing>Flow_coerce_to_template</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="format_message" name="Format Message">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="string-template" />
+          <camunda:property name="pluginConfig" value="template=${parsed.method} ${parsed.path} returned ${parsed.status} (${parsed.bytes} bytes) from ${parsed.ip}" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_coerce_to_template</bpmn:incoming>
+      <bpmn:outgoing>Flow_template_to_flatten</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="flatten_for_index" name="Flatten for Index">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="json-flatten" />
+          <camunda:property name="pluginConfig" value="direction=flatten;separator=.;maxDepth=2" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_template_to_flatten</bpmn:incoming>
+      <bpmn:outgoing>Flow_flatten_to_validate</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="validate_log" name="Validate Log Record">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="json-schema-validator" />
+          <camunda:property name="pluginConfig" value="required=parsed.ip,parsed.timestamp,parsed.method,parsed.path,parsed.status" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_flatten_to_validate</bpmn:incoming>
+      <bpmn:outgoing>Flow_validate_to_mask</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="mask_ip" name="Mask IP Address">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="pii-mask" />
+          <camunda:property name="pluginConfig" value="fields=parsed.ip;mask=#;preserve=0" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_validate_to_mask</bpmn:incoming>
+      <bpmn:outgoing>Flow_mask_to_end</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_1" name="Sink to search index">
+      <bpmn:incoming>Flow_mask_to_end</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_to_regex" sourceRef="StartEvent_1" targetRef="extract_fields" />
+    <bpmn:sequenceFlow id="Flow_regex_to_coerce" sourceRef="extract_fields" targetRef="coerce_log_types" />
+    <bpmn:sequenceFlow id="Flow_coerce_to_template" sourceRef="coerce_log_types" targetRef="format_message" />
+    <bpmn:sequenceFlow id="Flow_template_to_flatten" sourceRef="format_message" targetRef="flatten_for_index" />
+    <bpmn:sequenceFlow id="Flow_flatten_to_validate" sourceRef="flatten_for_index" targetRef="validate_log" />
+    <bpmn:sequenceFlow id="Flow_validate_to_mask" sourceRef="validate_log" targetRef="mask_ip" />
+    <bpmn:sequenceFlow id="Flow_mask_to_end" sourceRef="mask_ip" targetRef="EndEvent_1" />
+
+  </bpmn:process>
+
+</bpmn:definitions>

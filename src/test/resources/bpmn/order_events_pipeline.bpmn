@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Definitions_1"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <!--
+    Order Events Pipeline — a realistic data pipeline mixing plugins, gateways,
+    and Kafka Connect source/sink. Demonstrates the full Durga model:
+
+    Source (JDBC) → Transform → Coerce → Route by value → Enrich + Validate → Sinks (S3, warehouse)
+  -->
+
+  <bpmn:process id="order_events_pipeline" name="Order Events Pipeline" isExecutable="true">
+
+    <bpmn:startEvent id="StartEvent_1" name="Ingest from source">
+      <bpmn:outgoing>Flow_to_normalize</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="normalize_order" name="Normalize Order">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="json-transform" />
+          <camunda:property name="pluginConfig" value="id:order_id, customer.name, customer.email, items, total:amount, status, created_at:timestamp" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_to_normalize</bpmn:incoming>
+      <bpmn:outgoing>Flow_normalize_to_coerce</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="coerce_types" name="Coerce Types">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="type-coercer" />
+          <camunda:property name="pluginConfig" value="amount:double, order_id:int" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_normalize_to_coerce</bpmn:incoming>
+      <bpmn:outgoing>Flow_coerce_to_filter</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="filter_fields" name="Filter Fields">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="field-filter" />
+          <camunda:property name="pluginConfig" value="keep=order_id,customer_name,customer_email,items,amount,status,timestamp" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_coerce_to_filter</bpmn:incoming>
+      <bpmn:outgoing>Flow_filter_to_route</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="route_by_amount" name="Route by Amount">
+      <bpmn:incoming>Flow_filter_to_route</bpmn:incoming>
+      <bpmn:outgoing>Flow_high_value</bpmn:outgoing>
+      <bpmn:outgoing>Flow_low_value</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="enrich_high_value" name="Enrich High Value">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="kv-enricher" />
+          <camunda:property name="pluginConfig" value="keyField=customer_email" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_high_value</bpmn:incoming>
+      <bpmn:outgoing>Flow_high_enrich_to_validate</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="validate_high_value" name="Validate High Value">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="json-schema-validator" />
+          <camunda:property name="pluginConfig" value="required=order_id,amount,customer_email" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_high_enrich_to_validate</bpmn:incoming>
+      <bpmn:outgoing>Flow_high_validate_to_inject</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="inject_trace_id" name="Inject Trace ID">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="uuid-inject" />
+          <camunda:property name="pluginConfig" value="fields=trace_id;strategy=uuid4" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_high_validate_to_inject</bpmn:incoming>
+      <bpmn:outgoing>Flow_inject_to_normalize_ts</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="normalize_timestamp" name="Normalize Timestamp">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="timestamp-normalize" />
+          <camunda:property name="pluginConfig" value="fields=timestamp;from=epoch_ms;to=ISO8601" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_inject_to_normalize_ts</bpmn:incoming>
+      <bpmn:outgoing>Flow_normalize_to_high_end</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_High" name="Sink to warehouse">
+      <bpmn:incoming>Flow_normalize_to_high_end</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:serviceTask id="mask_pii_low_value" name="Mask PII (Low Value)">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="pii-mask" />
+          <camunda:property name="pluginConfig" value="fields=customer_email;mask=*;preserve=2" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_low_value</bpmn:incoming>
+      <bpmn:outgoing>Flow_mask_to_low_end</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_Low" name="Sink to data lake">
+      <bpmn:incoming>Flow_mask_to_low_end</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_to_normalize" sourceRef="StartEvent_1" targetRef="normalize_order" />
+    <bpmn:sequenceFlow id="Flow_normalize_to_coerce" sourceRef="normalize_order" targetRef="coerce_types" />
+    <bpmn:sequenceFlow id="Flow_coerce_to_filter" sourceRef="coerce_types" targetRef="filter_fields" />
+    <bpmn:sequenceFlow id="Flow_filter_to_route" sourceRef="filter_fields" targetRef="route_by_amount" />
+    <bpmn:sequenceFlow id="Flow_high_value" sourceRef="route_by_amount" targetRef="enrich_high_value">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount > 1000}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_low_value" sourceRef="route_by_amount" targetRef="mask_pii_low_value">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &lt;= 1000}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_high_enrich_to_validate" sourceRef="enrich_high_value" targetRef="validate_high_value" />
+    <bpmn:sequenceFlow id="Flow_high_validate_to_inject" sourceRef="validate_high_value" targetRef="inject_trace_id" />
+    <bpmn:sequenceFlow id="Flow_inject_to_normalize_ts" sourceRef="inject_trace_id" targetRef="normalize_timestamp" />
+    <bpmn:sequenceFlow id="Flow_normalize_to_high_end" sourceRef="normalize_timestamp" targetRef="EndEvent_High" />
+    <bpmn:sequenceFlow id="Flow_mask_to_low_end" sourceRef="mask_pii_low_value" targetRef="EndEvent_Low" />
+
+  </bpmn:process>
+
+</bpmn:definitions>

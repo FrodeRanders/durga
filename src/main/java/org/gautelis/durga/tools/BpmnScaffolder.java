@@ -445,37 +445,65 @@ public class BpmnScaffolder {
             }
         }
 
-        if (parsed.connect && !parsed.dryRun) {
-            Path connectDir = outputRoot.resolve("connect");
-            try {
-                Files.createDirectories(connectDir);
-            } catch (IOException e) {
-                throw new IllegalStateException("Failed to create connect directory", e);
-            }
-
+        if (parsed.connect) {
             List<String> outputTopics = collectTerminalOutputs(nodes);
 
-            ST sourceSt = group.getInstanceOf("connectSourceConfig");
-            sourceSt.add("processId", processId);
-            sourceSt.add("intakeTopic", !tasks.isEmpty());
-            sourceSt.add("messageTopics", messageTopics);
-            Path sourcePath = connectDir.resolve("connect-source.json");
-            writeFile(sourcePath, sourceSt.render());
-            generatedFiles.add(outputRoot.relativize(sourcePath).toString());
+            StringBuilder sourceTopics = new StringBuilder();
+            sourceTopics.append(processId).append("_start");
+            if (!messageTopics.isEmpty()) {
+                sourceTopics.append(", ");
+                sourceTopics.append(String.join(", ", messageTopics));
+            }
 
-            ST sinkSt = group.getInstanceOf("connectSinkConfig");
-            sinkSt.add("processId", processId);
-            sinkSt.add("outputTopics", outputTopics);
-            sinkSt.add("externalTopics", messageTopics);
-            Path sinkPath = connectDir.resolve("connect-sink.json");
-            writeFile(sinkPath, sinkSt.render());
-            generatedFiles.add(outputRoot.relativize(sinkPath).toString());
+            StringBuilder sinkTopics = new StringBuilder();
+            sinkTopics.append("process-events");
+            for (String topic : outputTopics) {
+                sinkTopics.append(", ").append(processId).append("_").append(topic).append("_output");
+            }
+            for (String topic : messageTopics) {
+                sinkTopics.append(", ").append(topic);
+            }
 
-            Path connectScriptPath = outputRoot.resolve("connect.sh");
-            ST scriptSt = group.getInstanceOf("connectScript");
-            scriptSt.add("processId", processId);
-            writeFile(connectScriptPath, scriptSt.render());
-            generatedFiles.add(outputRoot.relativize(connectScriptPath).toString());
+            if (parsed.dryRun) {
+                ST sourceSt = group.getInstanceOf("connectSourceConfig");
+                sourceSt.add("processId", processId);
+                sourceSt.add("sourceTopics", sourceTopics.toString());
+                System.out.println("--- connect-source.json ---");
+                System.out.println(sourceSt.render());
+
+                ST sinkSt = group.getInstanceOf("connectSinkConfig");
+                sinkSt.add("processId", processId);
+                sinkSt.add("sinkTopics", sinkTopics.toString());
+                System.out.println("--- connect-sink.json ---");
+                System.out.println(sinkSt.render());
+            } else {
+                Path connectDir = outputRoot.resolve("connect");
+                try {
+                    Files.createDirectories(connectDir);
+                } catch (IOException e) {
+                    throw new IllegalStateException("Failed to create connect directory", e);
+                }
+
+                ST sourceSt = group.getInstanceOf("connectSourceConfig");
+                sourceSt.add("processId", processId);
+                sourceSt.add("sourceTopics", sourceTopics.toString());
+                Path sourcePath = connectDir.resolve("connect-source.json");
+                writeFile(sourcePath, sourceSt.render());
+                generatedFiles.add(outputRoot.relativize(sourcePath).toString());
+
+                ST sinkSt = group.getInstanceOf("connectSinkConfig");
+                sinkSt.add("processId", processId);
+                sinkSt.add("sinkTopics", sinkTopics.toString());
+                Path sinkPath = connectDir.resolve("connect-sink.json");
+                writeFile(sinkPath, sinkSt.render());
+                generatedFiles.add(outputRoot.relativize(sinkPath).toString());
+
+                Path connectScriptPath = outputRoot.resolve("connect.sh");
+                ST scriptSt = group.getInstanceOf("connectScript");
+                scriptSt.add("processId", processId);
+                writeFile(connectScriptPath, scriptSt.render());
+                generatedFiles.add(outputRoot.relativize(connectScriptPath).toString());
+            }
         }
 
         List<String> boundaryEvents = combineNames(combineNames(boundaryTimers, boundaryErrors), boundaryEscalations);
