@@ -1,0 +1,27 @@
+id: string-template
+name: String Template
+version: 1.0.0
+category: transform
+status: stable
+description: >
+  Renders a template string with ${field} substitution from payload fields.
+  Supports dot-notation for nested field access.
+
+input:
+  schema:
+    type: object
+    description: JSON payload with source fields
+
+output:
+  schema:
+    type: string
+    description: Rendered template string
+
+config:
+  template:
+    type: string
+    required: true
+    description: Template string with ${field} tokens
+
+implementation:
+  class: org.gautelis.durga.plugins.StringTemplate

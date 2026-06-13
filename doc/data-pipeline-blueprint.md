@@ -42,9 +42,10 @@ id: json-transform
 name: JSON Transform
 version: 1.0.0
 category: transform
+status: stable
 description: |
-  Applies a JQ-like transformation to the input payload. The transform
-  expression is evaluated against each incoming message.
+  Applies dot-notation field remapping to transform one JSON structure
+  into another.
 
 input:
   schema:
@@ -60,13 +61,16 @@ config:
   expression:
     type: string
     required: true
-    description: JQ-style expression (e.g. '.data | {name: .name, total: .amount}')
+    description: Comma-separated field mappings with optional colon-syntax remapping
     default: "."
   errorStrategy:
     type: enum
     values: [skip, dlq, fail]
     default: dlq
     description: How to handle transformation errors
+
+implementation:
+  class: org.gautelis.durga.plugins.JsonTransform
 ```
 
 ### 2.2 Registry structure
@@ -77,21 +81,24 @@ plugins/
 ├── transform/
 │   ├── json-transform.yml
 │   ├── field-filter.yml
-│   └── type-cast.yml
+│   ├── type-coercer.yml
+│   ├── string-template.yml
+│   ├── pii-mask.yml
+│   ├── regex-extract.yml
+│   ├── json-flatten.yml
+│   ├── uuid-inject.yml
+│   └── timestamp-normalize.yml
 ├── validate/
-│   ├── json-schema.yml
-│   └── field-required.yml
+│   └── json-schema.yml
 ├── enrich/
-│   ├── kv-lookup.yml
-│   └── http-enrich.yml
+│   └── kv-enricher.yml
 ├── route/
-│   ├── field-router.yml
-│   └── weighted-split.yml
+│   └── field-router.yml
 ├── aggregate/
-│   └── window-count.yml
-└── sink/
-    ├── kafka-sink.yml
-    └── dead-letter.yml
+│   └── window-counter.yml
+└── connect/
+    ├── source.yml
+    └── sink.yml
 ```
 
 The catalog is a flat index for tooling and validation:
@@ -231,72 +238,55 @@ descriptor at scaffold time. No per-plugin code paths are needed in the template
 
 ---
 
-## 6. Task Implementation Plan
+## 6. Plugin Catalog
 
-The following plugins should be implemented as reference implementations
-and test harnesses for the plugin architecture.
+The following plugins are implemented and distributed with Durga. All are stable
+except where noted.
 
-### 6.1 JSON Transform (category: transform)
+### 6.1 Transform plugins
 
-Applies a template expression to transform one JSON structure into another.
+| Plugin | Config | Description |
+|--------|--------|-------------|
+| `json-transform` | `name, email, data.amount:total, status:active` | Dot-notation field remapping with colon-syntax renaming and literal injection. Fields not mentioned are dropped. `.` for identity passthrough. |
+| `field-filter` | `keep=name,email;drop=ssn` | Whitelist or blacklist field filtering. If both specified, `keep` wins. Supports optional `flatten=prefix` for hoisting nested fields. |
+| `type-coercer` | `amount:double, age:int, flag:boolean` | Coerces field values to string, int, long, double, decimal, or boolean. Boolean coercion accepts `true`/`false`/`1`/`0`/`yes`/`no`. |
+| `string-template` | `template=Order ${id} for ${customer.name}` | Renders a template string with `${field}` substitution. Dot-notation access for nested fields. Missing fields become empty string. |
+| `pii-mask` | `fields=ssn,email;mask=*;preserve=3` | Masks sensitive text fields. Configurable mask character and boundary character count to preserve. Supports nested fields via dot-notation. |
+| `regex-extract` | `source=log;pattern=(?<ip>...);target=parsed` | Extracts named capture groups from a source field into the payload. Optional target path for storage. Supports `all=true` for multiple matches. |
+| `json-flatten` | `direction=flatten;separator=.;maxDepth=3` | Flattens nested JSON to dot-notation keys or unflattens dot-notation back to nested objects. Configurable separator and max depth. |
+| `uuid-inject` | `fields=id,correlation_id;strategy=uuid4` | Injects UUIDs into fields. `uuid4` for random, `uuid1` for time-based. Creates intermediate objects for nested paths. |
+| `timestamp-normalize` | `fields=created_at;from=epoch_ms;to=ISO8601;zone=UTC` | Converts between epoch_s, epoch_ms, ISO8601, RFC3339, and custom DateTimeFormatter patterns. Configurable timezone and `removeOnError` option. |
 
-**Config:**
-- `expression` (string, required) — template expression
-- `engine` (enum: `jq`, `jsonpath`, `handlebars`, default: `jq`)
-- `errorStrategy` (enum, default: `dlq`)
+### 6.2 Validate plugins
 
-**Implementation strategy:** Use a simple key-remapping approach with dot-notation
-paths, avoiding external dependencies on JQ or Handlebars for now. The expression
-format uses dot-notation for field access and simple template strings.
+| Plugin | Config | Description |
+|--------|--------|-------------|
+| `json-schema-validator` | `schema={"type":"object",...};onInvalid=dlq` | Validates payloads against a JSON Schema subset. Routes invalid messages to DLQ, skipped, or fails the process. Status: experimental. |
 
-### 6.2 Field Filter (category: transform)
+### 6.3 Enrich plugins
 
-Keeps or drops specific fields from the input payload.
+| Plugin | Config | Description |
+|--------|--------|-------------|
+| `kv-enricher` | `keyField=email` | Looks up a key field value in an inline data map and shallow-merges the enrichment data into the payload. Status: experimental. |
 
-**Config:**
-- `keep` (list of strings) — fields to retain (whitelist)
-- `drop` (list of strings) — fields to remove (blacklist)
-- If both are empty, passthrough; if both are set, `keep` wins.
+### 6.4 Route plugins
 
-### 6.3 JSON Schema Validator (category: validate)
+| Plugin | Config | Description |
+|--------|--------|-------------|
+| `field-router` | `field=status;routes={ok:success,err:fail};default=other` | Routes messages to named output channels based on a field value. Status: experimental. |
 
-Validates input payloads against a JSON Schema and routes valid/invalid to
-separate output channels.
+### 6.5 Aggregate plugins
 
-**Config:**
-- `schema` (string, required) — inline JSON Schema or `schemaFile` path
-- `onInvalid` (enum: `dlq`, `skip`, `fail`, default: `dlq`)
-- `invalidChannel` (string) — topic for invalid messages (defaults to `%task%_invalid`)
+| Plugin | Config | Description |
+|--------|--------|-------------|
+| `window-counter` | `window=60;groupBy=status` | Counts messages within a tumbling time window and emits a summary record on window close. Optional group-by field. Status: experimental. |
 
-### 6.4 Dead Letter Router (category: route)
+### 6.6 Connect plugins
 
-Routes messages based on a field value. Maps field values to downstream topic
-names.
-
-**Config:**
-- `field` (string, required) — payload field to route on
-- `routes` (map: value → topicSuffix) — routing table
-- `defaultRoute` (string) — fallback topic suffix
-
-### 6.5 KV Enricher (category: enrich)
-
-Looks up an external key and merges the result into the payload.
-
-**Config:**
-- `keyField` (string, required) — which field in the payload is the lookup key
-- `source` (enum: `kafka_topic`, `http`, `inline`, default: `inline`)
-- `sourceConfig` (map) — source-specific configuration
-- `mergeStrategy` (enum: `shallow`, `deep`, `prefix`, default: `shallow`)
-- `errorStrategy` (enum, default: `skip`)
-
-### 6.6 Window Counter (category: aggregate)
-
-Counts messages arriving in a time window and emits a summary record.
-
-**Config:**
-- `windowSeconds` (integer, required)
-- `groupBy` (string, optional) — field to group counts by
-- `emitOnClose` (boolean, default: true)
+| Plugin | Config | Description |
+|--------|--------|-------------|
+| `kafka-connect-source` | `connectorClass=io.confluent.connect.jdbc.JdbcSourceConnector;tasksMax=1` | Generates Kafka Connect source connector configuration for pipeline intake topics. |
+| `kafka-connect-sink` | `connectorClass=...` | Generates Kafka Connect sink connector configuration for pipeline egress to external systems. |
 
 ---
 

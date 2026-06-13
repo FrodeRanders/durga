@@ -1,0 +1,40 @@
+id: regex-extract
+name: Regex Extract
+version: 1.0.0
+category: transform
+status: stable
+description: >
+  Extracts named capture groups from a source field using a regular expression.
+  Results are stored under a target path in the payload.
+
+input:
+  schema:
+    type: object
+    description: JSON payload with a text field to parse
+
+output:
+  schema:
+    type: object
+    description: JSON payload with extracted fields added
+
+config:
+  source:
+    type: string
+    required: true
+    description: Dot-notation path to the source text field
+  pattern:
+    type: string
+    required: true
+    description: Java regex with named capture groups
+  target:
+    type: string
+    required: false
+    description: "Dot-notation path to store extracted groups (default: top-level)"
+  all:
+    type: boolean
+    required: false
+    description: "Extract all matches (default: first only)"
+    default: "false"
+
+implementation:
+  class: org.gautelis.durga.plugins.RegexExtract

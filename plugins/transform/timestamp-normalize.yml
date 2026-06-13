@@ -1,0 +1,49 @@
+id: timestamp-normalize
+name: Timestamp Normalize
+version: 1.0.0
+category: transform
+status: stable
+description: >
+  Normalizes timestamp fields to a consistent format. Converts between
+  epoch seconds/milliseconds, ISO 8601, RFC 3339, and custom patterns.
+
+input:
+  schema:
+    type: object
+    description: JSON payload with timestamp fields
+
+output:
+  schema:
+    type: object
+    description: JSON payload with normalized timestamp fields
+
+config:
+  fields:
+    type: string
+    required: true
+    description: Comma-separated field paths to normalize
+  from:
+    type: enum
+    values: [epoch_s, epoch_ms, ISO8601, RFC3339]
+    required: false
+    description: Source timestamp format
+    default: epoch_ms
+  to:
+    type: enum
+    values: [epoch_s, epoch_ms, ISO8601, RFC3339]
+    required: false
+    description: Target timestamp format
+    default: ISO8601
+  zone:
+    type: string
+    required: false
+    description: Timezone for conversion (default UTC)
+    default: UTC
+  removeOnError:
+    type: boolean
+    required: false
+    description: Remove field on parse failure instead of preserving original
+    default: "false"
+
+implementation:
+  class: org.gautelis.durga.plugins.TimestampNormalize

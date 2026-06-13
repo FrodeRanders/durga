@@ -1,6 +1,33 @@
 # Changes
 
-## [Current] — 2026-06-12
+## [Current] — 2026-06-13
+
+### 7 new data pipeline plugins
+- **type-coercer** — coerces fields between string/int/long/double/decimal/boolean
+- **string-template** — `${field}` token substitution with dot-notation field access
+- **pii-mask** — masks sensitive fields with configurable char and boundary preservation
+- **regex-extract** — extracts named capture groups from a source field into the payload
+- **json-flatten** — flattens nested JSON to dot-notation keys, or unflattens the reverse
+- **uuid-inject** — injects UUIDs (v4 or time-based v1) into specified payload fields
+- **timestamp-normalize** — converts between epoch_s/ms, ISO8601, RFC3339, and custom patterns
+
+### Gateway condition expression evaluator
+- Rewrote `evaluateCondition()` from a simple `==`/`!=` checker into a recursive descent
+  parser supporting `>`, `<`, `>=`, `<=`, `&&`, `||`, `!`, parentheses, nested field
+  access (`data.amount`), and numeric/string/boolean/null literals
+- Evaluator is embedded in generated XOR and OR split gateway classes — no new runtime
+  dependencies
+- Generated README now states conditions are evaluated at runtime instead of calling
+  them placeholders
+- Both `xorGatewayClass` and `orSplitGatewayClass` templates include the full evaluator
+
+### Catalog
+- 15 plugins total (8 existing + 7 new), all registered in `plugins/catalog.yml`
+
+### Tests — 133 → 188
+- 55 new unit tests across 7 new plugin test classes
+
+## [Previous] — 2026-06-12
 
 ### BPMN coverage — 6 new elements
 - **SendTask** — dedicated Kafka producer handler

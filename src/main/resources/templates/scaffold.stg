@@ -335,41 +335,227 @@ public class %className% {
         if (expr.startsWith("${") && expr.endsWith("}")) {
             expr = expr.substring(2, expr.length() - 1).trim();
         }
+        if (expr.isEmpty()) {
+            return false;
+        }
         Map<String, Object> payload = event.payload();
         if (payload == null) {
             return false;
         }
-        String operator = expr.contains("!=") ? "!=" : expr.contains("==") ? "==" : null;
-        if (operator == null) {
-            Object value = payload.get(expr);
-            return value instanceof Boolean ? (Boolean) value : value != null;
-        }
-        String[] parts = expr.split(operator, 2);
-        if (parts.length != 2) {
+        try {
+            int[] pos = new int[]{0};
+            boolean result = evalOr(expr, pos, payload);
+            skipWhitespace(expr, pos);
+            return result && pos[0] >= expr.length();
+        } catch (Exception e) {
             return false;
         }
-        String left = parts[0].trim();
-        String right = parts[1].trim();
-        Object value = payload.get(left);
-        String literal = stripQuotes(right);
-        if ("true".equalsIgnoreCase(literal) || "false".equalsIgnoreCase(literal)) {
-            boolean expected = Boolean.parseBoolean(literal);
-            if (value instanceof Boolean boolValue) {
-                return operator.equals("==") == (boolValue == expected);
-            }
-            return operator.equals("==") == expected;
-        }
-        String actual = value != null ? value.toString() : null;
-        boolean equals = actual != null && actual.equals(literal);
-        return operator.equals("==") == equals;
     }
 
-    private String stripQuotes(String value) {
-        if ((value.startsWith("\"") && value.endsWith("\""))
-                || (value.startsWith("'") && value.endsWith("'"))) {
-            return value.substring(1, value.length() - 1);
+    private boolean evalOr(String expr, int[] pos, Map<String, Object> payload) {
+        boolean left = evalAnd(expr, pos, payload);
+        while (true) {
+            skipWhitespace(expr, pos);
+            if (pos[0] + 1 < expr.length() && expr.charAt(pos[0]) == '|' && expr.charAt(pos[0] + 1) == '|') {
+                pos[0] += 2;
+                boolean right = evalAnd(expr, pos, payload);
+                left = left || right;
+            } else {
+                break;
+            }
         }
-        return value;
+        return left;
+    }
+
+    private boolean evalAnd(String expr, int[] pos, Map<String, Object> payload) {
+        boolean left = evalComparison(expr, pos, payload);
+        while (true) {
+            skipWhitespace(expr, pos);
+            if (pos[0] + 1 < expr.length() && expr.charAt(pos[0]) == '&' && expr.charAt(pos[0] + 1) == '&') {
+                pos[0] += 2;
+                boolean right = evalComparison(expr, pos, payload);
+                left = left && right;
+            } else {
+                break;
+            }
+        }
+        return left;
+    }
+
+    private boolean evalComparison(String expr, int[] pos, Map<String, Object> payload) {
+        skipWhitespace(expr, pos);
+        if (pos[0] < expr.length() && expr.charAt(pos[0]) == '!') {
+            pos[0]++;
+            boolean inner = evalComparison(expr, pos, payload);
+            return !inner;
+        }
+        Object left = evalPrimary(expr, pos, payload);
+        skipWhitespace(expr, pos);
+        if (pos[0] >= expr.length()) {
+            return isTruthy(left);
+        }
+        char c = expr.charAt(pos[0]);
+        if (c == '=' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return valuesEqual(left, right);
+        } else if (c == '!' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return !valuesEqual(left, right);
+        } else if (c == '>' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) >= 0;
+        } else if (c == '<' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) <= 0;
+        } else if (c == '>') {
+            pos[0]++;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) > 0;
+        } else if (c == '<') {
+            pos[0]++;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) < 0;
+        }
+        return isTruthy(left);
+    }
+
+    private Object evalPrimary(String expr, int[] pos, Map<String, Object> payload) {
+        skipWhitespace(expr, pos);
+        if (pos[0] >= expr.length()) {
+            return null;
+        }
+        char c = expr.charAt(pos[0]);
+        if (c == '(') {
+            pos[0]++;
+            boolean result = evalOr(expr, pos, payload);
+            skipWhitespace(expr, pos);
+            if (pos[0] < expr.length() && expr.charAt(pos[0]) == ')') {
+                pos[0]++;
+            }
+            return result;
+        }
+        if (c == '"' || c == '\'') {
+            char quote = c;
+            pos[0]++;
+            StringBuilder sb = new StringBuilder();
+            while (pos[0] < expr.length() && expr.charAt(pos[0]) != quote) {
+                if (expr.charAt(pos[0]) == '\\' && pos[0] + 1 < expr.length()) {
+                    pos[0]++;
+                    sb.append(expr.charAt(pos[0]));
+                } else {
+                    sb.append(expr.charAt(pos[0]));
+                }
+                pos[0]++;
+            }
+            if (pos[0] < expr.length()) {
+                pos[0]++;
+            }
+            return sb.toString();
+        }
+        if (c == '-' || (c >= '0' && c <= '9')) {
+            StringBuilder sb = new StringBuilder();
+            if (c == '-') {
+                sb.append(c);
+                pos[0]++;
+            }
+            while (pos[0] < expr.length()) {
+                char d = expr.charAt(pos[0]);
+                if ((d >= '0' && d <= '9') || d == '.') {
+                    sb.append(d);
+                    pos[0]++;
+                } else {
+                    break;
+                }
+            }
+            String numStr = sb.toString();
+            try {
+                if (numStr.contains(".")) {
+                    return Double.parseDouble(numStr);
+                }
+                return Long.parseLong(numStr);
+            } catch (NumberFormatException e) {
+                return 0L;
+            }
+        }
+        if (pos[0] + 3 < expr.length()
+                && expr.substring(pos[0], pos[0] + 4).equalsIgnoreCase("true")) {
+            pos[0] += 4;
+            return true;
+        }
+        if (pos[0] + 4 < expr.length()
+                && expr.substring(pos[0], pos[0] + 5).equalsIgnoreCase("false")) {
+            pos[0] += 5;
+            return false;
+        }
+        if (pos[0] + 3 < expr.length()
+                && expr.substring(pos[0], pos[0] + 4).equalsIgnoreCase("null")) {
+            pos[0] += 4;
+            return null;
+        }
+        StringBuilder ident = new StringBuilder();
+        while (pos[0] < expr.length()) {
+            char d = expr.charAt(pos[0]);
+            if (Character.isJavaIdentifierPart(d) || d == '.') {
+                ident.append(d);
+                pos[0]++;
+            } else {
+                break;
+            }
+        }
+        String path = ident.toString().trim();
+        if (path.isEmpty()) {
+            return null;
+        }
+        return resolveField(payload, path);
+    }
+
+    private Object resolveField(Map<String, Object> payload, String path) {
+        String[] segments = path.split("\\.");
+        Object current = payload;
+        for (String segment : segments) {
+            if (current instanceof Map<?, ?> map) {
+                current = map.get(segment);
+            } else {
+                return null;
+            }
+        }
+        return current;
+    }
+
+    private boolean isTruthy(Object value) {
+        if (value == null) return false;
+        if (value instanceof Boolean b) return b;
+        if (value instanceof Number n) return n.doubleValue() != 0.0;
+        if (value instanceof String s) return !s.isBlank();
+        return true;
+    }
+
+    private boolean valuesEqual(Object left, Object right) {
+        if (left == null && right == null) return true;
+        if (left == null || right == null) return false;
+        if (left instanceof Number && right instanceof Number) {
+            return ((Number) left).doubleValue() == ((Number) right).doubleValue();
+        }
+        return left.toString().equals(right.toString());
+    }
+
+    private int compareValues(Object left, Object right) {
+        if (left instanceof Number ln && right instanceof Number rn) {
+            return Double.compare(ln.doubleValue(), rn.doubleValue());
+        }
+        String ls = left != null ? left.toString() : "";
+        String rs = right != null ? right.toString() : "";
+        return ls.compareTo(rs);
+    }
+
+    private void skipWhitespace(String expr, int[] pos) {
+        while (pos[0] < expr.length() && Character.isWhitespace(expr.charAt(pos[0]))) {
+            pos[0]++;
+        }
     }
 }
 >>
@@ -820,6 +1006,7 @@ import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.reactive.messaging.Message;
 import org.gautelis.durga.ProcessEvent;
 
+import java.util.Map;
 import java.util.concurrent.CompletionStage;
 
 @ApplicationScoped
@@ -841,6 +1028,237 @@ public class %className% {
 %output.conditionBlock%
 }%
         return msg.ack();
+    }
+
+    private boolean evaluateCondition(String expression, ProcessEvent event) {
+        if (expression == null || expression.isBlank()) {
+            return false;
+        }
+        String expr = expression.trim();
+        if (expr.startsWith("${") && expr.endsWith("}")) {
+            expr = expr.substring(2, expr.length() - 1).trim();
+        }
+        if (expr.isEmpty()) {
+            return false;
+        }
+        Map<String, Object> payload = event.payload();
+        if (payload == null) {
+            return false;
+        }
+        try {
+            int[] pos = new int[]{0};
+            boolean result = evalOr(expr, pos, payload);
+            skipWhitespace(expr, pos);
+            return result && pos[0] >= expr.length();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean evalOr(String expr, int[] pos, Map<String, Object> payload) {
+        boolean left = evalAnd(expr, pos, payload);
+        while (true) {
+            skipWhitespace(expr, pos);
+            if (pos[0] + 1 < expr.length() && expr.charAt(pos[0]) == '|' && expr.charAt(pos[0] + 1) == '|') {
+                pos[0] += 2;
+                boolean right = evalAnd(expr, pos, payload);
+                left = left || right;
+            } else {
+                break;
+            }
+        }
+        return left;
+    }
+
+    private boolean evalAnd(String expr, int[] pos, Map<String, Object> payload) {
+        boolean left = evalComparison(expr, pos, payload);
+        while (true) {
+            skipWhitespace(expr, pos);
+            if (pos[0] + 1 < expr.length() && expr.charAt(pos[0]) == '&' && expr.charAt(pos[0] + 1) == '&') {
+                pos[0] += 2;
+                boolean right = evalComparison(expr, pos, payload);
+                left = left && right;
+            } else {
+                break;
+            }
+        }
+        return left;
+    }
+
+    private boolean evalComparison(String expr, int[] pos, Map<String, Object> payload) {
+        skipWhitespace(expr, pos);
+        if (pos[0] < expr.length() && expr.charAt(pos[0]) == '!') {
+            pos[0]++;
+            boolean inner = evalComparison(expr, pos, payload);
+            return !inner;
+        }
+        Object left = evalPrimary(expr, pos, payload);
+        skipWhitespace(expr, pos);
+        if (pos[0] >= expr.length()) {
+            return isTruthy(left);
+        }
+        char c = expr.charAt(pos[0]);
+        if (c == '=' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return valuesEqual(left, right);
+        } else if (c == '!' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return !valuesEqual(left, right);
+        } else if (c == '>' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) >= 0;
+        } else if (c == '<' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) <= 0;
+        } else if (c == '>') {
+            pos[0]++;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) > 0;
+        } else if (c == '<') {
+            pos[0]++;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) < 0;
+        }
+        return isTruthy(left);
+    }
+
+    private Object evalPrimary(String expr, int[] pos, Map<String, Object> payload) {
+        skipWhitespace(expr, pos);
+        if (pos[0] >= expr.length()) {
+            return null;
+        }
+        char c = expr.charAt(pos[0]);
+        if (c == '(') {
+            pos[0]++;
+            boolean result = evalOr(expr, pos, payload);
+            skipWhitespace(expr, pos);
+            if (pos[0] < expr.length() && expr.charAt(pos[0]) == ')') {
+                pos[0]++;
+            }
+            return result;
+        }
+        if (c == '"' || c == '\'') {
+            char quote = c;
+            pos[0]++;
+            StringBuilder sb = new StringBuilder();
+            while (pos[0] < expr.length() && expr.charAt(pos[0]) != quote) {
+                if (expr.charAt(pos[0]) == '\\' && pos[0] + 1 < expr.length()) {
+                    pos[0]++;
+                    sb.append(expr.charAt(pos[0]));
+                } else {
+                    sb.append(expr.charAt(pos[0]));
+                }
+                pos[0]++;
+            }
+            if (pos[0] < expr.length()) {
+                pos[0]++;
+            }
+            return sb.toString();
+        }
+        if (c == '-' || (c >= '0' && c <= '9')) {
+            StringBuilder sb = new StringBuilder();
+            if (c == '-') {
+                sb.append(c);
+                pos[0]++;
+            }
+            while (pos[0] < expr.length()) {
+                char d = expr.charAt(pos[0]);
+                if ((d >= '0' && d <= '9') || d == '.') {
+                    sb.append(d);
+                    pos[0]++;
+                } else {
+                    break;
+                }
+            }
+            String numStr = sb.toString();
+            try {
+                if (numStr.contains(".")) {
+                    return Double.parseDouble(numStr);
+                }
+                return Long.parseLong(numStr);
+            } catch (NumberFormatException e) {
+                return 0L;
+            }
+        }
+        if (pos[0] + 3 < expr.length()
+                && expr.substring(pos[0], pos[0] + 4).equalsIgnoreCase("true")) {
+            pos[0] += 4;
+            return true;
+        }
+        if (pos[0] + 4 < expr.length()
+                && expr.substring(pos[0], pos[0] + 5).equalsIgnoreCase("false")) {
+            pos[0] += 5;
+            return false;
+        }
+        if (pos[0] + 3 < expr.length()
+                && expr.substring(pos[0], pos[0] + 4).equalsIgnoreCase("null")) {
+            pos[0] += 4;
+            return null;
+        }
+        StringBuilder ident = new StringBuilder();
+        while (pos[0] < expr.length()) {
+            char d = expr.charAt(pos[0]);
+            if (Character.isJavaIdentifierPart(d) || d == '.') {
+                ident.append(d);
+                pos[0]++;
+            } else {
+                break;
+            }
+        }
+        String path = ident.toString().trim();
+        if (path.isEmpty()) {
+            return null;
+        }
+        return resolveField(payload, path);
+    }
+
+    private Object resolveField(Map<String, Object> payload, String path) {
+        String[] segments = path.split("\\.");
+        Object current = payload;
+        for (String segment : segments) {
+            if (current instanceof Map<?, ?> map) {
+                current = map.get(segment);
+            } else {
+                return null;
+            }
+        }
+        return current;
+    }
+
+    private boolean isTruthy(Object value) {
+        if (value == null) return false;
+        if (value instanceof Boolean b) return b;
+        if (value instanceof Number n) return n.doubleValue() != 0.0;
+        if (value instanceof String s) return !s.isBlank();
+        return true;
+    }
+
+    private boolean valuesEqual(Object left, Object right) {
+        if (left == null && right == null) return true;
+        if (left == null || right == null) return false;
+        if (left instanceof Number && right instanceof Number) {
+            return ((Number) left).doubleValue() == ((Number) right).doubleValue();
+        }
+        return left.toString().equals(right.toString());
+    }
+
+    private int compareValues(Object left, Object right) {
+        if (left instanceof Number ln && right instanceof Number rn) {
+            return Double.compare(ln.doubleValue(), rn.doubleValue());
+        }
+        String ls = left != null ? left.toString() : "";
+        String rs = right != null ? right.toString() : "";
+        return ls.compareTo(rs);
+    }
+
+    private void skipWhitespace(String expr, int[] pos) {
+        while (pos[0] < expr.length() && Character.isWhitespace(expr.charAt(pos[0]))) {
+            pos[0]++;
+        }
     }
 }
 >>

@@ -41,7 +41,7 @@ Flags:
 - `--transactions` — generate transactional workers using Kafka producer/consumer APIs
 
 The generator skips existing files in `src/main/java/`, merges new channels into
-`application.yml`, and emits XOR conditions as placeholders.
+`application.yml`, and evaluates gateway conditions from BPMN `conditionExpression` at runtime.
 
 ## BPMN sample catalog
 

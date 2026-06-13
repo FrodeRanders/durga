@@ -13,8 +13,8 @@ This matrix describes the current execution mapping in `durga`. It is a support 
 | `ScriptTask` | Worker stub with `// TODO: implement script logic` placeholder | Supported | Stub includes TODO markers for user implementation. |
 | `BusinessRuleTask` | Worker stub with `// TODO: implement business rule evaluation` placeholder | Supported | Stub includes TODO markers for DMN/rule engine integration. |
 | `Task` (generic/unknown) | Auto-completing worker (catch-all) | Supported with warning | Unrecognised task subtypes emit a stderr warning. |
-| `ExclusiveGateway` | Consumer on upstream topic, conditional producer to one downstream task input, `GATEWAY_TAKEN` lifecycle emission | Supported | Conditions are generated as placeholders. |
-| `InclusiveGateway` split | Consumer on upstream topic, conditional fan-out to ALL matching downstream outputs | Supported | All matching conditions fire (unlike XOR which picks first match). |
+| `ExclusiveGateway` | Consumer on upstream topic, conditional producer to one downstream task input, `GATEWAY_TAKEN` lifecycle emission | Supported | Conditions from `conditionExpression` are evaluated at runtime via a recursive descent expression parser (`==`, `!=`, `>`, `<`, `>=`, `<=`, `&&`, `||`, `!`, parentheses, nested field access). |
+| `InclusiveGateway` split | Consumer on upstream topic, conditional fan-out to ALL matching downstream outputs | Supported | Same expression evaluator as XOR; all matching conditions fire (unlike XOR which picks first match). |
 | `InclusiveGateway` join | Consumers on multiple upstream outputs, activates when first branch arrives, `GATEWAY_TAKEN` emission | Supported | Fire-on-first-arrival join model with instance-level arrived-set tracking. |
 | `ParallelGateway` split | Consumer on upstream topic, fan-out producer to all downstream task inputs | Supported | Simple fan-out behavior. |
 | `ParallelGateway` join | Consumers on multiple upstream outputs, state-topic coordination, producer to next task input | Supported | Uses `ProcessStateStore` to coordinate joins. All branches must arrive. |

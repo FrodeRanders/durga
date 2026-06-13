@@ -1,0 +1,29 @@
+id: type-coercer
+name: Type Coercion
+version: 1.0.0
+category: transform
+status: stable
+description: >
+  Coerces payload fields to specified types (string, int, long, double, decimal,
+  boolean). Comma-separated field:type pairs.
+
+input:
+  schema:
+    type: object
+    description: JSON payload with fields to coerce
+
+output:
+  schema:
+    type: object
+    description: JSON payload with coerced field types
+
+config:
+  expression:
+    type: string
+    required: true
+    description: >
+      Comma-separated field:type pairs. Types: string, int, long, double, decimal, boolean.
+    default: ""
+
+implementation:
+  class: org.gautelis.durga.plugins.TypeCoercion

@@ -398,7 +398,7 @@ final class GeneratedProjectSupport {
         builder.append("\n```\n");
         builder.append("\n## Notes\n");
         builder.append("- The generator skips classes that already exist in `src/main/java/`.\n");
-        builder.append("- XOR conditions are generated as placeholders; implement your expression logic.\n");
+        builder.append("- XOR/OR gateway conditions from BPMN conditionExpression are evaluated at runtime.\n");
         builder.append("- Embedded subprocesses generate explicit scope entry/completion handlers.\n");
         builder.append("- Call activities use request/reply topics and generated completion helpers.\n");
         builder.append("- `application.yml` was merged with new channels; formatting/comments may change.\n");

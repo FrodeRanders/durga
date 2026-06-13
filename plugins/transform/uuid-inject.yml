@@ -1,0 +1,34 @@
+id: uuid-inject
+name: UUID Inject
+version: 1.0.0
+category: transform
+status: stable
+description: >
+  Injects UUIDs into specified payload fields. Supports UUID v4 and v1-style
+  time-based generation.
+
+input:
+  schema:
+    type: object
+    description: JSON payload to annotate
+
+output:
+  schema:
+    type: object
+    description: JSON payload with UUID fields injected
+
+config:
+  fields:
+    type: string
+    required: true
+    description: Comma-separated field paths (dot-notation for nested)
+    default: id
+  strategy:
+    type: enum
+    values: [uuid4, uuid1, random]
+    required: false
+    description: UUID generation strategy
+    default: uuid4
+
+implementation:
+  class: org.gautelis.durga.plugins.UuidInject

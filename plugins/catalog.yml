@@ -7,6 +7,34 @@ plugins:
     version: 1.0.0
     category: transform
     path: transform/field-filter.yml
+  - id: type-coercer
+    version: 1.0.0
+    category: transform
+    path: transform/type-coercer.yml
+  - id: string-template
+    version: 1.0.0
+    category: transform
+    path: transform/string-template.yml
+  - id: pii-mask
+    version: 1.0.0
+    category: transform
+    path: transform/pii-mask.yml
+  - id: regex-extract
+    version: 1.0.0
+    category: transform
+    path: transform/regex-extract.yml
+  - id: json-flatten
+    version: 1.0.0
+    category: transform
+    path: transform/json-flatten.yml
+  - id: uuid-inject
+    version: 1.0.0
+    category: transform
+    path: transform/uuid-inject.yml
+  - id: timestamp-normalize
+    version: 1.0.0
+    category: transform
+    path: transform/timestamp-normalize.yml
   - id: json-schema-validator
     version: 1.0.0
     category: validate

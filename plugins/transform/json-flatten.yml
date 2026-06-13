@@ -1,0 +1,39 @@
+id: json-flatten
+name: JSON Flatten/Unflatten
+version: 1.0.0
+category: transform
+status: stable
+description: >
+  Flattens nested JSON to dot-notation keys or unflattens dot-notation keys
+  back to nested objects. Configurable separator and max depth.
+
+input:
+  schema:
+    type: object
+    description: JSON payload (nested or flat)
+
+output:
+  schema:
+    type: object
+    description: Flattened or unflattened JSON payload
+
+config:
+  direction:
+    type: enum
+    values: [flatten, unflatten]
+    required: true
+    description: flatten (nested to dot-notation) or unflatten (dot-notation to nested)
+    default: flatten
+  separator:
+    type: string
+    required: false
+    description: Key separator character (default .)
+    default: "."
+  maxDepth:
+    type: integer
+    required: false
+    description: Maximum nesting depth to flatten (default unlimited)
+    default: "2147483647"
+
+implementation:
+  class: org.gautelis.durga.plugins.JsonFlatten
