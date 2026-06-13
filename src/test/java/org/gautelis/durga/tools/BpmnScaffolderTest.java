@@ -2,12 +2,17 @@ package org.gautelis.durga.tools;
 
 import org.junit.Test;
 
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -606,5 +611,43 @@ public class BpmnScaffolderTest {
             System.setErr(originalErr);
             captureStream.close();
         }
+    }
+
+    @Test
+    public void generatedProjectCompiles() throws Exception {
+        System.out.println("TC: generated project compiles without errors");
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        if (compiler == null) {
+            System.out.println("Skipping compilation test: no system Java compiler available (JRE only?)");
+            return;
+        }
+
+        Path outputDir = Files.createTempDirectory("durga-compile-test-");
+        runGeneration("src/test/resources/bpmn/invoice_receipt.bpmn", outputDir);
+
+        List<String> sources = new ArrayList<>();
+        Path srcDir = outputDir.resolve("src/main/java");
+        try (Stream<Path> stream = Files.walk(srcDir)) {
+            stream.filter(p -> p.getFileName().toString().endsWith(".java"))
+                    .forEach(p -> sources.add(p.toAbsolutePath().toString()));
+        }
+        assertFalse("no Java sources found", sources.isEmpty());
+
+        List<String> args = new ArrayList<>();
+        args.add("-d");
+        args.add(outputDir.resolve("target/classes").toAbsolutePath().toString());
+        args.add("-cp");
+        args.add(System.getProperty("java.class.path"));
+        args.addAll(sources);
+
+        ByteArrayOutputStream errStream = new ByteArrayOutputStream();
+        int result = compiler.run(null, null, new PrintStream(errStream, true, StandardCharsets.UTF_8),
+                args.toArray(new String[0]));
+
+        String errors = errStream.toString(StandardCharsets.UTF_8);
+        if (result != 0) {
+            System.err.println("Compilation errors:\n" + errors);
+        }
+        assertEquals("generated project failed to compile", 0, result);
     }
 }
