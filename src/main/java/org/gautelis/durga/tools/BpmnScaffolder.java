@@ -62,7 +62,7 @@ import java.util.TreeSet;
  */
 public class BpmnScaffolder {
     static String generatedPackage = "org.gautelis.durga.generated";
-    static String generatedProbesPackage = "org.gautelis.durga.generated.probes";
+    static String generatedProbesPackage;
     static String eventsTopic = "process-events";
     /**
      * Generates a project from a BPMN file.
