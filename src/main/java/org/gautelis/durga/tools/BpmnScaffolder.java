@@ -63,7 +63,7 @@ import java.util.TreeSet;
 public class BpmnScaffolder {
     static String generatedPackage = "org.gautelis.durga.generated";
     static String generatedProbesPackage;
-    static String eventsTopic = "process-events";
+    static String eventsTopic;
     /**
      * Generates a project from a BPMN file.
      *
@@ -90,9 +90,7 @@ public class BpmnScaffolder {
         }
         generatedPackage = pkg;
         generatedProbesPackage = pkg + ".probes";
-        if (parsed.eventsTopic != null && !parsed.eventsTopic.isBlank()) {
-            eventsTopic = parsed.eventsTopic;
-        }
+        eventsTopic = parsed.eventsTopic;
         Path javaOutput = outputRoot.resolve("src/main/java/" + pkg.replace('.', '/'));
 
         String retention = parsed.retentionHours;
@@ -122,6 +120,9 @@ public class BpmnScaffolder {
                         ? parsed.processIdOverride
                         : (process.getId() != null ? process.getId() : "process")
         );
+        if (eventsTopic == null || eventsTopic.isBlank()) {
+            eventsTopic = "process-events-" + processId;
+        }
         Map<String, NodeInfo> nodes = new LinkedHashMap<>();
         Map<String, List<FlowInfo>> flowsBySource = new LinkedHashMap<>();
         List<EventSubProcessSpec> eventSubProcessSpecs = collectEventSubProcessSpecs(model, nodes);

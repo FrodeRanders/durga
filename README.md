@@ -38,7 +38,7 @@ Flags:
 
 - `--dry-run` — print `summary.json`, `topics.sh`, connect configs, and application YAML without writing files
 - `--out <dir>` — custom output directory
-- `--event-topic <topic>` — set the canonical lifecycle event topic (default: `process-events`). Use per-pipeline names like `process-events-orders` to isolate pipelines.
+- `--event-topic <topic>` — override the canonical lifecycle event topic (default: `process-events-{processId}`). Each pipeline gets an isolated topic by default; use this flag to share a topic across pipelines or use a custom name.
 - `--transactions` — generate transactional workers using Kafka producer/consumer APIs
 
 The generator skips existing files in `src/main/java/`, merges new channels into
