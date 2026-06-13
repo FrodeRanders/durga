@@ -63,6 +63,7 @@ import java.util.TreeSet;
 public class BpmnScaffolder {
     static String generatedPackage = "org.gautelis.durga.generated";
     static String generatedProbesPackage = "org.gautelis.durga.generated.probes";
+    static String eventsTopic = "process-events";
     /**
      * Generates a project from a BPMN file.
      *
@@ -89,6 +90,9 @@ public class BpmnScaffolder {
         }
         generatedPackage = pkg;
         generatedProbesPackage = pkg + ".probes";
+        if (parsed.eventsTopic != null && !parsed.eventsTopic.isBlank()) {
+            eventsTopic = parsed.eventsTopic;
+        }
         Path javaOutput = outputRoot.resolve("src/main/java/" + pkg.replace('.', '/'));
 
         String retention = parsed.retentionHours;
@@ -456,7 +460,7 @@ public class BpmnScaffolder {
             }
 
             StringBuilder sinkTopics = new StringBuilder();
-            sinkTopics.append("process-events");
+            sinkTopics.append(eventsTopic);
             for (String topic : outputTopics) {
                 sinkTopics.append(", ").append(processId).append("_").append(topic).append("_output");
             }
@@ -592,7 +596,7 @@ public class BpmnScaffolder {
 
     private static ParsedArgs parseArgs(String[] args) {
         if (args.length == 0) {
-            System.err.println("Usage: BpmnScaffolder <path-to-bpmn.xml> [--out <dir>] [--process-id <id>] [--dry-run] [--transactions] [--separate-workers] [--strimzi] [--connect]");
+            System.err.println("Usage: BpmnScaffolder <path-to-bpmn.xml> [--out <dir>] [--process-id <id>] [--package <pkg>] [--event-topic <topic>] [--retention <h|d|w>] [--dry-run] [--transactions] [--separate-workers] [--strimzi] [--connect]");
             return null;
         }
         boolean dryRun = false;
@@ -604,6 +608,7 @@ public class BpmnScaffolder {
         String processIdOverride = null;
         String packageName = null;
         String retentionHours = null;
+        String eventsTopic = null;
         List<String> positional = new ArrayList<>();
 
         for (int i = 0; i < args.length; i++) {
@@ -644,6 +649,12 @@ public class BpmnScaffolder {
                     return null;
                 }
                 retentionHours = args[++i];
+            } else if ("--event-topic".equals(arg)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Missing value for --event-topic");
+                    return null;
+                }
+                eventsTopic = args[++i];
             } else {
                 positional.add(arg);
             }
@@ -658,7 +669,7 @@ public class BpmnScaffolder {
         if (outputDir == null) {
             outputDir = positional.size() > 1 ? positional.get(1) : "generated";
         }
-        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi, processIdOverride, packageName, retentionHours);
+        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi, processIdOverride, packageName, retentionHours, eventsTopic);
     }
 
     private static String normalize(String value) {
@@ -2110,6 +2121,7 @@ public class BpmnScaffolder {
         yaml.add("messageTopics", messageTopics);
         yaml.add("callActivities", callActivities);
         yaml.add("subProcesses", subProcesses);
+        yaml.add("eventsTopic", eventsTopic);
         return yaml.render();
     }
 

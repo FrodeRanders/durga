@@ -58,13 +58,13 @@ final class GeneratedProjectSupport {
 
         incoming.putIfAbsent("process-events-monitor", channelConfig(
                 "smallrye-kafka",
-                "process-events",
+                BpmnScaffolder.eventsTopic,
                 "org.apache.kafka.common.serialization.StringDeserializer"
         ));
 
         outgoing.putIfAbsent("process-events", channelConfig(
                 "smallrye-kafka",
-                "process-events",
+                BpmnScaffolder.eventsTopic,
                 "org.apache.kafka.common.serialization.StringSerializer"
         ));
 

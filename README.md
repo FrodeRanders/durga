@@ -38,7 +38,7 @@ Flags:
 
 - `--dry-run` — print `summary.json`, `topics.sh`, connect configs, and application YAML without writing files
 - `--out <dir>` — custom output directory
-- `--connect` — generate Kafka Connect source/sink connector configs and a deployment script under `connect/`
+- `--event-topic <topic>` — set the canonical lifecycle event topic (default: `process-events`). Use per-pipeline names like `process-events-orders` to isolate pipelines.
 - `--transactions` — generate transactional workers using Kafka producer/consumer APIs
 
 The generator skips existing files in `src/main/java/`, merges new channels into

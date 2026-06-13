@@ -1,4 +1,4 @@
-applicationYaml(processId, tasks, timers, messageTopics, callActivities, subProcesses) ::= <<
+applicationYaml(processId, tasks, timers, messageTopics, callActivities, subProcesses, eventsTopic) ::= <<
 kafka:
   bootstrap:
     servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
@@ -17,7 +17,7 @@ mp:
     incoming:
       process-events-monitor:
         connector: "smallrye-kafka"
-        topic: "process-events"
+        topic: "%eventsTopic%"
         value:
           deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
 %tasks:{t|
@@ -63,7 +63,7 @@ mp:
     outgoing:
       process-events:
         connector: "smallrye-kafka"
-        topic: "process-events"
+        topic: "%eventsTopic%"
         value:
           serializer: "org.apache.kafka.common.serialization.StringSerializer"
 %tasks:{t|

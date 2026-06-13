@@ -478,10 +478,12 @@ final class ParsedArgs {
     final String processIdOverride;
     final String packageName;
     final String retentionHours;
+    final String eventsTopic;
 
     ParsedArgs(String bpmnPath, String outputDir, boolean dryRun, boolean transactions,
                boolean separateWorkers, boolean connect, boolean strimzi,
-               String processIdOverride, String packageName, String retentionHours) {
+               String processIdOverride, String packageName, String retentionHours,
+               String eventsTopic) {
         this.bpmnPath = bpmnPath;
         this.outputDir = outputDir;
         this.dryRun = dryRun;
@@ -492,6 +494,7 @@ final class ParsedArgs {
         this.processIdOverride = processIdOverride;
         this.packageName = packageName;
         this.retentionHours = retentionHours;
+        this.eventsTopic = eventsTopic;
     }
 }
 

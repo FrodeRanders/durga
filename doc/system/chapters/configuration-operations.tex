@@ -19,21 +19,31 @@ java -jar target/durga-1.0-SNAPSHOT.jar path/to/process.bpmn [flags...]
 
 Available flags: \texttt{--dry-run}, \texttt{--out <dir>},
 \texttt{--transactions}, \texttt{--separate-workers}, \texttt{--strimzi},
-\texttt{--connect}, \texttt{--process-id <id>}, \texttt{--package <pkg>},
-\texttt{--retention <hours>}.
+\texttt{--connect}, \texttt{--event-topic <topic>}, \texttt{--process-id <id>},
+\texttt{--package <pkg>}, \texttt{--retention <hours>}.
 
 \texttt{--retention <hours>} sets Kafka topic retention in hours
 (defaults to 168\,h/7\,days with a warning). Use \texttt{-1} for
-infinite retention. The \texttt{process-events} topic always has
-infinite retention; the \texttt{\%process\%\_state} topic always uses
-compaction. Wired into both \texttt{topics.sh} and Strimzi
-\texttt{topics.yml}. Accepts \texttt{h}, \texttt{d}, \texttt{w},
-\texttt{m} suffixes for hours, days, weeks, or 30-day months.
+infinite retention. The canonical event topic (configured via
+\texttt{--event-topic}) always has infinite retention; the
+\texttt{\%process\%\_state} topic always uses compaction. Wired
+into both \texttt{topics.sh} and Strimzi \texttt{topics.yml}.
+Accepts \texttt{h}, \texttt{d}, \texttt{w}, \texttt{m} suffixes
+for hours, days, weeks, or 30-day months.
 
 \texttt{--package <pkg>} sets the Java package for generated code
 (defaults to \texttt{org.gautelis.durga.generated} with a warning).
 Operational classes are placed directly in the package; probe and
 exerciser classes in \texttt{<pkg>.probes}.
+
+\texttt{--event-topic <topic>} sets the physical Kafka topic name for
+canonical lifecycle events (defaults to \texttt{process-events}). Use
+per-pipeline names such as \texttt{process-events-orders} to isolate
+pipeline traffic and control retention independently. The logical channel
+names \texttt{process-events} and \texttt{process-events-monitor} in the
+generated code stay unchanged; only the physical topic mapping in
+\texttt{application.yml} is affected. The monitoring topology accepts
+the topic as a command-line argument.
 
 \texttt{--process-id <id>} overrides the process identifier read from the
 BPMN file. This is the name used in topic names, consumer group IDs,
