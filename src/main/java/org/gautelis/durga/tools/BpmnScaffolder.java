@@ -2144,6 +2144,7 @@ public class BpmnScaffolder {
         topicsScript.add("callActivities", callActivities);
         topicsScript.add("subProcesses", subProcesses);
         topicsScript.add("retentionMs", retentionMs);
+        topicsScript.add("eventsTopic", eventsTopic);
         return topicsScript.render();
     }
 
@@ -2311,6 +2312,7 @@ public class BpmnScaffolder {
         template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
+        template.add("eventsTopic", eventsTopic);
         if (!dryRun) {
             writeFile(outputFile, template.render());
         }
@@ -2337,6 +2339,7 @@ public class BpmnScaffolder {
         template.add("processId", processId);
         template.add("firstTask", tasks.isEmpty() ? "start" : tasks.getFirst());
         template.add("lastTask", tasks.isEmpty() ? "completed" : tasks.getLast());
+        template.add("eventsTopic", eventsTopic);
         if (!dryRun) {
             writeFile(outputFile, template.render());
         }
@@ -2360,6 +2363,7 @@ public class BpmnScaffolder {
         template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
+        template.add("eventsTopic", eventsTopic);
         if (!dryRun) {
             writeFile(outputFile, template.render());
         }
@@ -2383,6 +2387,7 @@ public class BpmnScaffolder {
         template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
+        template.add("eventsTopic", eventsTopic);
         if (!dryRun) {
             writeFile(outputFile, template.render());
         }
@@ -2406,6 +2411,7 @@ public class BpmnScaffolder {
         template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
+        template.add("eventsTopic", eventsTopic);
         if (!dryRun) {
             writeFile(outputFile, template.render());
         }
@@ -2429,6 +2435,7 @@ public class BpmnScaffolder {
         template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
+        template.add("eventsTopic", eventsTopic);
         if (!dryRun) {
             writeFile(outputFile, template.render());
         }
@@ -2475,6 +2482,7 @@ public class BpmnScaffolder {
         template.add("packageName", generatedProbesPackage);
         template.add("className", className);
         template.add("processId", processId);
+        template.add("eventsTopic", eventsTopic);
         if (!dryRun) {
             writeFile(outputFile, template.render());
         }

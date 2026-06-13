@@ -120,7 +120,7 @@ mp:
 }%
 >>
 
-topicsScript(processId, tasks, timers, messageTopics, callActivities, subProcesses, retentionMs) ::= <<
+topicsScript(processId, tasks, timers, messageTopics, callActivities, subProcesses, retentionMs, eventsTopic) ::= <<
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -130,7 +130,7 @@ RETENTION_MS=%retentionMs%
 topics=(
   "%processId%_start"
   "%processId%_state"
-  "process-events"
+  "%eventsTopic%"
 %timers:{t|
   "%processId%_%t%_input"
 }%
@@ -474,7 +474,7 @@ java -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%TaskOutputWatc
   "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID" "$MAX_RECORDS" "$TIMEOUT_SECONDS"
 >>
 
-demoScenarioRunnerClass(packageName, className, processId, firstTask, lastTask) ::= <<
+demoScenarioRunnerClass(packageName, className, processId, firstTask, lastTask, eventsTopic) ::= <<
 package %packageName%;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -495,7 +495,7 @@ import java.util.Properties;
 import java.util.UUID;
 
 public class %className% {
-    private static final String TOPIC = "process-events";
+    private static final String TOPIC = "%eventsTopic%";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static void main(String[] args) {
@@ -619,7 +619,7 @@ public class %className% {
 }
 >>
 
-taskInputPublisherClass(packageName, className, processId) ::= <<
+taskInputPublisherClass(packageName, className, processId, eventsTopic) ::= <<
 package %packageName%;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -678,7 +678,7 @@ public class %className% {
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             producer.send(new ProducerRecord<>(topic, processInstanceId, event.toJson()));
-            producer.send(new ProducerRecord<>("process-events", processInstanceId, event.toJson()));
+            producer.send(new ProducerRecord<>("%eventsTopic%", processInstanceId, event.toJson()));
             producer.flush();
         }
 
@@ -709,7 +709,7 @@ public class %className% {
 }
 >>
 
-taskCompletionPublisherClass(packageName, className, processId) ::= <<
+taskCompletionPublisherClass(packageName, className, processId, eventsTopic) ::= <<
 package %packageName%;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -771,7 +771,7 @@ public class %className% {
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             producer.send(new ProducerRecord<>(topic, processInstanceId, event.toJson()));
-            producer.send(new ProducerRecord<>("process-events", processInstanceId, event.toJson()));
+            producer.send(new ProducerRecord<>("%eventsTopic%", processInstanceId, event.toJson()));
             producer.flush();
         }
 
@@ -802,7 +802,7 @@ public class %className% {
 }
 >>
 
-taskFailurePublisherClass(packageName, className, processId) ::= <<
+taskFailurePublisherClass(packageName, className, processId, eventsTopic) ::= <<
 package %packageName%;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -864,7 +864,7 @@ public class %className% {
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             producer.send(new ProducerRecord<>(topic, processInstanceId, event.toJson()));
-            producer.send(new ProducerRecord<>("process-events", processInstanceId, event.toJson()));
+            producer.send(new ProducerRecord<>("%eventsTopic%", processInstanceId, event.toJson()));
             producer.flush();
         }
 
@@ -895,7 +895,7 @@ public class %className% {
 }
 >>
 
-taskEscalationPublisherClass(packageName, className, processId) ::= <<
+taskEscalationPublisherClass(packageName, className, processId, eventsTopic) ::= <<
 package %packageName%;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -957,7 +957,7 @@ public class %className% {
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             producer.send(new ProducerRecord<>(topic, processInstanceId, event.toJson()));
-            producer.send(new ProducerRecord<>("process-events", processInstanceId, event.toJson()));
+            producer.send(new ProducerRecord<>("%eventsTopic%", processInstanceId, event.toJson()));
             producer.flush();
         }
 
@@ -1188,7 +1188,7 @@ public class %className% {
 }
 >>
 
-processEventsWatcherClass(packageName, className, processId) ::= <<
+processEventsWatcherClass(packageName, className, processId, eventsTopic) ::= <<
 package %packageName%;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -1218,7 +1218,7 @@ public class %className% {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
-            consumer.subscribe(Collections.singletonList("process-events"));
+            consumer.subscribe(Collections.singletonList("%eventsTopic%"));
             long deadlineMs = System.currentTimeMillis() + (timeoutSeconds * 1000);
             int seen = 0;
 
@@ -1434,7 +1434,7 @@ pomXml(processId, starterClass) ::= <<
 </project>
 >>
 
-starterClass(packageName, className, processId) ::= <<
+starterClass(packageName, className, processId, eventsTopic) ::= <<
 package %packageName%;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -1484,7 +1484,7 @@ public class %className% {
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             producer.send(new ProducerRecord<>(topic, event.processInstanceId(), event.toJson()));
-            producer.send(new ProducerRecord<>("process-events", event.processInstanceId(), event.toJson()));
+            producer.send(new ProducerRecord<>("%eventsTopic%", event.processInstanceId(), event.toJson()));
             producer.flush();
         }
 
