@@ -158,7 +158,7 @@ Instead of generating a self-contained worker, the scaffolder produces:
 \item A \textbf{delegating worker} (\texttt{CustomTransformWorkerService}) that injects the contract via CDI (\texttt{@Inject}) and delegates each message to \texttt{implementation.execute()}. The worker includes a null guard that routes to the dead-letter queue if no implementation is present.
 \end{enumerate}
 
-The developer writes an implementation class (\texttt{CustomTransformImpl implements CustomTransformContract}) in a normal Java file, with full IDE support, compilation, and testing. The generated contract and worker are never modified by hand.
+The developer writes an implementation class (\texttt{CustomTransformImpl implements CustomTransformContract}) in a standard Java source file. It is compiled and tested with the rest of the project. The generated contract and worker are not modified by hand.
 
 \subsubsection{Round-trip model enrichment}
 

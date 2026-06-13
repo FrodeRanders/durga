@@ -10,7 +10,7 @@ for extending generated code, ordered by preference.
 For common data pipeline operations, use one of the 15 registered plugins. Annotate a
 \texttt{ServiceTask} with \texttt{camunda:plugin} and \texttt{camunda:pluginConfig}
 in the BPMN model. The scaffolder generates a complete, working worker that delegates
-to the plugin at runtime. No code is written or maintained.
+to the plugin at runtime. No new code is required.
 
 This covers: field remapping, filtering, type coercion, string templating, PII masking,
 regex extraction, JSON flatten/unflatten, UUID injection, timestamp normalization,
@@ -30,9 +30,9 @@ When no plugin covers the required logic, mark the BPMN activity with
   guard with dead-letter routing.
 \end{itemize}
 
-The developer writes an implementation class in a normal Java file (IDE, compilation,
-testing). The generated contract interface and delegating worker are never modified
-by hand.
+The developer writes an implementation class in a standard Java source file,
+compiles and tests it with the rest of the project. The generated contract
+interface and delegating worker are not modified by hand.
 
 A build-time utility (\texttt{ModelEnricher}) scans compiled classes for
 implementations of generated contracts, matches them to BPMN activities, and writes
@@ -53,8 +53,8 @@ modify the generated Java files directly. The scaffolder skips files that alread
 exist in \texttt{src/main/java/} on regeneration, so modifications survive.
 
 This approach is reserved for cases where strategies 1 and 2 are insufficient.
-Custom activity contracts are preferred because they separate generated boilerplate
-from hand-written logic cleanly.
+Custom activity contracts separate generated code from hand-written logic, so
+regeneration does not overwrite custom work.
 
 \subsection{What is typically edited}
 

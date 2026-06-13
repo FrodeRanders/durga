@@ -18,10 +18,10 @@ in \texttt{<package>.probes},
 \item helper scripts for demos, inputs, completions, failures, escalations and observers.
 \end{itemize}
 
-The BPMN model copy travels with the project and serves as the source of truth for
-regeneration. During the build, the \texttt{ModelEnricher} utility updates it with
-implementation metadata for custom activities, so the model always reflects the
-current state of the code.
+The BPMN model copy is kept alongside the source code and is the input to
+regeneration. During the build, \texttt{ModelEnricher} writes implementation
+metadata for custom activities back into this copy, keeping the model in sync
+with the implementation.
 
 \subsection{Contract interfaces and custom workers}
 
