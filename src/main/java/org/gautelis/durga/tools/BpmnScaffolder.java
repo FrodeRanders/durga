@@ -1651,12 +1651,6 @@ public class BpmnScaffolder {
         if (kind == TaskKind.RECEIVE) {
             return "receiveTaskClass";
         }
-        if (kind == TaskKind.SCRIPT) {
-            return "scriptTaskHandlerClass";
-        }
-        if (kind == TaskKind.BUSINESS_RULE) {
-            return "businessRuleTaskHandlerClass";
-        }
         if (kind == TaskKind.PLUGIN) {
             return "pluginExecutorClass";
         }
@@ -1673,10 +1667,8 @@ public class BpmnScaffolder {
             case CALL -> "CallActivityStub";
             case SEND -> "SendTaskService";
             case RECEIVE -> "ReceiveTaskService";
-            case SCRIPT -> "ScriptTaskService";
-            case BUSINESS_RULE -> "BusinessRuleTaskService";
+            case SCRIPT, BUSINESS_RULE, CUSTOM -> "WorkerService";
             case PLUGIN -> "PluginExecutor";
-            case CUSTOM -> "WorkerService";
             case SERVICE, GENERIC -> transactions ? "TransactionalWorker" : "WorkerService";
         };
     }

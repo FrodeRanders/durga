@@ -40,7 +40,8 @@ final class TaskRoutingGenerator {
                 continue;
             }
 
-            if (task.kind == TaskKind.CUSTOM) {
+            if (task.kind == TaskKind.CUSTOM || task.kind == TaskKind.SCRIPT
+                    || task.kind == TaskKind.BUSINESS_RULE) {
                 generateCustomTask(group, javaOutput, outputRoot, generatedFiles,
                         dryRun, processId, task, className, existingSources);
                 continue;
