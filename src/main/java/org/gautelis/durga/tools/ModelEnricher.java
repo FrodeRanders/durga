@@ -8,24 +8,23 @@ import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperty;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.stream.Stream;
 
 /**
  * Enriches a local BPMN model with implementation metadata discovered from
  * compiled Java classes that implement generated contract interfaces.
  *
- * <p>Intended to be run during the build (e.g. via Maven exec plugin or a
- * dedicated Maven plugin). It scans {@code target/classes/} for classes that
- * implement a contract interface in the generated package, matches them to
- * BPMN activities, and writes {@code customImpl}, {@code customSource},
- * and {@code customHash} Camunda extension properties back into the BPMN file.
+ * <p>Uses a {@link URLClassLoader} to load compiled classes and check
+ * interface implementations via reflection, rather than scanning raw bytecode.
  *
  * <p>Usage:
  * <pre>
@@ -66,6 +65,7 @@ public final class ModelEnricher {
         BpmnModelInstance model = Bpmn.readModelFromStream(
                 new java.io.ByteArrayInputStream(bpmnContent.getBytes(StandardCharsets.UTF_8)));
 
+        URLClassLoader classLoader = null;
         boolean modified = false;
         Collection<ServiceTask> serviceTasks = model.getModelElementsByType(ServiceTask.class);
 
@@ -75,21 +75,22 @@ public final class ModelEnricher {
                 continue;
             }
 
-            String contractName = getProperty(task, "pluginConfig");
-            if (contractName == null || contractName.isBlank()) {
+            String pluginConfig = getProperty(task, "pluginConfig");
+            String contractFqName = parseContractFqName(pluginConfig, task);
+            if (contractFqName == null) {
                 continue;
             }
 
-            String contractSimpleName = contractName.contains(".")
-                    ? contractName.substring(contractName.lastIndexOf('.') + 1)
-                    : contractName;
+            if (classLoader == null) {
+                classLoader = new URLClassLoader(new URL[]{classesDir.toUri().toURL()},
+                        ClassLoader.getSystemClassLoader());
+            }
 
-            List<Path> impls = findImplementations(classesDir, contractSimpleName);
-            if (impls.isEmpty()) {
+            Path implPath = findImplementation(classesDir, contractFqName, classLoader);
+            if (implPath == null) {
                 continue;
             }
 
-            Path implPath = impls.getFirst();
             String implClassName = classNameFromPath(classesDir, implPath);
             String hash = sha256(implPath);
             String sourceName = implPath.getFileName().toString();
@@ -109,6 +110,13 @@ public final class ModelEnricher {
             modified = true;
         }
 
+        if (classLoader != null) {
+            try {
+                classLoader.close();
+            } catch (IOException ignored) {
+            }
+        }
+
         if (modified) {
             String updatedBpmn = Bpmn.convertToString(model);
             Files.writeString(bpmnFile, updatedBpmn, StandardCharsets.UTF_8);
@@ -116,6 +124,73 @@ public final class ModelEnricher {
         } else {
             System.out.println("No changes needed for: " + bpmnFile);
         }
+    }
+
+    private static String parseContractFqName(String pluginConfig, ServiceTask task) {
+        if (pluginConfig == null || pluginConfig.isBlank()) {
+            String name = task.getName() != null && !task.getName().isBlank()
+                    ? task.getName() : task.getId();
+            return BpmnScaffolder.toClassName(name) + "Contract";
+        }
+        for (String part : pluginConfig.split(";")) {
+            part = part.trim();
+            if (part.startsWith("interface=")) {
+                return part.substring("interface=".length()).trim();
+            }
+        }
+        String trimmed = pluginConfig.trim();
+        if (trimmed.contains(".")) {
+            return trimmed;
+        }
+        return null;
+    }
+
+    private static Path findImplementation(Path classesDir, String contractFqName,
+                                            URLClassLoader classLoader) {
+        Class<?> contractClass;
+        try {
+            contractClass = classLoader.loadClass(contractFqName);
+        } catch (ClassNotFoundException e) {
+            return null;
+        }
+
+        String contractPackage = contractFqName.contains(".")
+                ? contractFqName.substring(0, contractFqName.lastIndexOf('.'))
+                : "";
+        String packagePath = contractPackage.replace('.', '/');
+        Path packageDir = classesDir.resolve(packagePath);
+
+        if (!Files.isDirectory(packageDir)) {
+            return null;
+        }
+
+        try (var stream = Files.list(packageDir)) {
+            List<Path> candidates = stream
+                    .filter(p -> p.getFileName().toString().endsWith(".class"))
+                    .filter(p -> {
+                        String name = p.getFileName().toString();
+                        return !name.contains("$") && !name.equals(contractFqName.substring(
+                                contractFqName.lastIndexOf('.') + 1) + ".class");
+                    })
+                    .toList();
+
+            for (Path candidate : candidates) {
+                String candidateName = classNameFromPath(classesDir, candidate);
+                try {
+                    Class<?> candidateClass = classLoader.loadClass(candidateName);
+                    if (contractClass.isAssignableFrom(candidateClass)
+                            && candidateClass != contractClass
+                            && !candidateClass.isInterface()) {
+                        return candidate;
+                    }
+                } catch (ClassNotFoundException | NoClassDefFoundError e) {
+                    continue;
+                }
+            }
+        } catch (IOException e) {
+            return null;
+        }
+        return null;
     }
 
     private static String getProperty(ServiceTask task, String name) {
@@ -159,32 +234,6 @@ public final class ModelEnricher {
         newProp.setCamundaName(name);
         newProp.setCamundaValue(value);
         props.getCamundaProperties().add(newProp);
-    }
-
-    private static List<Path> findImplementations(Path classesDir, String contractName) throws IOException {
-        try (Stream<Path> stream = Files.walk(classesDir)) {
-            return stream
-                    .filter(p -> p.getFileName().toString().endsWith(".class"))
-                    .filter(p -> {
-                        String className = p.getFileName().toString().replace(".class", "");
-                        return !className.equals(contractName) && !className.contains("$");
-                    })
-                    .filter(p -> implementsContract(classesDir, p, contractName))
-                    .toList();
-        }
-    }
-
-    private static boolean implementsContract(Path classesDir, Path classFile, String contractName) {
-        try {
-            byte[] bytes = Files.readAllBytes(classFile);
-            String interfaceRef = ("L" + contractName.replace('.', '/') + ";").replace('/', '/');
-            String constantRef = contractName.replace('.', '/');
-            String content = new String(bytes, StandardCharsets.ISO_8859_1);
-
-            return content.contains(interfaceRef) || content.contains(constantRef);
-        } catch (IOException e) {
-            return false;
-        }
     }
 
     private static String classNameFromPath(Path classesDir, Path classFile) {

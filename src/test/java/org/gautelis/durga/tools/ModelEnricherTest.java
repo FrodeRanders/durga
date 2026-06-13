@@ -2,22 +2,54 @@ package org.gautelis.durga.tools;
 
 import org.junit.Test;
 
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.Assert.*;
 
 public class ModelEnricherTest {
 
+    private static final boolean COMPILER_AVAILABLE = ToolProvider.getSystemJavaCompiler() != null;
+
     @Test
     public void shouldEnrichCustomActivityWithImplementationMetadata() throws Exception {
-        System.out.println("TC: enriches BPMN model with custom impl, source, and hash properties");
+        assumeCompilerAvailable();
 
-        Path bpmnFile = Files.createTempFile("test-enrich-", ".bpmn");
-        Path classesDir = Files.createTempDirectory("test-classes-");
+        Path workDir = Files.createTempDirectory("test-enrich-");
         try {
-            String bpmn = """
+            Path classesDir = workDir.resolve("classes");
+            Files.createDirectories(classesDir);
+
+            Path srcDir = workDir.resolve("src");
+            Path contractFile = srcDir.resolve("CustomStepContract.java");
+            Files.createDirectories(contractFile.getParent());
+            Files.writeString(contractFile, """
+                    package org.example;
+                    public interface CustomStepContract extends org.gautelis.durga.plugins.Plugin {
+                    }
+                    """, StandardCharsets.UTF_8);
+
+            Path implFile = srcDir.resolve("CustomStepImpl.java");
+            Files.writeString(implFile, """
+                    package org.example;
+                    public class CustomStepImpl implements CustomStepContract {
+                        public String execute(String payload, String config) { return payload; }
+                    }
+                    """, StandardCharsets.UTF_8);
+
+            JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+            int result = compiler.run(null, null, null,
+                    "-d", classesDir.toString(),
+                    "-cp", System.getProperty("java.class.path"),
+                    contractFile.toString(), implFile.toString());
+            assertEquals("compilation failed", 0, result);
+
+            Path bpmnFile = workDir.resolve("pipeline.bpmn");
+            Files.writeString(bpmnFile, """
                     <?xml version="1.0" encoding="UTF-8"?>
                     <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                                       xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
@@ -33,17 +65,7 @@ public class ModelEnricherTest {
                         </bpmn:serviceTask>
                       </bpmn:process>
                     </bpmn:definitions>
-                    """;
-            Files.writeString(bpmnFile, bpmn, StandardCharsets.UTF_8);
-
-            Path contractDir = classesDir.resolve("org/example");
-            Files.createDirectories(contractDir);
-
-            byte[] contractBytes = mockClassBytes("org/example/CustomStepContract", (String) null);
-            Files.write(contractDir.resolve("CustomStepContract.class"), contractBytes);
-
-            byte[] implBytes = mockClassBytes("org/example/CustomStepImpl", "org/example/CustomStepContract");
-            Files.write(contractDir.resolve("CustomStepImpl.class"), implBytes);
+                    """, StandardCharsets.UTF_8);
 
             ModelEnricher.enrich(classesDir, bpmnFile);
 
@@ -57,19 +79,21 @@ public class ModelEnricherTest {
                     enriched.contains("CustomStepImpl.class"));
 
         } finally {
-            Files.deleteIfExists(bpmnFile);
-            deleteRecursively(classesDir);
+            deleteRecursively(workDir);
         }
     }
 
     @Test
     public void shouldNotModifyBpmnWhenNoImplementationFound() throws Exception {
-        System.out.println("TC: does not modify BPMN when no contract implementation exists");
+        assumeCompilerAvailable();
 
-        Path bpmnFile = Files.createTempFile("test-noimpl-", ".bpmn");
-        Path classesDir = Files.createTempDirectory("test-noclasses-");
+        Path workDir = Files.createTempDirectory("test-noimpl-");
         try {
-            String bpmn = """
+            Path classesDir = workDir.resolve("classes");
+            Files.createDirectories(classesDir);
+
+            Path bpmnFile = workDir.resolve("pipeline.bpmn");
+            Files.writeString(bpmnFile, """
                     <?xml version="1.0" encoding="UTF-8"?>
                     <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                                       xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
@@ -79,14 +103,13 @@ public class ModelEnricherTest {
                           <bpmn:extensionElements>
                             <camunda:properties>
                               <camunda:property name="plugin" value="custom" />
-                              <camunda:property name="pluginConfig" value="interface=com.example.OrphanContract" />
+                              <camunda:property name="pluginConfig" value="interface=org.example.OrphanContract" />
                             </camunda:properties>
                           </bpmn:extensionElements>
                         </bpmn:serviceTask>
                       </bpmn:process>
                     </bpmn:definitions>
-                    """;
-            Files.writeString(bpmnFile, bpmn, StandardCharsets.UTF_8);
+                    """, StandardCharsets.UTF_8);
             String before = Files.readString(bpmnFile, StandardCharsets.UTF_8);
 
             ModelEnricher.enrich(classesDir, bpmnFile);
@@ -95,19 +118,45 @@ public class ModelEnricherTest {
             assertEquals("BPMN modified when no implementation found", before, after);
 
         } finally {
-            Files.deleteIfExists(bpmnFile);
-            deleteRecursively(classesDir);
+            deleteRecursively(workDir);
         }
     }
 
     @Test
     public void shouldUpdateExistingPropertiesOnReenrichment() throws Exception {
-        System.out.println("TC: updates customImpl, customHash when implementation changes");
+        assumeCompilerAvailable();
 
-        Path bpmnFile = Files.createTempFile("test-reenrich-", ".bpmn");
-        Path classesDir = Files.createTempDirectory("test-reclasses-");
+        Path workDir = Files.createTempDirectory("test-reenrich-");
         try {
-            String bpmn = """
+            Path classesDir = workDir.resolve("classes");
+            Files.createDirectories(classesDir);
+
+            Path srcDir = workDir.resolve("src");
+            Path contractFile = srcDir.resolve("StepContract.java");
+            Files.createDirectories(contractFile.getParent());
+            Files.writeString(contractFile, """
+                    package org.example;
+                    public interface StepContract extends org.gautelis.durga.plugins.Plugin {
+                    }
+                    """, StandardCharsets.UTF_8);
+
+            Path implFile = srcDir.resolve("StepImpl.java");
+            Files.writeString(implFile, """
+                    package org.example;
+                    public class StepImpl implements StepContract {
+                        public String execute(String payload, String config) { return payload; }
+                    }
+                    """, StandardCharsets.UTF_8);
+
+            JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+            int result = compiler.run(null, null, null,
+                    "-d", classesDir.toString(),
+                    "-cp", System.getProperty("java.class.path"),
+                    contractFile.toString(), implFile.toString());
+            assertEquals("compilation failed", 0, result);
+
+            Path bpmnFile = workDir.resolve("pipeline.bpmn");
+            Files.writeString(bpmnFile, """
                     <?xml version="1.0" encoding="UTF-8"?>
                     <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                                       xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
@@ -126,24 +175,16 @@ public class ModelEnricherTest {
                         </bpmn:serviceTask>
                       </bpmn:process>
                     </bpmn:definitions>
-                    """;
-            Files.writeString(bpmnFile, bpmn, StandardCharsets.UTF_8);
-
-            Path contractDir = classesDir.resolve("org/example");
-            Files.createDirectories(contractDir);
-            Files.write(contractDir.resolve("StepContract.class"),
-                    mockClassBytes("org/example/StepContract", (String) null));
-            Files.write(contractDir.resolve("StepImpl.class"),
-                    mockClassBytes("org/example/StepImpl", "org/example/StepContract"));
+                    """, StandardCharsets.UTF_8);
 
             ModelEnricher.enrich(classesDir, bpmnFile);
 
             String enriched = Files.readString(bpmnFile, StandardCharsets.UTF_8);
-            assertTrue("old customImpl not replaced",
+            assertTrue("new customImpl not written",
                     enriched.contains("org.example.StepImpl"));
             assertFalse("old customImpl still present",
                     enriched.contains("old.Implementation"));
-            assertTrue("old customSource not replaced",
+            assertTrue("new customSource not written",
                     enriched.contains("StepImpl.class"));
             assertFalse("old customSource still present",
                     enriched.contains("OldImpl.class"));
@@ -151,20 +192,15 @@ public class ModelEnricherTest {
                     enriched.contains("abc123"));
 
         } finally {
-            Files.deleteIfExists(bpmnFile);
-            deleteRecursively(classesDir);
+            deleteRecursively(workDir);
         }
     }
 
-    private byte[] mockClassBytes(String fqName, String implementsContract) {
-        String internalName = fqName.replace('.', '/');
-        StringBuilder sb = new StringBuilder();
-        sb.append("CAFEBABE");
-        sb.append("class:").append(internalName);
-        if (implementsContract != null) {
-            sb.append(";implements:").append(implementsContract.replace('.', '/'));
+    private static void assumeCompilerAvailable() {
+        if (!COMPILER_AVAILABLE) {
+            System.out.println("Skipping test: no system Java compiler available (JRE only?)");
         }
-        return sb.toString().getBytes(StandardCharsets.ISO_8859_1);
+        assertTrue("Java compiler not available", COMPILER_AVAILABLE);
     }
 
     private static void deleteRecursively(Path path) {
