@@ -2286,8 +2286,7 @@ public class BpmnScaffolder {
             List<String> tasks
     ) {
         String className = toClassName(processId) + "Runner";
-        Path probesDir = javaOutput.resolve("probes");
-        Path outputFile = probesDir.resolve(className + ".java");
+        Path outputFile = javaOutput.resolve(className + ".java");
         if (Files.exists(outputFile)) {
             return;
         }
