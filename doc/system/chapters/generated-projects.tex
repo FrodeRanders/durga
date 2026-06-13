@@ -6,8 +6,10 @@
 The generated output contains:
 \begin{itemize}
 \item operational classes (workers, gateways, orchestrator) in the configured package,
+\item contract interfaces for custom activities (\texttt{\textit{Name}Contract.java}),
 \item probe and exerciser classes (starter, publishers, watchers, scenario runner)
 in \texttt{<package>.probes},
+\item a copy of the original BPMN model under \texttt{src/main/resources/},
 \item a generated \texttt{pom.xml},
 \item merged Kafka channel configuration in \texttt{application.yml},
 \item a topic-creation script,
@@ -15,6 +17,28 @@ in \texttt{<package>.probes},
 \item a generated README,
 \item helper scripts for demos, inputs, completions, failures, escalations and observers.
 \end{itemize}
+
+The BPMN model copy travels with the project and serves as the source of truth for
+regeneration. During the build, the \texttt{ModelEnricher} utility updates it with
+implementation metadata for custom activities, so the model always reflects the
+current state of the code.
+
+\subsection{Contract interfaces and custom workers}
+
+When a \texttt{ServiceTask} is annotated with \texttt{camunda:plugin="custom"}, the
+scaffolder generates:
+
+\begin{itemize}
+\item \texttt{\textit{Name}Contract.java} --- an interface extending \texttt{Plugin}
+  that defines the contract for the custom implementation.
+\item \texttt{\textit{Name}WorkerService.java} --- a CDI bean that injects the
+  contract interface and delegates each incoming message to the implementation.
+  Includes a null guard and dead-letter routing.
+\end{itemize}
+
+The developer writes a separate implementation class (\texttt{\textit{Name}Impl.java})
+that implements the contract interface and is annotated with \texttt{@ApplicationScoped}
+for CDI discovery. The implementation class is never touched by the scaffolder.
 
 \subsection{Helper scripts}
 
@@ -35,10 +59,15 @@ Generated scripts include:
 \subsection{Development workflow}
 
 \begin{enumerate}
-\item generate the project from a BPMN model,
-\item inspect \texttt{summary.json}, topic config and helper scripts,
-\item build the generated project independently,
-\item run a starter or a scenario,
-\item observe progress through \texttt{process-events} and the monitoring views,
-\item adjust the BPMN model and regenerate.
+\item Model the pipeline in Camunda Modeler, selecting plugins from the catalog for
+  standard operations and marking custom activities with \texttt{plugin="custom"}.
+\item Generate the project from the BPMN model with Durga.
+\item For custom activities: implement the generated contract interface in a separate
+  Java file. Compile and test with standard tools.
+\item Run \texttt{ModelEnricher} during the build to write implementation metadata
+  back into the local BPMN model copy.
+\item Build the generated project, run a starter or scenario, and observe progress
+  through \texttt{process-events} and the monitoring views.
+\item When the pipeline needs changes, edit the enriched BPMN model and regenerate.
+  Custom implementations survive untouched; plugin workers are fully regenerated.
 \end{enumerate}

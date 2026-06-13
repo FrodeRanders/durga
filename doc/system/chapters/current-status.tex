@@ -18,7 +18,9 @@ regression-covered; generated projects are usable for local exploration.
 \item \texttt{SendTask}, \texttt{ReceiveTask}, \texttt{ScriptTask}, \texttt{BusinessRuleTask} generate dedicated handlers,
 \item inclusive gateway (OR) split/join,
 \item multi-instance loop characteristics detected and reported,
-\item 6 data pipeline plugins with interface-based dispatch.
+\item 15 data pipeline plugins (9 transform, 1 validate, 1 enrich, 1 route, 1 aggregate, 2 connect) with interface-based dispatch,
+\item recursive descent expression evaluator for XOR and OR gateway conditions (\texttt{==}, \texttt{!=}, \texttt{>}, \texttt{<}, \texttt{>=}, \texttt{<=}, \texttt{\&\&}, \texttt{||}, \texttt{!}, parentheses, nested field access),
+\item custom activity round-trip: contract interface generation, delegating workers with CDI injection, model enrichment utility.
 \end{itemize}
 
 \subsection{Limits}
@@ -37,4 +39,6 @@ regression-covered; generated projects are usable for local exploration.
   event subprocess starts should have first-class process-level semantics.
 \item[Runtime fidelity] Whether to deepen true BPMN scope semantics as the
   project evolves.
+\item[Plugin SDK] Whether to formalize a plugin development kit for third-party
+  plugin authors beyond the current \texttt{Plugin} interface contract.
 \end{description}

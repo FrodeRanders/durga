@@ -2,17 +2,70 @@
 \label{sec:ExtensionStrategy}
 
 Generated code is a starting point. The BPMN model is the primary design source; generated
-code is scaffolding expected to be completed and adapted.
+code is scaffolding expected to be completed and adapted. Durga provides three strategies
+for extending generated code, ordered by preference.
 
-\subsection{What is edited}
+\subsection{Strategy 1: Use a registered plugin}
+
+For common data pipeline operations, use one of the 15 registered plugins. Annotate a
+\texttt{ServiceTask} with \texttt{camunda:plugin} and \texttt{camunda:pluginConfig}
+in the BPMN model. The scaffolder generates a complete, working worker that delegates
+to the plugin at runtime. No code is written or maintained.
+
+This covers: field remapping, filtering, type coercion, string templating, PII masking,
+regex extraction, JSON flatten/unflatten, UUID injection, timestamp normalization,
+schema validation, key-value enrichment, field-based routing, window counting, and
+Kafka Connect source/sink configuration.
+
+\subsection{Strategy 2: Implement a custom activity}
+
+When no plugin covers the required logic, mark the BPMN activity with
+\texttt{camunda:plugin="custom"}. The scaffolder generates:
+
+\begin{itemize}
+\item A \textbf{contract interface} (e.g. \texttt{MyTransformContract extends Plugin})
+  that defines the API between generated and hand-written code.
+\item A \textbf{delegating worker} that injects the contract via CDI (\texttt{@Inject}),
+  delegates each message to \texttt{implementation.execute()}, and includes a null
+  guard with dead-letter routing.
+\end{itemize}
+
+The developer writes an implementation class in a normal Java file (IDE, compilation,
+testing). The generated contract interface and delegating worker are never modified
+by hand.
+
+A build-time utility (\texttt{ModelEnricher}) scans compiled classes for
+implementations of generated contracts, matches them to BPMN activities, and writes
+\texttt{customImpl}, \texttt{customSource}, and \texttt{customHash} properties back
+into the local BPMN model copy. On regeneration, the enriched model carries the
+implementation references forward --- the scaffolder regenerates the contract and
+worker but never touches the hand-written implementation class.
+
+The BPMN model is copied into \texttt{src/main/resources/} in every generated project.
+It is version-controlled alongside the custom implementation and contract interface.
+Plugin-only workers can be \texttt{.gitignored} since they are fully regenerated from
+the model.
+
+\subsection{Strategy 3: Modify generated code directly}
+
+For one-off customizations that don't fit the plugin or custom activity models,
+modify the generated Java files directly. The scaffolder skips files that already
+exist in \texttt{src/main/java/} on regeneration, so modifications survive.
+
+This approach is reserved for cases where strategies 1 and 2 are insufficient.
+Custom activity contracts are preferred because they separate generated boilerplate
+from hand-written logic cleanly.
+
+\subsection{What is typically edited}
 
 Common edits in generated projects:
 \begin{itemize}
-\item task business logic,
-\item XOR decision conditions,
+\item custom activity implementations (implementing generated contracts),
+\item gateway condition expressions in the BPMN model (evaluated at runtime by the
+  recursive descent parser --- no code modification needed),
 \item payload handling and validation,
-\item integration calls inside service-style workers,
-\item operational configuration values.
+\item integration calls inside custom implementations,
+\item operational configuration values in \texttt{application.yml}.
 \end{itemize}
 
 \subsection{What should remain generated}
@@ -28,6 +81,12 @@ Keep these close to the generated structure:
 
 \subsection{Regeneration strategy}
 
-Preserve the overall generated runtime structure while filling in task-specific behavior.
-When the BPMN model changes substantially, regenerate and re-apply focused logic changes
-rather than manually rewiring the generated topology.
+When the pipeline needs structural changes (add/remove/reorder activities, change
+gateway logic, adjust plugin configuration), edit the BPMN model in Camunda Modeler
+and regenerate the project. For custom activities, start from the enriched model
+that already carries implementation metadata.
+
+Plugin workers are regenerated from scratch. Contract interfaces are regenerated if
+the activity configuration changed. Hand-written implementation classes are never
+touched. If an implementation class was removed or renamed, the scaffolder emits a
+warning but does not delete the orphaned file.

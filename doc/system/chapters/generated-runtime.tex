@@ -17,8 +17,16 @@ rather than hiding behind an opaque engine.
 \item \textbf{Task services} handle BPMN tasks. Service-task handlers auto-complete after
 their work step; user and manual task handlers enter a waiting state and await explicit
 completion, failure or escalation input.
-\item \textbf{Gateway services} handle XOR and parallel routing decisions, including fan-out
-and join behavior.
+\item \textbf{Plugin executors} instantiate a registered plugin at field level and delegate
+each message to \texttt{plugin.execute()}. No per-plugin code paths in the generator.
+\item \textbf{Custom contract interfaces} define the API for hand-written implementations
+of custom activities. They extend the \texttt{Plugin} interface.
+\item \textbf{Custom delegating workers} inject a contract interface via CDI and delegate
+each message to the implementation. Includes a null guard with dead-letter routing.
+\item \textbf{Gateway services} handle XOR, AND and OR routing decisions, including fan-out
+and join behavior. XOR and OR conditions are evaluated at runtime by a recursive descent
+expression parser supporting \texttt{==}, \texttt{!=}, \texttt{>}, \texttt{<}, \texttt{>=},
+\texttt{<=}, \texttt{\&\&}, \texttt{||}, \texttt{!}, parentheses, and nested field access.
 \item \textbf{Event handlers} implement timer, message and signal behavior for intermediate
 events and boundary-event reactions.
 \item \textbf{Call-activity helpers} model request and reply behavior for call activities.
@@ -35,6 +43,26 @@ Generated task services consume a task input topic, emit \texttt{ACTIVITY\_ENTER
 the generated action or enter a wait state, then emit \texttt{ACTIVITY\_COMPLETED},
 \texttt{FAILED}, \texttt{ESCALATED} or \texttt{CANCELLED} before forwarding to the next
 topic or boundary path.
+
+\subsection{Plugin executors and custom workers}
+
+Plugin executors and custom delegating workers share the same structure: a CDI bean
+with \texttt{@Incoming} for the task input topic and \texttt{@Channel} emitters for
+output, process-events, and dead-letter topics. The difference is in how the
+transformation logic is obtained:
+
+\begin{itemize}
+\item \textbf{Plugin executor}: instantiates the concrete plugin class as a field
+  (\texttt{private final Plugin plugin = new JsonTransform();}) and calls
+  \texttt{plugin.execute(payload, config)}.
+\item \textbf{Custom delegating worker}: injects the contract interface via CDI
+  (\texttt{@Inject MyContract implementation;}) and calls
+  \texttt{implementation.execute(payload, config)}. The implementation is provided
+  by a developer-written class annotated with \texttt{@ApplicationScoped}.
+\end{itemize}
+
+Both patterns include scope cancellation checks, DLQ routing on failure, and
+canonical \texttt{process-events} emission.
 
 \subsection{Routing and event classes}
 

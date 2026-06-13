@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  id="Definitions_1"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="custom_activity_demo" name="Custom Activity Demo" isExecutable="true">
+
+    <bpmn:startEvent id="StartEvent_1" name="Start">
+      <bpmn:outgoing>Flow_start_to_custom</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="custom_transform" name="Custom Transform">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="custom" />
+          <camunda:property name="pluginConfig" value="interface=org.example.CustomTransformContract" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_start_to_custom</bpmn:incoming>
+      <bpmn:outgoing>Flow_custom_to_end</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_1" name="End">
+      <bpmn:incoming>Flow_custom_to_end</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_start_to_custom" sourceRef="StartEvent_1" targetRef="custom_transform" />
+    <bpmn:sequenceFlow id="Flow_custom_to_end" sourceRef="custom_transform" targetRef="EndEvent_1" />
+
+  </bpmn:process>
+
+</bpmn:definitions>

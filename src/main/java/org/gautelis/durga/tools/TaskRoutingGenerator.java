@@ -39,6 +39,13 @@ final class TaskRoutingGenerator {
             if (Files.exists(outputFile) || existingSources.contains(className + ".java")) {
                 continue;
             }
+
+            if (task.kind == TaskKind.CUSTOM) {
+                generateCustomTask(group, javaOutput, outputRoot, generatedFiles,
+                        dryRun, processId, task, className, existingSources);
+                continue;
+            }
+
             ST worker = group.getInstanceOf(BpmnScaffolder.templateForTask(task.kind, transactions));
             worker.add("packageName", BpmnScaffolder.generatedPackage);
             worker.add("className", className);
@@ -54,6 +61,59 @@ final class TaskRoutingGenerator {
                 BpmnScaffolder.writeFile(outputFile, worker.render());
             }
             generatedFiles.add(outputRoot.relativize(outputFile).toString());
+        }
+    }
+
+    private static void generateCustomTask(
+            STGroupString group,
+            Path javaOutput,
+            Path outputRoot,
+            List<String> generatedFiles,
+            boolean dryRun,
+            String processId,
+            TaskSpec task,
+            String className,
+            Set<String> existingSources
+    ) {
+        String contractSimpleName = task.customContract != null
+                && task.customContract.contains(".")
+                ? task.customContract.substring(task.customContract.lastIndexOf('.') + 1)
+                : (task.customContract != null ? task.customContract : BpmnScaffolder.toClassName(task.name) + "Contract");
+
+        Path contractFile = javaOutput.resolve(contractSimpleName + ".java");
+
+        boolean contractExists = Files.exists(contractFile)
+                || existingSources.contains(contractSimpleName + ".java");
+
+        if (!contractExists) {
+            ST contract = group.getInstanceOf("customContractClass");
+            contract.add("packageName", BpmnScaffolder.generatedPackage);
+            contract.add("className", contractSimpleName);
+            contract.add("processId", processId);
+            contract.add("taskId", task.id);
+            contract.add("taskName", task.name);
+            if (!dryRun) {
+                BpmnScaffolder.writeFile(contractFile, contract.render());
+            }
+            generatedFiles.add(outputRoot.relativize(contractFile).toString());
+        }
+
+        Path workerFile = javaOutput.resolve(className + ".java");
+        if (!Files.exists(workerFile)) {
+            ST worker = group.getInstanceOf("customDelegatingWorkerClass");
+            worker.add("packageName", BpmnScaffolder.generatedPackage);
+            worker.add("className", className);
+            worker.add("contractClassName", contractSimpleName);
+            worker.add("processId", processId);
+            worker.add("taskId", task.name);
+            worker.add("taskType", task.kind.bpmnType);
+            worker.add("pluginConfig", task.pluginConfig != null ? task.pluginConfig : ".");
+            worker.add("customImpl", task.customImpl != null ? task.customImpl : "");
+            worker.add("customHash", task.customHash != null ? task.customHash : "");
+            if (!dryRun) {
+                BpmnScaffolder.writeFile(workerFile, worker.render());
+            }
+            generatedFiles.add(outputRoot.relativize(workerFile).toString());
         }
     }
 

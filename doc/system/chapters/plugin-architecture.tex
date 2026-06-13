@@ -13,7 +13,7 @@ Plugins are defined by YAML descriptors under \filepath{plugins/} and indexed by
 \begin{itemize}
 \item \texttt{id} --- unique plugin identifier (used in \texttt{camunda:plugin}),
 \item \texttt{name} / \texttt{version} --- human-readable identifier,
-\item \texttt{category} --- governed taxonomy (transform, validate, enrich, route, aggregate, sink),
+\item \texttt{category} --- governed taxonomy (transform, validate, enrich, route, aggregate, connect),
 \item \texttt{status} --- lifecycle state (experimental, stable, deprecated, retired),
 \item \texttt{implementation} --- Java class implementing
 \filepath{org.gautelis.durga.plugins.Plugin},
@@ -35,7 +35,7 @@ category contract.
 \textbf{enrich} & Input$\to$enriched output, may block on external lookup \\
 \textbf{route} & Input$\to$N downstream channels, GATEWAY\_TAKEN lifecycle \\
 \textbf{aggregate} & Windowed counting, ACTIVITY\_ENTERED on window start \\
-\textbf{sink} & Terminal output, no downstream routing \\
+\textbf{connect} & Kafka Connect source/sink configuration generation \\
 \hline
 \end{longtable}
 
@@ -51,17 +51,54 @@ Generated executor classes instantiate the plugin at field level and call
 \texttt{plugin.execute(payload, config)} for each message. The config string
 comes from the BPMN \texttt{camunda:pluginConfig} property.
 
-\subsection{Reference implementations}
+\subsection{Plugin catalog}
 
-The repository ships with five reference plugins that form the initial
-standard library:
+The repository ships with 15 plugins organized by category. Stable plugins are
+fully supported; experimental plugins generate with a warning.
+
+\subsubsection{Transform plugins (9)}
 
 \begin{description}
-\item[JSON Transform] Dot-notation field remapping.
-\item[Field Filter] Whitelist/blacklist with flatten.
-\item[KV Enricher] Inline key-value lookup and merge.
-\item[Field Router] Value-based routing to named channels.
-\item[Window Counter] Time-window counting with grouping.
+\item[JSON Transform] Dot-notation field remapping with colon-syntax renaming and literal injection.
+\item[Field Filter] Whitelist/blacklist field filtering with optional flatten.
+\item[Type Coercion] Coerces field values between string, int, long, double, decimal, and boolean.
+\item[String Template] Renders a template string with \texttt{\$\{field\}} substitution. Dot-notation access for nested fields.
+\item[PII Mask] Masks sensitive text fields with configurable mask character and boundary character preservation.
+\item[Regex Extract] Extracts named capture groups from a source field into the payload. Supports multiple matches.
+\item[JSON Flatten] Flattens nested JSON to dot-notation keys, or unflattens dot-notation back to nested objects. Configurable separator and max depth.
+\item[UUID Inject] Injects UUIDs (v4 or time-based v1) into specified payload fields.
+\item[Timestamp Normalize] Converts between epoch\_s, epoch\_ms, ISO 8601, RFC 3339, and custom DateTimeFormatter patterns. Configurable timezone.
+\end{description}
+
+\subsubsection{Validate plugins (1)}
+
+\begin{description}
+\item[JSON Schema Validator] Validates payloads against a JSON Schema subset. Routes invalid messages to DLQ, skipped, or fails. Status: experimental.
+\end{description}
+
+\subsubsection{Enrich plugins (1)}
+
+\begin{description}
+\item[KV Enricher] Looks up a key field value in an inline data map and shallow-merges enrichment data. Status: experimental.
+\end{description}
+
+\subsubsection{Route plugins (1)}
+
+\begin{description}
+\item[Field Router] Routes messages to named output channels based on a field value. Status: experimental.
+\end{description}
+
+\subsubsection{Aggregate plugins (1)}
+
+\begin{description}
+\item[Window Counter] Counts messages within a tumbling time window and emits a summary record on window close. Optional group-by field. Status: experimental.
+\end{description}
+
+\subsubsection{Connect plugins (2)}
+
+\begin{description}
+\item[Kafka Connect Source] Generates Kafka Connect source connector configuration for pipeline intake topics.
+\item[Kafka Connect Sink] Generates Kafka Connect sink connector configuration for pipeline egress.
 \end{description}
 
 \subsection{BPMN binding}
@@ -97,6 +134,43 @@ template. The executor:
 \item routes failures to a dead-letter topic (\texttt{\%task\%\_dlq}) with structured error records,
 \item respects \texttt{ScopeCancellationRegistry} for interrupting boundary support.
 \end{itemize}
+
+\subsection{Custom activities}
+
+When no registered plugin covers a transformation, the \texttt{camunda:plugin="custom"}
+marker triggers a different code generation path designed for hand-written implementations:
+
+\begin{verbatim}
+<bpmn:serviceTask id="custom_transform" name="Custom Transform">
+  <bpmn:extensionElements>
+    <camunda:properties>
+      <camunda:property name="plugin" value="custom" />
+      <camunda:property name="pluginConfig" value="org.example.CustomTransformContract" />
+    </camunda:properties>
+  </bpmn:extensionElements>
+</bpmn:serviceTask>
+\end{verbatim}
+
+Instead of generating a self-contained worker, the scaffolder produces:
+
+\begin{enumerate}
+\item A \textbf{contract interface} (\texttt{CustomTransformContract}) extending \texttt{Plugin} --- this defines the API between generated and hand-written code.
+\item A \textbf{delegating worker} (\texttt{CustomTransformWorkerService}) that injects the contract via CDI (\texttt{@Inject}) and delegates each message to \texttt{implementation.execute()}. The worker includes a null guard that routes to the dead-letter queue if no implementation is present.
+\end{enumerate}
+
+The developer writes an implementation class (\texttt{CustomTransformImpl implements CustomTransformContract}) in a normal Java file, with full IDE support, compilation, and testing. The generated contract and worker are never modified by hand.
+
+\subsubsection{Round-trip model enrichment}
+
+A build-time utility (\texttt{ModelEnricher}) scans compiled classes for implementations
+of generated contracts, matches them to BPMN activities by contract name, and writes
+\texttt{customImpl}, \texttt{customSource}, and \texttt{customHash} Camunda extension
+properties back into the local copy of the BPMN model.
+
+The enriched model becomes the source of truth for future regenerations. When the
+pipeline changes, regeneration starts from the enriched model --- it already knows
+which activities have custom implementations and which Java class backs each one.
+The custom implementation files are never touched by the scaffolder.
 
 \subsection{Current limitations}
 

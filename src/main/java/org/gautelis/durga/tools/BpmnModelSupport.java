@@ -39,23 +39,37 @@ final class TaskSpec {
     final String pluginRef;
     final String pluginConfig;
     final String pluginImplClass;
+    final String customContract;
+    final String customImpl;
+    final String customSource;
+    final String customHash;
 
     TaskSpec(String id, String name, TaskKind kind) {
-        this(id, name, kind, null, null, null);
+        this(id, name, kind, null, null, null, null, null, null, null);
     }
 
     TaskSpec(String id, String name, TaskKind kind, String pluginRef, String pluginConfig) {
-        this(id, name, kind, pluginRef, pluginConfig, null);
+        this(id, name, kind, pluginRef, pluginConfig, null, null, null, null, null);
     }
 
     TaskSpec(String id, String name, TaskKind kind, String pluginRef, String pluginConfig,
              String pluginImplClass) {
+        this(id, name, kind, pluginRef, pluginConfig, pluginImplClass, null, null, null, null);
+    }
+
+    TaskSpec(String id, String name, TaskKind kind, String pluginRef, String pluginConfig,
+             String pluginImplClass, String customContract, String customImpl,
+             String customSource, String customHash) {
         this.id = id;
         this.name = name;
         this.kind = kind;
         this.pluginRef = pluginRef;
         this.pluginConfig = pluginConfig;
         this.pluginImplClass = pluginImplClass;
+        this.customContract = customContract;
+        this.customImpl = customImpl;
+        this.customSource = customSource;
+        this.customHash = customHash;
     }
 }
 
@@ -72,6 +86,7 @@ enum TaskKind {
     BUSINESS_RULE("businessRuleTask"),
     CALL("callActivity"),
     PLUGIN("pluginTask"),
+    CUSTOM("customTask"),
     GENERIC("task");
 
     final String bpmnType;

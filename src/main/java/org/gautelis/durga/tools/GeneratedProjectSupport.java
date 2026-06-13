@@ -242,6 +242,28 @@ final class GeneratedProjectSupport {
     }
 
     /**
+     * Copies the original BPMN model into the generated project's resources directory
+     * so it travels with the generated code. The model serves as the source of truth
+     * for regeneration and is enriched by the build with custom implementation metadata.
+     */
+    static void copyBpmnModel(Path outputRoot, String bpmnPath, List<String> generatedFiles) {
+        Path source = Path.of(bpmnPath);
+        if (!Files.exists(source)) {
+            System.err.println("Warning: BPMN source file not found for copy: " + source);
+            return;
+        }
+        Path destDir = outputRoot.resolve("src/main/resources");
+        Path dest = destDir.resolve(source.getFileName());
+        try {
+            Files.createDirectories(destDir);
+            Files.copy(source, dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            generatedFiles.add(outputRoot.relativize(dest).toString());
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to copy BPMN model to " + dest, e);
+        }
+    }
+
+    /**
      * Writes the generated README that explains the scaffolded topology and helper scripts.
      */
     static void writeGeneratedReadme(

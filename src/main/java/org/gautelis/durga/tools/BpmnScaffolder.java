@@ -492,6 +492,7 @@ public class BpmnScaffolder {
                     signalTopics, boundaryEvents, callActivities, subProcesses, xors, ands, ors,
                     multiInstanceSpecs, generatedFiles, payloadPreview
             );
+            GeneratedProjectSupport.copyBpmnModel(outputRoot, parsed.bpmnPath, generatedFiles);
         }
 
         System.out.println("Generated in " + outputRoot.toAbsolutePath());
@@ -769,6 +770,13 @@ public class BpmnScaffolder {
             if (taskSpecs.containsKey(task.getId())) {
                 continue;
             }
+            TaskSpec customSpec = resolveCustomTask(task);
+            if (customSpec != null) {
+                String name = normalize(nameOrId(task.getName(), task.getId()));
+                taskSpecs.put(task.getId(), customSpec);
+                nodes.put(task.getId(), new NodeInfo(task.getId(), name, NodeType.TASK, TaskKind.CUSTOM));
+                continue;
+            }
             TaskSpec pluginSpec = resolvePluginTask(task, pluginRegistry);
             if (pluginSpec != null) {
                 String name = normalize(nameOrId(task.getName(), task.getId()));
@@ -847,6 +855,54 @@ public class BpmnScaffolder {
         String name = normalize(nameOrId(task.getName(), task.getId()));
         return new TaskSpec(task.getId(), name, TaskKind.PLUGIN, pluginId, pluginConfig,
                 desc.implementation.className);
+    }
+
+    private static TaskSpec resolveCustomTask(ServiceTask task) {
+        String pluginId = null;
+        String pluginConfig = null;
+        String customImpl = null;
+        String customSource = null;
+        String customHash = null;
+        if (task.getExtensionElements() != null) {
+            CamundaProperties props = task.getExtensionElements()
+                    .getElementsQuery()
+                    .filterByType(CamundaProperties.class)
+                    .singleResult();
+            if (props != null && props.getCamundaProperties() != null) {
+                for (CamundaProperty prop : props.getCamundaProperties()) {
+                    String name = prop.getCamundaName();
+                    String value = prop.getCamundaValue();
+                    switch (name) {
+                        case "plugin" -> pluginId = value;
+                        case "pluginConfig" -> pluginConfig = value;
+                        case "customImpl" -> customImpl = value;
+                        case "customSource" -> customSource = value;
+                        case "customHash" -> customHash = value;
+                    }
+                }
+            }
+        }
+        if (pluginId == null || !"custom".equals(pluginId)) {
+            return null;
+        }
+        String contractName = parseContractName(pluginConfig, task);
+        String name = normalize(nameOrId(task.getName(), task.getId()));
+        return new TaskSpec(task.getId(), name, TaskKind.CUSTOM, pluginId, pluginConfig,
+                null, contractName, customImpl, customSource, customHash);
+    }
+
+    private static String parseContractName(String pluginConfig, ServiceTask task) {
+        if (pluginConfig == null || pluginConfig.isBlank()) {
+            String name = normalize(nameOrId(task.getName(), task.getId()));
+            return toClassName(name) + "Contract";
+        }
+        for (String part : pluginConfig.split(";")) {
+            part = part.trim();
+            if (part.startsWith("interface=")) {
+                return part.substring("interface=".length()).trim();
+            }
+        }
+        return pluginConfig.trim();
     }
 
     private static void registerTaskSpec(
@@ -1564,6 +1620,9 @@ public class BpmnScaffolder {
         if (kind == TaskKind.PLUGIN) {
             return "pluginExecutorClass";
         }
+        if (kind == TaskKind.CUSTOM) {
+            return "customDelegatingWorkerClass";
+        }
         return transactions ? "transactionalWorkerClass" : "workerClass";
     }
 
@@ -1577,6 +1636,7 @@ public class BpmnScaffolder {
             case SCRIPT -> "ScriptTaskService";
             case BUSINESS_RULE -> "BusinessRuleTaskService";
             case PLUGIN -> "PluginExecutor";
+            case CUSTOM -> "WorkerService";
             case SERVICE, GENERIC -> transactions ? "TransactionalWorker" : "WorkerService";
         };
     }
