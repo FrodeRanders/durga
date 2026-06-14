@@ -1,7 +1,9 @@
 /**
  * Data pipeline plugin implementations.
  * <p>
- * Plugins implement {@link Plugin#execute(byte[], String)} and are registered
+ * Plugins override either {@link Plugin#execute(String, String)} for text/JSON
+ * payloads or {@link Plugin#execute(byte[], String)} for binary payloads, and are
+ * registered
  * in {@code plugins/catalog.yml} with individual YAML descriptors.
  *
  * <h3>Categories</h3>

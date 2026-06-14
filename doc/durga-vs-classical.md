@@ -81,7 +81,8 @@ The practical path:
 
 The 15 built-in plugins mean most transformation logic doesn't need new
 code. If you _do_ need custom logic, you implement the `Plugin` interface
-(one method: `byte[] execute(byte[] payload, String config)`) and
+(override `String execute(String payload, String config)` for text data,
+or `byte[] execute(byte[] payload, String config)` for binary) and
 register it. You never touch the generated worker code.
 
 ### 3. "Kafka is complex. Who's going to operate this?"
@@ -116,8 +117,9 @@ Yes, Kafka has a learning curve. But:
 Four escape hatches, in order of preference:
 
 **Use a plugin.** If you need a transform, filter, enrichment, or
-validation step, implement the `Plugin` interface — a single method:
-`byte[] execute(byte[] payload, String config)`. The 15 built-in
+validation step, implement the `Plugin` interface. Override
+`String execute(String payload, String config)` for text/JSON data
+(or `byte[] execute(byte[], String)` for binary). The 15 built-in
 plugins show the pattern. Your plugin appears in the registry and can
 be referenced from any BPMN diagram by name. No generated code changes.
 

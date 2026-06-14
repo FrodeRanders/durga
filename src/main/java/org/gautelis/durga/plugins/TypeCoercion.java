@@ -20,9 +20,8 @@ import java.util.Map;
 public final class TypeCoercion implements Plugin {
 
     @Override
-    public byte[] execute(byte[] payload, String config) throws Exception {
-        String payloadStr = Plugin.toString(payload);
-        return Plugin.toBytes(coerce(payloadStr, config));
+    public String execute(String payload, String config) throws Exception {
+        return coerce(payload, config);
     }
 
     private TypeCoercion() {

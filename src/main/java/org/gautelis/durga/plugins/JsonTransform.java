@@ -29,9 +29,8 @@ import java.util.Set;
 public final class JsonTransform implements Plugin {
 
     @Override
-    public byte[] execute(byte[] payload, String config) throws Exception {
-        String payloadStr = Plugin.toString(payload);
-        return Plugin.toBytes(transform(payloadStr, config));
+    public String execute(String payload, String config) throws Exception {
+        return transform(payload, config);
     }
 
     private JsonTransform() {

@@ -23,8 +23,7 @@ public final class StringTemplate implements Plugin {
     private static final Pattern TOKEN_PATTERN = Pattern.compile("\\$\\{([^}]+)}");
 
     @Override
-    public byte[] execute(byte[] payload, String config) throws Exception {
-        String payloadStr = Plugin.toString(payload);
+    public String execute(String payload, String config) throws Exception {
         String template = null;
         if (config != null && !config.isBlank()) {
             String[] parts = config.split("\\s+", 2);
@@ -42,7 +41,7 @@ public final class StringTemplate implements Plugin {
         if (template == null) {
             return payload;
         }
-        return Plugin.toBytes(render(payloadStr, template));
+        return render(payload, template);
     }
 
     private StringTemplate() {

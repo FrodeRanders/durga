@@ -17,8 +17,7 @@ import java.util.Map;
 public final class DeadLetterRouter implements Plugin {
 
     @Override
-    public byte[] execute(byte[] payload, String config) throws Exception {
-        String payloadStr = Plugin.toString(payload);
+    public String execute(String payload, String config) throws Exception {
         String field = "status";
         String defaultRoute = "default";
         java.util.Map<String, String> routes = new java.util.LinkedHashMap<>();
@@ -49,7 +48,7 @@ public final class DeadLetterRouter implements Plugin {
             }
         }
         DeadLetterRouter router = new DeadLetterRouter(field, routes, defaultRoute);
-        return Plugin.toBytes(router.route(payloadStr));
+        return router.route(payload);
     }
 
     private final String field;

@@ -29,8 +29,7 @@ import java.util.stream.Collectors;
 public final class PiiMask implements Plugin {
 
     @Override
-    public byte[] execute(byte[] payload, String config) throws Exception {
-        String payloadStr = Plugin.toString(payload);
+    public String execute(String payload, String config) throws Exception {
         String fieldsList = null;
         char maskChar = '*';
         int preserve = 0;
@@ -54,7 +53,7 @@ public final class PiiMask implements Plugin {
                 }
             }
         }
-        return Plugin.toBytes(mask(payloadStr, fieldsList, maskChar, preserve));
+        return mask(payload, fieldsList, maskChar, preserve);
     }
 
     private PiiMask() {

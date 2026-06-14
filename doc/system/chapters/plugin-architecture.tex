@@ -41,11 +41,19 @@ category contract.
 
 \subsection{Plugin interface}
 
-All plugins implement \filepath{org.gautelis.durga.plugins.Plugin}:
+All plugins implement \filepath{org.gautelis.durga.plugins.Plugin}, which provides
+two \texttt{default} methods:
 
 \begin{quote}
 \shellcmd{byte[] execute(byte[] payload, String config) throws Exception}
+
+\shellcmd{String execute(String payload, String config) throws Exception}
 \end{quote}
+
+The generated worker calls the \texttt{byte[]} overload. Text / JSON plugins
+override the \texttt{String} variant instead, with UTF-8 conversion handled by
+the \texttt{byte[]} default. Binary plugins override the \texttt{byte[]} variant
+directly. Only one of the two needs to be overridden.
 
 Generated executor classes instantiate the plugin at field level and call
 \texttt{plugin.execute(payload, config)} for each message. The config string

@@ -175,7 +175,7 @@ import org.gautelis.durga.plugins.Plugin;
  * to your implementation at runtime.
  */
 public interface MyTransformContract extends Plugin {
-    // Extends Plugin: byte[] execute(byte[] payload, String config)
+    // Extends Plugin — provides default byte[] and String execute methods
 }
 ```
 
@@ -315,8 +315,7 @@ Is there a plugin that covers this?
           └── Regeneration preserves the connection
 ```
 
-The custom path uses the same `Plugin` interface (`byte[] execute(byte[]
-payload, String config)`) so the contract interface simply extends
-`Plugin`. This means custom implementations and registered plugins are
+The custom path uses the same `Plugin` interface so the contract
+interface simply extends `Plugin`. This means custom implementations and registered plugins are
 interchangeable at the contract level — a custom implementation can
 later be promoted to a registered plugin without changing the BPMN model.

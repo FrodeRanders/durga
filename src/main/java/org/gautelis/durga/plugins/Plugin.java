@@ -8,24 +8,48 @@ import java.nio.charset.StandardCharsets;
  * Plugins receive a raw payload and a configuration string, and return a
  * transformed payload. If the transformation fails, they throw.
  * <p>
- * The payload is {@code byte[]} to avoid assumptions about character
- * encoding. Convenience methods {@link #toString(byte[])} and
- * {@link #toBytes(String)} handle the common case of UTF-8 text data.
- * <p>
- * The config is a plain {@code String} — it originates from Camunda
- * extension properties in the BPMN model and is always text-based.
+ * The generated worker always calls {@link #execute(byte[], String)}.
+ * <ul>
+ * <li><b>Text / JSON plugins</b> — override {@link #execute(String, String)}.
+ *     The default {@code byte[]} overload handles UTF-8 conversion.</li>
+ * <li><b>Binary plugins</b> — override {@link #execute(byte[], String)} directly.</li>
+ * </ul>
  */
 public interface Plugin {
 
     /**
-     * Execute the plugin against a raw payload.
+     * Called by the generated worker. Override for binary payloads.
+     * <p>
+     * Default converts payload to a UTF-8 String and delegates to
+     * {@link #execute(String, String)}, then converts the result back.
      *
      * @param payload raw input bytes
-     * @param config  plugin configuration string (format varies by plugin)
+     * @param config  plugin configuration string
      * @return raw output bytes
      * @throws Exception if processing fails
      */
-    byte[] execute(byte[] payload, String config) throws Exception;
+    default byte[] execute(byte[] payload, String config) throws Exception {
+        String result = execute(toString(payload), config);
+        return result != null ? toBytes(result) : null;
+    }
+
+    /**
+     * Override for text / JSON payloads. Only called via
+     * {@link #execute(byte[], String)} — never directly by the worker.
+     * <p>
+     * The default throws {@link UnsupportedOperationException}. Only override
+     * this if your plugin consumes text data; otherwise override
+     * {@link #execute(byte[], String)} instead.
+     *
+     * @param payload input string (typically JSON)
+     * @param config  plugin configuration string
+     * @return output string
+     * @throws Exception if processing fails
+     */
+    default String execute(String payload, String config) throws Exception {
+        throw new UnsupportedOperationException(
+                "Plugin does not support text payloads — override execute(byte[], String) instead");
+    }
 
     static String toString(byte[] data) {
         return new String(data, StandardCharsets.UTF_8);

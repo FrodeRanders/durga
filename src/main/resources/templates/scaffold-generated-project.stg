@@ -1868,7 +1868,15 @@ package org.gautelis.durga.plugins;
 import java.nio.charset.StandardCharsets;
 
 public interface Plugin {
-    byte[] execute(byte[] payload, String config) throws Exception;
+    default byte[] execute(byte[] payload, String config) throws Exception {
+        String result = execute(toString(payload), config);
+        return result != null ? toBytes(result) : null;
+    }
+
+    default String execute(String payload, String config) throws Exception {
+        throw new UnsupportedOperationException(
+                "Plugin does not support text payloads — override execute(byte[], String) instead");
+    }
 
     static String toString(byte[] data) {
         return new String(data, StandardCharsets.UTF_8);

@@ -48,7 +48,7 @@
 - **MultiInstanceLoopCharacteristics** — detected and reported in generation summary
 
 ### Data pipeline plugin architecture
-- **`Plugin` interface** — `byte[] execute(byte[] payload, String config)` contract, UTF-8 convenience methods
+- **`Plugin` interface** — dual-path: override `String execute(String, String)` for text/JSON or `byte[] execute(byte[], String)` for binary; UTF-8 conversion helpers
 - **5 reference plugins** — JsonTransform, FieldFilter, KvEnricher, DeadLetterRouter, WindowCounter
 - **Plugin registry** — YAML descriptors + catalog in `plugins/`, SnakeYAML-based loader
 - **Scaffolder integration** — `camunda:plugin` + `camunda:pluginConfig` Camunda extension attributes on `ServiceTask`
