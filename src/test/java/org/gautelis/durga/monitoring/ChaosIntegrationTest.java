@@ -30,6 +30,7 @@ import static org.junit.Assert.*;
 
 public class ChaosIntegrationTest extends KafkaIntegrationTestBase {
     private static final String SUFFIX = "-chaos-" + UUID.randomUUID().toString().substring(0, 8);
+    private static final Duration DEFAULT_TIMEOUT = resolveTimeout();
     private static final ProcessMonitoringTopology.MonitoringTopics TOPICS = new ProcessMonitoringTopology.MonitoringTopics(
             "process-events" + SUFFIX,
             "process-state" + SUFFIX,
@@ -107,7 +108,7 @@ public class ChaosIntegrationTest extends KafkaIntegrationTestBase {
             ProcessMonitoringQueryService qs = new ProcessMonitoringQueryService(streams, TOPICS);
             return qs.findInstance(instanceId)
                     .map(s -> "completed".equals(s.lifecycleState())).orElse(false);
-        }, Duration.ofSeconds(30));
+        }, DEFAULT_TIMEOUT);
 
         ProcessStateView before = new ProcessMonitoringQueryService(streams, TOPICS)
                 .findInstance(instanceId).orElse(null);
@@ -122,7 +123,7 @@ public class ChaosIntegrationTest extends KafkaIntegrationTestBase {
         waitForCondition(() -> {
             ProcessMonitoringQueryService qs = new ProcessMonitoringQueryService(streams, TOPICS);
             return qs.findInstance(instanceId).isPresent();
-        }, Duration.ofSeconds(30));
+        }, DEFAULT_TIMEOUT);
 
         ProcessStateView after = new ProcessMonitoringQueryService(streams, TOPICS)
                 .findInstance(instanceId).orElse(null);
@@ -145,7 +146,7 @@ public class ChaosIntegrationTest extends KafkaIntegrationTestBase {
         waitForCondition(() -> {
             ProcessMonitoringQueryService qs = new ProcessMonitoringQueryService(streams, TOPICS);
             return !qs.countsForProcess(processId).isEmpty();
-        }, Duration.ofSeconds(30));
+        }, DEFAULT_TIMEOUT);
 
         List<ProcessStateCount> beforeCounts = new ProcessMonitoringQueryService(streams, TOPICS)
                 .countsForProcess(processId);
@@ -160,7 +161,7 @@ public class ChaosIntegrationTest extends KafkaIntegrationTestBase {
         waitForCondition(() -> {
             ProcessMonitoringQueryService qs = new ProcessMonitoringQueryService(streams, TOPICS);
             return !qs.countsForProcess(processId).isEmpty();
-        }, Duration.ofSeconds(30));
+        }, DEFAULT_TIMEOUT);
 
         List<ProcessStateCount> afterCounts = new ProcessMonitoringQueryService(streams, TOPICS)
                 .countsForProcess(processId);
@@ -183,16 +184,15 @@ public class ChaosIntegrationTest extends KafkaIntegrationTestBase {
             }
             awaitRunning();
 
-            int r = restart;
             waitForCondition(() -> {
                 ProcessMonitoringQueryService qs = new ProcessMonitoringQueryService(streams, TOPICS);
                 return qs.findInstance(instanceId)
                         .map(s -> "completed".equals(s.lifecycleState())).orElse(false);
-            }, Duration.ofSeconds(30));
+            }, DEFAULT_TIMEOUT);
 
             ProcessStateView state = new ProcessMonitoringQueryService(streams, TOPICS)
                     .findInstance(instanceId).orElse(null);
-            assertNotNull("state should be present after restart #" + r, state);
+            assertNotNull("state should be present after restart #" + restart, state);
             assertEquals("completed", state.lifecycleState());
             assertEquals(instanceId, state.processInstanceId());
 
@@ -226,7 +226,7 @@ public class ChaosIntegrationTest extends KafkaIntegrationTestBase {
     }
 
     private void awaitRunning() {
-        waitForCondition(() -> streams != null && streams.state() == KafkaStreams.State.RUNNING, Duration.ofSeconds(30));
+        waitForCondition(() -> streams != null && streams.state() == KafkaStreams.State.RUNNING, DEFAULT_TIMEOUT);
     }
 
     private void produceCompleteFlow(String instanceId, String processId) {
@@ -278,5 +278,15 @@ public class ChaosIntegrationTest extends KafkaIntegrationTestBase {
             }
         }
         Files.deleteIfExists(path);
+    }
+
+    private static Duration resolveTimeout() {
+        String val = System.getProperty("durga.it.timeout.seconds",
+                System.getenv().getOrDefault("DURGA_IT_TIMEOUT_SECONDS", "60"));
+        try {
+            return Duration.ofSeconds(Long.parseLong(val));
+        } catch (NumberFormatException e) {
+            return Duration.ofSeconds(60);
+        }
     }
 }

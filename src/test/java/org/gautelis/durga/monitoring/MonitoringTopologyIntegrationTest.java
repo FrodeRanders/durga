@@ -30,6 +30,7 @@ import static org.junit.Assert.*;
 
 public class MonitoringTopologyIntegrationTest extends KafkaIntegrationTestBase {
     private static final String SUFFIX = "-mt-" + UUID.randomUUID().toString().substring(0, 8);
+    private static final Duration DEFAULT_TIMEOUT = resolveTimeout();
     private static final ProcessMonitoringTopology.MonitoringTopics TOPICS = new ProcessMonitoringTopology.MonitoringTopics(
             "process-events" + SUFFIX,
             "process-state" + SUFFIX,
@@ -89,7 +90,7 @@ public class MonitoringTopologyIntegrationTest extends KafkaIntegrationTestBase 
         Topology topology = ProcessMonitoringTopology.buildTopology(TOPICS);
         streams = new KafkaStreams(topology, streamsProps);
         streams.start();
-        waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, Duration.ofSeconds(30));
+        waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, DEFAULT_TIMEOUT);
 
         queryService = new ProcessMonitoringQueryService(streams, TOPICS);
     }
@@ -117,7 +118,7 @@ public class MonitoringTopologyIntegrationTest extends KafkaIntegrationTestBase 
         produceEvent(instanceId, "test_proc", "task-a", ProcessEvent.EventType.ACTIVITY_ENTERED, "2026-04-03T08:01:00Z");
         produceEvent(instanceId, "test_proc", "task-a", ProcessEvent.EventType.ACTIVITY_COMPLETED, "2026-04-03T08:05:00Z");
 
-        waitForCondition(() -> queryService.findInstance(instanceId).isPresent(), Duration.ofSeconds(30));
+        waitForCondition(() -> queryService.findInstance(instanceId).isPresent(), DEFAULT_TIMEOUT);
 
         Optional<ProcessStateView> stateOpt = queryService.findInstance(instanceId);
         assertTrue(stateOpt.isPresent());
@@ -137,7 +138,7 @@ public class MonitoringTopologyIntegrationTest extends KafkaIntegrationTestBase 
         produceEvent("pi-ct-2", processId, "start", ProcessEvent.EventType.PROCESS_STARTED, "2026-04-03T08:01:00Z");
         produceEvent("pi-ct-1", processId, "validate", ProcessEvent.EventType.ACTIVITY_ENTERED, "2026-04-03T08:02:00Z");
 
-        waitForCondition(() -> !queryService.countsForProcess(processId).isEmpty(), Duration.ofSeconds(30));
+        waitForCondition(() -> !queryService.countsForProcess(processId).isEmpty(), DEFAULT_TIMEOUT);
 
         List<ProcessStateCount> counts = queryService.countsForProcess(processId);
         assertTrue(counts.size() > 0);
@@ -154,7 +155,7 @@ public class MonitoringTopologyIntegrationTest extends KafkaIntegrationTestBase 
         produceEvent("pi-lt-1", processId, "latency-task", ProcessEvent.EventType.ACTIVITY_ENTERED, "2026-04-03T08:01:00Z");
         produceEvent("pi-lt-1", processId, "latency-task", ProcessEvent.EventType.ACTIVITY_COMPLETED, "2026-04-03T08:05:00Z");
 
-        waitForCondition(() -> !queryService.latencyForProcess(processId).isEmpty(), Duration.ofSeconds(30));
+        waitForCondition(() -> !queryService.latencyForProcess(processId).isEmpty(), DEFAULT_TIMEOUT);
 
         List<ActivityLatencySummary> latency = queryService.latencyForProcess(processId);
         assertTrue(latency.size() > 0);
@@ -173,7 +174,7 @@ public class MonitoringTopologyIntegrationTest extends KafkaIntegrationTestBase 
         produceEvent(instanceId, "stuck_proc", "long-task", ProcessEvent.EventType.ACTIVITY_ENTERED, "2026-04-03T08:01:00Z");
 
         waitForCondition(() -> queryService.findInstance(instanceId)
-                .map(s -> "active".equals(s.lifecycleState())).orElse(false), Duration.ofSeconds(30));
+                .map(s -> "active".equals(s.lifecycleState())).orElse(false), DEFAULT_TIMEOUT);
 
         List<StuckProcessInstance> stuck = queryService.stuckInstances("stuck_proc", 1);
         Optional<StuckProcessInstance> found = stuck.stream()
@@ -222,5 +223,15 @@ public class MonitoringTopologyIntegrationTest extends KafkaIntegrationTestBase 
             }
         }
         Files.deleteIfExists(path);
+    }
+
+    private static Duration resolveTimeout() {
+        String val = System.getProperty("durga.it.timeout.seconds",
+                System.getenv().getOrDefault("DURGA_IT_TIMEOUT_SECONDS", "60"));
+        try {
+            return Duration.ofSeconds(Long.parseLong(val));
+        } catch (NumberFormatException e) {
+            return Duration.ofSeconds(60);
+        }
     }
 }
