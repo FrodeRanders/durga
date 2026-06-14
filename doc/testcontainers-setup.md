@@ -18,6 +18,15 @@ Testcontainers 2.0.2 auto-detects the Docker socket on both macOS and Linux —
 no manual configuration needed. Ryuk (the container reaper) runs automatically
 and cleans up containers after each test run.
 
+If a release or CI gate must fail when Docker is unavailable, require Docker
+explicitly:
+
+```bash
+mvn test -Dtest='*IntegrationTest' -Ddurga.integration.requireDocker=true
+```
+
+The same behavior can be enabled with `DURGA_REQUIRE_DOCKER_TESTS=true`.
+
 ## Running inside a Linux container (fallback)
 
 If auto-detection fails on your platform, run the tests inside a Linux container

@@ -38,6 +38,13 @@ public abstract class KafkaIntegrationTestBase {
         try {
             DockerClientFactory.instance().client();
         } catch (Exception e) {
+            if (requiresDockerIntegrationTests()) {
+                throw new IllegalStateException(
+                        "Docker not available, but Docker-backed integration tests are required. "
+                                + "See doc/testcontainers-setup.md for setup instructions.",
+                        e
+                );
+            }
             System.err.println("Docker not available, skipping integration tests.");
             System.err.println("See doc/testcontainers-setup.md for setup instructions.");
             org.junit.Assume.assumeTrue("Docker not available", false);
@@ -118,6 +125,11 @@ public abstract class KafkaIntegrationTestBase {
     private static String envOr(String name, String fallback) {
         String value = System.getenv(name);
         return (value != null && !value.isBlank()) ? value : fallback;
+    }
+
+    private static boolean requiresDockerIntegrationTests() {
+        return Boolean.parseBoolean(System.getProperty("durga.integration.requireDocker"))
+                || Boolean.parseBoolean(System.getenv("DURGA_REQUIRE_DOCKER_TESTS"));
     }
 
     private static void configureDockerHost() {

@@ -1,0 +1,80 @@
+# Maturity Plan
+
+This document records the current maturity target and the gates required to move
+Durga from active prototype toward beta readiness.
+
+## Current Classification
+
+Durga is an active prototype with alpha-level engineering structure:
+
+- the core Maven build is repeatable on JDK 21,
+- the Java unit suite covers core contracts, plugins, monitoring projections, and
+  generated-project compilation,
+- Kafka-backed integration tests exist but require Docker,
+- the monitoring UI is buildable but has no dedicated test suite yet,
+- BPMN support is broad but intentionally scoped.
+
+The project should not be described as production-ready until the beta gates
+below are satisfied.
+
+## Quality Gates
+
+Run these gates before merging changes that affect generated code, Kafka
+runtime behavior, monitoring, or plugins:
+
+```bash
+# Java unit and generated-project checks, no Docker required
+mvn test -Dtest='!*IntegrationTest'
+
+# Monitoring UI build
+cd monitoring-ui && npm ci && npm run build
+
+# Kafka/Testcontainers verification, Docker required
+mvn test -Dtest='*IntegrationTest' -Ddurga.integration.requireDocker=true
+```
+
+For release candidates, run the full Maven verification after the UI has been
+built:
+
+```bash
+mvn verify -Ddurga.integration.requireDocker=true
+```
+
+## Beta Readiness Criteria
+
+Durga can be considered beta-ready when the following are true:
+
+1. CI runs both the monitoring UI build and the Maven verification gate.
+2. Integration tests are mandatory for release candidates and documented as
+   Docker-dependent.
+3. The supported BPMN subset is treated as a compatibility contract.
+4. Multi-instance loop behavior is either implemented with generated runtime
+   handlers or explicitly marked out of scope for beta.
+5. Top-level timer, error, and escalation event subprocess semantics are either
+   implemented or explicitly marked out of scope for beta.
+6. Operational behavior is documented for Kafka topic retention, state-store
+   recovery, security assumptions, and upgrade compatibility.
+7. Release artifacts use non-SNAPSHOT versions and each release has a changelog
+   entry.
+
+## Known Prototype Limits
+
+- `ScriptTask` and `BusinessRuleTask` generate stubs that require user code.
+- `ComplexGateway` has no dedicated mapping.
+- BPMN data objects and stores are only partially represented through payloads
+  and state maps.
+- Advanced BPMN scope semantics are approximated.
+- Timer, error, and escalation event subprocess starts are supported inside
+  embedded subprocess scopes, not as generalized top-level process semantics.
+- Monitoring history is intentionally coarse.
+
+## Next Implementation Priorities
+
+1. Make CI enforce the monitoring UI build before Maven verification.
+2. Keep integration test execution visible in release instructions.
+3. Add an operations hardening guide covering retention, state recovery,
+   security, and upgrade compatibility.
+4. Decide the beta boundary for multi-instance behavior and top-level event
+   subprocess semantics.
+5. Add frontend linting or tests once monitoring UI behavior grows beyond the
+   current dashboard surface.

@@ -20,5 +20,18 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: monitoring-ui/package-lock.json
+
+      - name: Build monitoring UI
+        working-directory: monitoring-ui
+        run: |
+          npm ci
+          npm run build
+
       - name: Build with Maven
-        run: mvn --batch-mode --update-snapshots verify
+        run: mvn --batch-mode --update-snapshots verify -Ddurga.integration.requireDocker=true

@@ -155,7 +155,7 @@
     --accent-2: #2f6c63;
   }
   * { box-sizing: border-box; }
-  body {
+  :global(body) {
     margin: 0;
     font-family: system-ui, -apple-system, sans-serif;
     color: var(--ink);
