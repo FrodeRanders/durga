@@ -38,7 +38,7 @@ Exclusive gateways are generated as routing services that evaluate simple condit
 
 \subsection{Boundary behavior}
 
-Boundary timer, error and escalation handlers are generated from BPMN boundary events and consume the canonical lifecycle stream on \texttt{process-events-monitor}. The current boundary implementation supports:
+Boundary timer, error and escalation handlers are generated from BPMN boundary events and consume the canonical lifecycle stream on \texttt{process-events-monitor} (a logical channel mapped to the physical event topic configured via \texttt{--event-topic}). The current boundary implementation supports:
 \begin{itemize}
 \item interrupting and non-interrupting timer boundaries,
 \item interrupting and non-interrupting error boundaries,

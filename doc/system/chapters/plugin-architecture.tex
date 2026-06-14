@@ -165,7 +165,12 @@ The developer writes an implementation class (\texttt{CustomTransformImpl implem
 A build-time utility (\texttt{ModelEnricher}) scans compiled classes for implementations
 of generated contracts, matches them to BPMN activities by contract name, and writes
 \texttt{customImpl}, \texttt{customSource}, and \texttt{customHash} Camunda extension
-properties back into the local copy of the BPMN model.
+properties back into the local copy of the BPMN model. Detection uses a
+\texttt{URLClassLoader} and reflection (\texttt{isAssignableFrom}); hashing uses
+the source file (\texttt{.java}) rather than the bytecode (\texttt{.class}), so the
+hash is stable across JDK versions and compiler flags. The source directory is
+derived from the classes directory by Maven convention (\texttt{target/classes}
+$\to$ \texttt{src/main/java}) or passed explicitly.
 
 The enriched model becomes the source of truth for future regenerations. When the
 pipeline changes, regeneration starts from the enriched model --- it already knows

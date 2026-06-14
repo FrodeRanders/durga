@@ -6,18 +6,62 @@
 Three layers:
 \begin{itemize}
 \item dry-run tests that treat scaffold summaries and previews as a contract,
-\item generation tests that write projects to temp directories and verify output,
-\item compile-level tests that run Maven on representative generated projects.
+\item generation tests that write projects to temp directories and verify output
+  (file existence, plugin imports, condition expressions, contract interfaces),
+\item a compilation integration test that generates a full project from
+  \filepath{invoice\_receipt.bpmn} and compiles all \texttt{.java} files with
+  \texttt{javax.tools.JavaCompiler}, verifying the generated code is
+  syntactically and semantically correct.
 \end{itemize}
 
-The verification set spans:
+The verification set spans 24 BPMN fixtures covering:
 \begin{itemize}
 \item message and signal events,
 \item timers and boundaries,
 \item subprocesses and nested subprocesses,
 \item call activities,
-\item event subprocesses.
+\item event subprocesses (message, signal, timer, error, escalation),
+\item data pipelines (plugin-annotated tasks, custom activities),
+\item gateway condition expressions.
 \end{itemize}
+
+\subsection{Plugin verification}
+
+Each of the 13 plugin implementations has dedicated unit tests (55 total)
+covering normal operation, edge cases, and error handling. The plugin
+registry loading and descriptor validation are exercised by the scaffolder
+tests.
+
+\subsection{Data pipeline verification}
+
+Four dedicated tests verify:
+\begin{itemize}
+\item the plugin-annotated pipeline (\filepath{data\_pipeline\_demo.bpmn})
+  generates correct plugin executor classes,
+\item the order events pipeline (\filepath{order\_events\_pipeline.bpmn})
+  generates workers for 8 plugin types and an XOR gateway with
+  runtime-evaluated conditions,
+\item the log processing pipeline (\filepath{log\_processing\_pipeline.bpmn})
+  generates workers for regex extraction, templating, flattening, and
+  validation plugins,
+\item the custom activity demo (\filepath{custom\_activity\_demo.bpmn})
+  generates contract interfaces and delegating workers.
+\end{itemize}
+
+\subsection{Connect verification}
+
+Two tests verify that \texttt{--connect} generates source and sink
+connector configs with correct topic lists for both dry-run and full
+generation modes.
+
+\subsection{Model enricher verification}
+
+Three tests verify the \texttt{ModelEnricher}: enrichment of custom
+activity metadata, no-op when no implementation is found, and property
+update on re-enrichment. Tests compile real Java source files during
+execution and verify that \texttt{customSource} references the
+\texttt{.java} path (not the \texttt{.class} file) and that hashes are
+computed from source files.
 
 \subsection{Core runtime contract verification}
 
@@ -32,20 +76,20 @@ process completion, gateway events, concurrent activities, and state-key generat
 \subsection{Monitoring verification}
 
 \begin{itemize}
-\item unit tests around the state-projection model,
-\item local startup and packaging checks,
+\item activity latency statistics (min, max, avg, p50, p95, p99, SLA violations),
 \item demo publishers and scenario runners that drive the monitoring topology
 without a full generated process runtime.
 \end{itemize}
 
 \subsection{CI pipeline}
 
-GitHub Actions runs \texttt{mvn verify} on push and PR to \texttt{main} using JDK 21.
+GitHub Actions runs \texttt{mvn test} on push and PR to \texttt{main} using JDK 21.
+196 tests execute in approximately 25 seconds.
 
 \subsection{Not fully covered}
 
 \begin{itemize}
-\item full end-to-end process executions across all BPMN features,
+\item full end-to-end process executions against a live Kafka broker,
 \item load and concurrency behavior,
 \item multi-instance monitoring scenarios.
 \end{itemize}
