@@ -67,7 +67,7 @@ public class ModelEnricherTest {
                     </bpmn:definitions>
                     """, StandardCharsets.UTF_8);
 
-            ModelEnricher.enrich(classesDir, bpmnFile);
+            ModelEnricher.enrich(classesDir, bpmnFile, srcDir);
 
             String enriched = Files.readString(bpmnFile, StandardCharsets.UTF_8);
             assertTrue("customImpl not written", enriched.contains("customImpl"));
@@ -75,8 +75,8 @@ public class ModelEnricherTest {
             assertTrue("customHash not written", enriched.contains("customHash"));
             assertTrue("customImpl value wrong",
                     enriched.contains("org.example.CustomStepImpl"));
-            assertTrue("customSource value wrong",
-                    enriched.contains("CustomStepImpl.class"));
+            assertTrue("customSource should reference .java not .class",
+                    enriched.contains("CustomStepImpl.java"));
 
         } finally {
             deleteRecursively(workDir);

@@ -24,13 +24,18 @@ import java.util.List;
  * compiled Java classes that implement generated contract interfaces.
  *
  * <p>Uses a {@link URLClassLoader} to load compiled classes and check
- * interface implementations via reflection, rather than scanning raw bytecode.
+ * interface implementations via reflection. Hashes source files rather
+ * than bytecode so the hash is stable across JDK versions and compiler flags.
  *
  * <p>Usage:
  * <pre>
  *   java -cp target/classes:... org.gautelis.durga.tools.ModelEnricher \
- *       target/classes src/main/resources/pipeline.bpmn
+ *       target/classes src/main/resources/pipeline.bpmn [src/main/java]
  * </pre>
+ *
+ * <p>If the source directory is omitted, it is derived from the classes
+ * directory by replacing {@code target/classes} with {@code src/main/java}
+ * (Maven convention).
  */
 public final class ModelEnricher {
 
@@ -39,11 +44,12 @@ public final class ModelEnricher {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 2) {
-            System.err.println("Usage: ModelEnricher <classes-dir> <bpmn-file>");
+            System.err.println("Usage: ModelEnricher <classes-dir> <bpmn-file> [sources-dir]");
             System.exit(1);
         }
         Path classesDir = Path.of(args[0]);
         Path bpmnFile = Path.of(args[1]);
+        Path sourcesDir = args.length >= 3 ? Path.of(args[2]) : null;
 
         if (!Files.exists(classesDir) || !Files.isDirectory(classesDir)) {
             System.err.println("Classes directory not found: " + classesDir);
@@ -54,13 +60,30 @@ public final class ModelEnricher {
             System.exit(1);
         }
 
-        enrich(classesDir, bpmnFile);
+        enrich(classesDir, bpmnFile, sourcesDir);
     }
 
     /**
      * Scans compiled classes and enriches the BPMN model with implementation metadata.
+     * Derives the source directory from the classes directory by Maven convention.
      */
     public static void enrich(Path classesDir, Path bpmnFile) throws IOException {
+        enrich(classesDir, bpmnFile, null);
+    }
+
+    /**
+     * Scans compiled classes and enriches the BPMN model with implementation metadata.
+     *
+     * @param classesDir compiled classes root (e.g. {@code target/classes})
+     * @param bpmnFile   the BPMN model to enrich in-place
+     * @param sourcesDir source files root (e.g. {@code src/main/java}); if null,
+     *                   derived from {@code classesDir} by Maven convention
+     */
+    public static void enrich(Path classesDir, Path bpmnFile, Path sourcesDir) throws IOException {
+        if (sourcesDir == null) {
+            sourcesDir = deriveSourcesDir(classesDir);
+        }
+
         String bpmnContent = Files.readString(bpmnFile, StandardCharsets.UTF_8);
         BpmnModelInstance model = Bpmn.readModelFromStream(
                 new java.io.ByteArrayInputStream(bpmnContent.getBytes(StandardCharsets.UTF_8)));
@@ -86,14 +109,18 @@ public final class ModelEnricher {
                         ClassLoader.getSystemClassLoader());
             }
 
-            Path implPath = findImplementation(classesDir, contractFqName, classLoader);
-            if (implPath == null) {
+            Path implClassPath = findImplementation(classesDir, contractFqName, classLoader);
+            if (implClassPath == null) {
                 continue;
             }
 
-            String implClassName = classNameFromPath(classesDir, implPath);
-            String hash = sha256(implPath);
-            String sourceName = implPath.getFileName().toString();
+            String implClassName = classNameFromPath(classesDir, implClassPath);
+            Path implSourcePath = classToSource(sourcesDir, implClassPath, classesDir);
+            String hash = implSourcePath != null && Files.exists(implSourcePath)
+                    ? sha256(implSourcePath) : sha256(implClassPath);
+            String sourceName = implSourcePath != null
+                    ? sourcesDir.relativize(implSourcePath).toString()
+                    : implClassPath.getFileName().toString();
             String knownHash = getProperty(task, "customHash");
 
             if (hash.equals(knownHash) && implClassName.equals(getProperty(task, "customImpl"))) {
@@ -124,6 +151,38 @@ public final class ModelEnricher {
         } else {
             System.out.println("No changes needed for: " + bpmnFile);
         }
+    }
+
+    /**
+     * Derives the source directory from the classes directory using the
+     * Maven convention: {@code target/classes → src/main/java}.
+     */
+    static Path deriveSourcesDir(Path classesDir) {
+        Path normalized = classesDir.toAbsolutePath().normalize();
+        String path = normalized.toString();
+        String targetClasses = path.endsWith("/") ? "target/classes/" : "target/classes";
+        int idx = path.lastIndexOf(targetClasses);
+        if (idx >= 0) {
+            return Path.of(path.substring(0, idx) + "src/main/java");
+        }
+        return null;
+    }
+
+    /**
+     * Converts a compiled class path to the corresponding source file path.
+     * For example, {@code target/classes/org/example/Foo.class} →
+     * {@code src/main/java/org/example/Foo.java}.
+     */
+    private static Path classToSource(Path sourcesDir, Path classFile, Path classesDir) {
+        if (sourcesDir == null) {
+            return null;
+        }
+        Path relative = classesDir.relativize(classFile);
+        String relStr = relative.toString();
+        if (relStr.endsWith(".class")) {
+            relStr = relStr.substring(0, relStr.length() - 6) + ".java";
+        }
+        return sourcesDir.resolve(relStr);
     }
 
     private static String parseContractFqName(String pluginConfig, ServiceTask task) {
@@ -245,7 +304,7 @@ public final class ModelEnricher {
         return path;
     }
 
-    private static String sha256(Path file) {
+    static String sha256(Path file) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             try (InputStream in = Files.newInputStream(file)) {
