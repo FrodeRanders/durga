@@ -3,6 +3,7 @@ export function dashboardRequestPaths(processId, thresholdSeconds) {
   const age = encodeURIComponent(thresholdSeconds ?? '')
   return [
     '/api/health',
+    '/api/counts',
     `/api/processes/${pid}/counts`,
     `/api/processes/${pid}/latency`,
     `/api/stuck?processId=${pid}&olderThanSeconds=${age}`,
@@ -18,9 +19,10 @@ export function instanceRequestPath(instanceId) {
 }
 
 export function normalizeDashboardResponses(responses) {
-  const [health, counts, latency, stuck, trends] = responses
+  const [health, allCounts, counts, latency, stuck, trends] = responses
   return {
     health: health?.body ?? { streamsState: '...' },
+    allCounts: Array.isArray(allCounts?.body) ? allCounts.body : [],
     counts: Array.isArray(counts?.body) ? counts.body : [],
     latency: Array.isArray(latency?.body) ? latency.body : [],
     stuck: Array.isArray(stuck?.body) ? stuck.body : [],

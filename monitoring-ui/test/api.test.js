@@ -10,6 +10,7 @@ import {
 test('dashboardRequestPaths URL-encodes process id and threshold', () => {
   assert.deepEqual(dashboardRequestPaths('invoice review/2026', 30), [
     '/api/health',
+    '/api/counts',
     '/api/processes/invoice%20review%2F2026/counts',
     '/api/processes/invoice%20review%2F2026/latency',
     '/api/stuck?processId=invoice%20review%2F2026&olderThanSeconds=30',
@@ -25,6 +26,7 @@ test('instanceRequestPath returns null for empty input and encodes ids', () => {
 test('normalizeDashboardResponses defaults missing collections to arrays', () => {
   const normalized = normalizeDashboardResponses([
     { body: { streamsState: 'RUNNING' } },
+    { body: [{ processId: 'invoice', state: 'active', count: 2 }] },
     { body: null },
     { body: [{ activityId: 'review', sampleCount: 1 }] },
     {},
@@ -33,6 +35,7 @@ test('normalizeDashboardResponses defaults missing collections to arrays', () =>
 
   assert.deepEqual(normalized, {
     health: { streamsState: 'RUNNING' },
+    allCounts: [{ processId: 'invoice', state: 'active', count: 2 }],
     counts: [],
     latency: [{ activityId: 'review', sampleCount: 1 }],
     stuck: [],

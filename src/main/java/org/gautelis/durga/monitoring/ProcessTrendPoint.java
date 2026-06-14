@@ -45,10 +45,13 @@ public record ProcessTrendPoint(
      * @return structured trend record
      */
     public static ProcessTrendPoint fromKey(String trendKey, long count) {
-        String[] parts = trendKey.split(":", 3);
-        String processId = parts.length > 0 ? parts[0] : "unknown";
-        String bucketStartedAt = parts.length > 1 ? parts[1] : Instant.EPOCH.toString();
-        String metric = parts.length > 2 ? parts[2] : "unknown";
+        int firstSeparator = trendKey.indexOf(':');
+        int lastSeparator = trendKey.lastIndexOf(':');
+        String processId = firstSeparator > 0 ? trendKey.substring(0, firstSeparator) : "unknown";
+        String bucketStartedAt = firstSeparator >= 0 && lastSeparator > firstSeparator
+                ? trendKey.substring(firstSeparator + 1, lastSeparator)
+                : Instant.EPOCH.toString();
+        String metric = lastSeparator > firstSeparator ? trendKey.substring(lastSeparator + 1) : "unknown";
         return new ProcessTrendPoint(processId, bucketStartedAt, metric, count);
     }
 

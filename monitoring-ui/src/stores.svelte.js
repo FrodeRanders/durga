@@ -10,6 +10,7 @@ let refreshSecs = $state(3)
 let instanceId = $state('')
 
 let health = $state({ streamsState: '...' })
+let allCounts = $state([])
 let counts = $state([])
 let latency = $state([])
 let stuck = $state([])
@@ -32,6 +33,7 @@ export async function refresh() {
     )
     const normalized = normalizeDashboardResponses(responses)
     health = normalized.health
+    allCounts = normalized.allCounts
     counts = normalized.counts
     latency = normalized.latency
     stuck = normalized.stuck
@@ -71,6 +73,7 @@ export function getState() {
     get instanceId() { return instanceId },
     set instanceId(v) { instanceId = v },
     get health() { return health },
+    get allCounts() { return allCounts },
     get counts() { return counts },
     get latency() { return latency },
     get stuck() { return stuck },
