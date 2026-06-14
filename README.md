@@ -28,9 +28,9 @@ The broker listens on `localhost:9094`.
 mvn test -Dtest='!*IntegrationTest'
 
 # Integration tests (require Docker):
-mvn test -Dtest='*IntegrationTest' -DTESTCONTAINERS_RYUK_DISABLED=true
+mvn test -Dtest='*IntegrationTest'
 
-# Or via the Linux container fallback if Docker detection fails:
+# If Docker detection fails, use the Linux container fallback:
 ./setup/run-integration-tests.sh
 ```
 

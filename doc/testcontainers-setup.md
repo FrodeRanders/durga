@@ -11,15 +11,12 @@ real Kafka broker in Docker containers.
 ## Quick start
 
 ```bash
-# With Ryuk disabled (avoids container-in-container issues):
-mvn test -Dtest='*IntegrationTest' -DTESTCONTAINERS_RYUK_DISABLED=true
-
-# Or pass via environment:
-TESTCONTAINERS_RYUK_DISABLED=true mvn test -Dtest='*IntegrationTest'
+mvn test -Dtest='*IntegrationTest'
 ```
 
-Testcontainers 2.0.2 auto-detects the Docker socket on both macOS and Linux — no
-manual configuration needed.
+Testcontainers 2.0.2 auto-detects the Docker socket on both macOS and Linux —
+no manual configuration needed. Ryuk (the container reaper) runs automatically
+and cleans up containers after each test run.
 
 ## Running inside a Linux container (fallback)
 
@@ -31,10 +28,9 @@ that mounts the Docker socket:
 ./setup/run-integration-tests.sh ChaosIntegrationTest  # single test class
 ```
 
-This uses a `maven:3.9-eclipse-temurin-21` image with the project directory,
-Docker socket, and `~/.m2` cache bind-mounted. It disables Ryuk and auto-detects
-the Docker host IP for correct network routing between the test container and
-the Kafka containers it spawns.
+This script uses a `maven:3.9-eclipse-temurin-21` image and disables Ryuk
+(`TESTCONTAINERS_RYUK_DISABLED=true`) because Ryuk cannot bind its control port
+through the Docker-out-of-Docker network layer.
 
 ## Colima users
 
@@ -63,7 +59,7 @@ On macOS, if the socket is at a non-standard location:
 
 ```bash
 export DOCKER_HOST=unix://$HOME/.docker/run/docker.sock
-mvn test -Dtest='*IntegrationTest' -DTESTCONTAINERS_RYUK_DISABLED=true
+mvn test -Dtest='*IntegrationTest'
 ```
 
 **"Timed out waiting for a node assignment"**
@@ -78,8 +74,9 @@ lsof -i :19092
 
 **Ryuk container fails**
 
-Tests disable Ryuk by default (`TESTCONTAINERS_RYUK_DISABLED=true`). If you
-need Ryuk, add to `~/.testcontainers.properties`:
+The container fallback disables Ryuk because it cannot reach the host gateway.
+On normal host runs Ryuk is enabled and handles cleanup automatically.
+If you need to disable it explicitly on the host, add to `~/.testcontainers.properties`:
 
 ```properties
 ryuk.container.privileged=true
