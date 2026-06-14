@@ -76,7 +76,7 @@ public final class JsonSchemaValidator implements Plugin {
             }
             if (schema.has("properties")) {
                 JsonNode props = schema.get("properties");
-                Iterator<Map.Entry<String, JsonNode>> fields = props.fields();
+                Iterator<Map.Entry<String, JsonNode>> fields = props.properties().iterator();
                 while (fields.hasNext()) {
                     Map.Entry<String, JsonNode> entry = fields.next();
                     String field = entry.getKey();

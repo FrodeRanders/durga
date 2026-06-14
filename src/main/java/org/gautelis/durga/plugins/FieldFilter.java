@@ -76,7 +76,7 @@ public final class FieldFilter implements Plugin {
                 : null;
 
         ObjectNode output = mapper.createObjectNode();
-        Iterator<Map.Entry<String, JsonNode>> fields = input.fields();
+        Iterator<Map.Entry<String, JsonNode>> fields = input.properties().iterator();
         while (fields.hasNext()) {
             Map.Entry<String, JsonNode> entry = fields.next();
             String field = entry.getKey();
@@ -97,7 +97,7 @@ public final class FieldFilter implements Plugin {
         if (flattenPrefix != null && !flattenPrefix.isBlank()) {
             JsonNode nested = input.get(flattenPrefix);
             if (nested != null && nested.isObject()) {
-                Iterator<Map.Entry<String, JsonNode>> nestedFields = nested.fields();
+                Iterator<Map.Entry<String, JsonNode>> nestedFields = nested.properties().iterator();
                 while (nestedFields.hasNext()) {
                     Map.Entry<String, JsonNode> entry = nestedFields.next();
                     output.set(entry.getKey(), entry.getValue());

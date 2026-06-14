@@ -55,6 +55,7 @@ final class PluginRegistry {
      * Loads the plugin registry from a directory containing {@code catalog.yml}
      * and individual descriptor files.
      */
+    @SuppressWarnings("unchecked")
     static PluginRegistry load(Path registryDir) throws IOException {
         Path catalogFile = registryDir.resolve("catalog.yml");
         if (!Files.exists(catalogFile)) {
@@ -96,6 +97,7 @@ final class PluginRegistry {
     /**
      * Loads the plugin registry from a classpath catalog URL.
      */
+    @SuppressWarnings("unchecked")
     static PluginRegistry load(URL catalogUrl) throws IOException {
         LoadSettings settings = LoadSettings.builder().build();
         Load loader = new Load(settings);
@@ -134,6 +136,7 @@ final class PluginRegistry {
         return new PluginRegistry(plugins);
     }
 
+    @SuppressWarnings("unchecked")
     private static PluginDescriptor parseDescriptor(String id, Map<String, Object> descMap) {
         PluginDescriptor desc = new PluginDescriptor();
         desc.id = id;

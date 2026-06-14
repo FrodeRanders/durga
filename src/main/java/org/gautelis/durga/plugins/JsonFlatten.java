@@ -72,7 +72,7 @@ public final class JsonFlatten implements Plugin {
 
     private static void flattenNode(ObjectMapper mapper, ObjectNode output, String prefix,
                                      ObjectNode node, String separator, int depth, int maxDepth) {
-        Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+        Iterator<Map.Entry<String, JsonNode>> fields = node.properties().iterator();
         while (fields.hasNext()) {
             Map.Entry<String, JsonNode> entry = fields.next();
             String key = prefix.isEmpty() ? entry.getKey() : prefix + separator + entry.getKey();
@@ -100,7 +100,7 @@ public final class JsonFlatten implements Plugin {
         }
 
         ObjectNode output = mapper.createObjectNode();
-        Iterator<Map.Entry<String, JsonNode>> fields = input.fields();
+        Iterator<Map.Entry<String, JsonNode>> fields = input.properties().iterator();
         while (fields.hasNext()) {
             Map.Entry<String, JsonNode> entry = fields.next();
             String key = entry.getKey();
