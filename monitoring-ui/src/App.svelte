@@ -32,6 +32,22 @@
     return date.toLocaleString()
   }
 
+  function timeLabel(value) {
+    if (!value) return '-'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
+  function percent(value, max, minimum = 0) {
+    const numericValue = Number(value || 0)
+    const numericMax = Number(max || 0)
+    if (!Number.isFinite(numericValue) || !Number.isFinite(numericMax) || numericMax <= 0) {
+      return `${minimum}%`
+    }
+    return `${Math.max(minimum, Math.min(100, (numericValue / numericMax) * 100))}%`
+  }
+
   function processRows() {
     const grouped = new Map()
     for (const row of s.allCounts) {
@@ -93,6 +109,9 @@
     const byBucket = new Map()
     for (const point of s.trends) {
       const bucket = point.bucketStartedAt || ''
+      if (!bucket || Number.isNaN(new Date(bucket).getTime())) {
+        continue
+      }
       const row = byBucket.get(bucket) || { bucket, started: 0, completed: 0, failed: 0 }
       if (trendMetrics.includes(point.metric)) {
         row[point.metric] += Number(point.count || 0)
@@ -238,7 +257,7 @@
               <div class="bar-track">
                 <div
                   class="bar-fill {row.className}"
-                  style={`width: ${Math.max(4, (Number(row.count || 0) / selectedProcessTotal()) * 100)}%`}
+                  style={`width: ${percent(row.count, selectedProcessTotal(), 4)}`}
                 ></div>
               </div>
             </div>
@@ -259,11 +278,11 @@
           {#each trendBuckets() as row}
             <div class="trend-column" title={dateTime(row.bucket)}>
               <div class="stack">
-                <span class="segment failed" style={`height: ${(row.failed / trendMax()) * 100}%`}></span>
-                <span class="segment completed" style={`height: ${(row.completed / trendMax()) * 100}%`}></span>
-                <span class="segment started" style={`height: ${(row.started / trendMax()) * 100}%`}></span>
+                <span class="segment failed" style={`height: ${percent(row.failed, trendMax(), 0)}`}></span>
+                <span class="segment completed" style={`height: ${percent(row.completed, trendMax(), 0)}`}></span>
+                <span class="segment started" style={`height: ${percent(row.started, trendMax(), 0)}`}></span>
               </div>
-              <small>{new Date(row.bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
+              <small>{timeLabel(row.bucket)}</small>
             </div>
           {/each}
         </div>
@@ -303,7 +322,7 @@
                     <div class="bar-track slim">
                       <div
                         class="bar-fill latency"
-                        style={`width: ${(Number(row.p95DurationMs || 0) / latencyMax()) * 100}%`}
+                        style={`width: ${percent(row.p95DurationMs, latencyMax(), 0)}`}
                       ></div>
                     </div>
                   </div>
