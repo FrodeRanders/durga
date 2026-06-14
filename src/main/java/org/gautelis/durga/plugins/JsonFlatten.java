@@ -22,7 +22,8 @@ import java.util.Map;
 public final class JsonFlatten implements Plugin {
 
     @Override
-    public String execute(String payload, String config) throws Exception {
+    public byte[] execute(byte[] payload, String config) throws Exception {
+        String payloadStr = Plugin.toString(payload);
         String direction = "flatten";
         String separator = ".";
         int maxDepth = Integer.MAX_VALUE;
@@ -45,9 +46,9 @@ public final class JsonFlatten implements Plugin {
             }
         }
         if ("unflatten".equalsIgnoreCase(direction)) {
-            return unflatten(payload, separator);
+            return Plugin.toBytes(unflatten(payloadStr, separator));
         }
-        return flatten(payload, separator, maxDepth);
+        return Plugin.toBytes(flatten(payloadStr, separator, maxDepth));
     }
 
     private JsonFlatten() {

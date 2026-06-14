@@ -21,7 +21,8 @@ import java.util.stream.Collectors;
 public final class FieldFilter implements Plugin {
 
     @Override
-    public String execute(String payload, String config) throws Exception {
+    public byte[] execute(byte[] payload, String config) throws Exception {
+        String payloadStr = Plugin.toString(payload);
         String keep = null;
         String drop = null;
         String flatten = null;
@@ -40,7 +41,7 @@ public final class FieldFilter implements Plugin {
                 }
             }
         }
-        return filter(payload, keep, drop, flatten);
+        return Plugin.toBytes(filter(payloadStr, keep, drop, flatten));
     }
 
     private FieldFilter() {

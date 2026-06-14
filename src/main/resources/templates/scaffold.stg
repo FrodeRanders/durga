@@ -1525,7 +1525,9 @@ public class %className% {
             String payload = inputEvent.payload() != null
                     ? new tools.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
                     : "{}";
-            String output = implementation.execute(payload, "%pluginConfig%");
+            byte[] output = implementation.execute(
+                    payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    "%pluginConfig%");
             ProcessEvent outputEvent = new ProcessEvent(
                     inputEvent.processInstanceId(),
                     inputEvent.processId(),
@@ -1610,7 +1612,9 @@ public class %className% {
             String payload = inputEvent.payload() != null
                     ? new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
                     : "{}";
-            String output = plugin.execute(payload, "%pluginConfig%");
+            byte[] output = plugin.execute(
+                    payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    "%pluginConfig%");
             ProcessEvent outputEvent = new ProcessEvent(
                     inputEvent.processInstanceId(),
                     inputEvent.processId(),

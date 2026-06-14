@@ -1865,8 +1865,18 @@ public final class ModelEnricher {
 pluginInterfaceClass() ::= <<
 package org.gautelis.durga.plugins;
 
+import java.nio.charset.StandardCharsets;
+
 public interface Plugin {
-    String execute(String payload, String config) throws Exception;
+    byte[] execute(byte[] payload, String config) throws Exception;
+
+    static String toString(byte[] data) {
+        return new String(data, StandardCharsets.UTF_8);
+    }
+
+    static byte[] toBytes(String data) {
+        return data.getBytes(StandardCharsets.UTF_8);
+    }
 }
 >>
 

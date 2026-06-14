@@ -28,7 +28,8 @@ import java.util.regex.Pattern;
 public final class RegexExtract implements Plugin {
 
     @Override
-    public String execute(String payload, String config) throws Exception {
+    public byte[] execute(byte[] payload, String config) throws Exception {
+        String payloadStr = Plugin.toString(payload);
         String source = null;
         String pattern = null;
         String target = null;
@@ -50,7 +51,7 @@ public final class RegexExtract implements Plugin {
                 }
             }
         }
-        return extract(payload, source, pattern, target, all);
+        return Plugin.toBytes(extract(payloadStr, source, pattern, target, all));
     }
 
     private RegexExtract() {

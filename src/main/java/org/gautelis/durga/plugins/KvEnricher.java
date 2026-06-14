@@ -22,7 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class KvEnricher implements Plugin {
 
     @Override
-    public String execute(String payload, String config) throws Exception {
+    public byte[] execute(byte[] payload, String config) throws Exception {
+        String payloadStr = Plugin.toString(payload);
         String keyField = "_id";
         java.util.Map<String, String> inline = new java.util.LinkedHashMap<>();
         if (config != null && !config.isBlank()) {
@@ -48,7 +49,7 @@ public final class KvEnricher implements Plugin {
             }
         }
         KvEnricher enricher = new KvEnricher(keyField, inline);
-        return enricher.enrich(payload);
+        return Plugin.toBytes(enricher.enrich(payloadStr));
     }
 
     private final String keyField;

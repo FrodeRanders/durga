@@ -36,7 +36,7 @@ public class ModelEnricherTest {
             Files.writeString(implFile, """
                     package org.example;
                     public class CustomStepImpl implements CustomStepContract {
-                        public String execute(String payload, String config) { return payload; }
+                        public byte[] execute(byte[] payload, String config) { return payload; }
                     }
                     """, StandardCharsets.UTF_8);
 
@@ -143,7 +143,7 @@ public class ModelEnricherTest {
             Files.writeString(implFile, """
                     package org.example;
                     public class StepImpl implements StepContract {
-                        public String execute(String payload, String config) { return payload; }
+                        public byte[] execute(byte[] payload, String config) { return payload; }
                     }
                     """, StandardCharsets.UTF_8);
 

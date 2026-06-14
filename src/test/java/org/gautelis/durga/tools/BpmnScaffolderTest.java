@@ -519,7 +519,7 @@ public class BpmnScaffolderTest {
         assertTrue(Files.exists(transformFile));
         String content = Files.readString(transformFile);
         assertTrue(content.contains("import org.gautelis.durga.plugins.Plugin"));
-        assertTrue(content.contains("plugin.execute(payload"));
+        assertTrue(content.contains("plugin.execute("));
     }
 
     @Test
@@ -632,8 +632,9 @@ public class BpmnScaffolderTest {
 
                 @ApplicationScoped
                 public class MaskIpAddressLocalImplementation implements MaskIpAddressContract {
-                    public String execute(String payload, String config) {
-                        return payload.replace("127.0.0.1", "masked");
+                    public byte[] execute(byte[] payload, String config) {
+                        return org.gautelis.durga.plugins.Plugin.toBytes(
+                            org.gautelis.durga.plugins.Plugin.toString(payload).replace("127.0.0.1", "masked"));
                     }
                 }
                 """, StandardCharsets.UTF_8);
@@ -657,8 +658,9 @@ public class BpmnScaffolderTest {
 
                 @ApplicationScoped
                 public class MaskIpAddressLocalImplementation implements MaskIpAddressContract {
-                    public String execute(String payload, String config) {
-                        return payload.replace("127.0.0.1", "masked-again");
+                    public byte[] execute(byte[] payload, String config) {
+                        return org.gautelis.durga.plugins.Plugin.toBytes(
+                            org.gautelis.durga.plugins.Plugin.toString(payload).replace("127.0.0.1", "masked-again"));
                     }
                 }
                 """, StandardCharsets.UTF_8);

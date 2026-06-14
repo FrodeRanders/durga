@@ -37,14 +37,15 @@ public final class JsonSchemaValidator implements Plugin {
     private JsonNode schema;
 
     @Override
-    public String execute(String payload, String config) throws Exception {
+    public byte[] execute(byte[] payload, String config) throws Exception {
+        String payloadStr = Plugin.toString(payload);
         String pluginName = "json-schema-validator";
         Counter counter = Metrics.registry().counter("plugin.executions", "plugin", pluginName);
         Timer timer = Metrics.registry().timer("plugin.duration", "plugin", pluginName);
         counter.increment();
         return timer.recordCallable(() -> {
             JsonNode schemaNode = mapper.readTree(config);
-            JsonNode input = mapper.readTree(payload);
+            JsonNode input = mapper.readTree(payloadStr);
             String error = validate(input, schemaNode, "$");
             if (error != null) {
                 throw new ValidationException(error);

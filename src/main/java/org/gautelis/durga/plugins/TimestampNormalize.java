@@ -43,7 +43,8 @@ public final class TimestampNormalize implements Plugin {
     private static final Logger LOG = LoggerFactory.getLogger(TimestampNormalize.class);
 
     @Override
-    public String execute(String payload, String config) throws Exception {
+    public byte[] execute(byte[] payload, String config) throws Exception {
+        String payloadStr = Plugin.toString(payload);
         String pluginName = "timestamp-normalize";
         Counter counter = Metrics.registry().counter("plugin.executions", "plugin", pluginName);
         Timer timer = Metrics.registry().timer("plugin.duration", "plugin", pluginName);
@@ -72,7 +73,7 @@ public final class TimestampNormalize implements Plugin {
                     }
                 }
             }
-            return normalize(payload, fieldsList, from, to, zone, removeOnError);
+            return Plugin.toBytes(normalize(payloadStr, fieldsList, from, to, zone, removeOnError));
         });
     }
 

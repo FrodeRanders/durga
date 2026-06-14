@@ -25,7 +25,8 @@ public final class WindowCounter implements Plugin {
     private boolean initialized;
 
     @Override
-    public synchronized String execute(String payload, String config) throws Exception {
+    public synchronized byte[] execute(byte[] payload, String config) throws Exception {
+        String payloadStr = Plugin.toString(payload);
         if (!initialized) {
             long windowSecs = 60;
             String group = null;
@@ -48,7 +49,8 @@ public final class WindowCounter implements Plugin {
             this.mapper = new ObjectMapper();
             this.initialized = true;
         }
-        return accept(payload);
+        String result = accept(payloadStr);
+        return result != null ? Plugin.toBytes(result) : null;
     }
 
     /** No-arg constructor for plugin interface. */

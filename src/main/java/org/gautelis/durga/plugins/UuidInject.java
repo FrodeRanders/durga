@@ -28,7 +28,8 @@ import java.util.stream.Collectors;
 public final class UuidInject implements Plugin {
 
     @Override
-    public String execute(String payload, String config) throws Exception {
+    public byte[] execute(byte[] payload, String config) throws Exception {
+        String payloadStr = Plugin.toString(payload);
         String fieldsList = "id";
         String strategy = "uuid4";
         if (config != null && !config.isBlank()) {
@@ -46,7 +47,7 @@ public final class UuidInject implements Plugin {
                 }
             }
         }
-        return inject(payload, fieldsList, strategy);
+        return Plugin.toBytes(inject(payloadStr, fieldsList, strategy));
     }
 
     private UuidInject() {

@@ -81,9 +81,9 @@ public class WindowCounterTest {
     public void shouldExecuteViaPluginInterface() throws Exception {
         System.out.println("TC: execute via Plugin interface returns null for in-window messages and flush returns summary");
         WindowCounter counter = new WindowCounter();
-        String summary = counter.execute("{\"a\":1}", "window=3600");
+        byte[] summary = counter.execute(Plugin.toBytes("{\"a\":1}"), "window=3600");
         assertNull(summary);
-        summary = counter.execute("{\"a\":2}", "window=3600");
+        summary = counter.execute(Plugin.toBytes("{\"a\":2}"), "window=3600");
         assertNull(summary);
         String flushed = counter.flush();
         assertTrue(flushed.contains("\"totalCount\":2"));
@@ -93,7 +93,7 @@ public class WindowCounterTest {
     public void shouldParseWindowConfigFromExecute() throws Exception {
         System.out.println("TC: parses window and groupBy parameters from config string in execute");
         WindowCounter counter = new WindowCounter();
-        String result = counter.execute("{\"type\":\"click\"}", "window=30 groupBy=type");
+        byte[] result = counter.execute(Plugin.toBytes("{\"type\":\"click\"}"), "window=30 groupBy=type");
         assertNull(result);
         String flushed = counter.flush();
         assertTrue(flushed.contains("\"totalCount\":1"));

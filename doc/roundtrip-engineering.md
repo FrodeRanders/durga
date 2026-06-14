@@ -63,7 +63,7 @@ future regenerations preserve the connection.
 │                                                                      │
 │   // MyTransformImpl.java                                            │
 │   public class MyTransformImpl implements MyTransformContract {      │
-│       public String execute(String payload, String config) {         │
+│       public byte[] execute(byte[] payload, String config) {         │
 │           return customLogic(payload);                               │
 │       }                                                              │
 │   }                                                                  │
@@ -175,7 +175,7 @@ import org.gautelis.durga.plugins.Plugin;
  * to your implementation at runtime.
  */
 public interface MyTransformContract extends Plugin {
-    // Extends Plugin: String execute(String payload, String config)
+    // Extends Plugin: byte[] execute(byte[] payload, String config)
 }
 ```
 
@@ -210,7 +210,7 @@ The developer writes:
 @ApplicationScoped
 public class MyTransformImpl implements MyTransformContract {
     @Override
-    public String execute(String payload, String config) {
+    public byte[] execute(byte[] payload, String config) {
         // Custom logic here — full Java, any library, testable.
         return transformedPayload;
     }
@@ -315,7 +315,7 @@ Is there a plugin that covers this?
           └── Regeneration preserves the connection
 ```
 
-The custom path uses the same `Plugin` interface (`String execute(String
+The custom path uses the same `Plugin` interface (`byte[] execute(byte[]
 payload, String config)`) so the contract interface simply extends
 `Plugin`. This means custom implementations and registered plugins are
 interchangeable at the contract level — a custom implementation can

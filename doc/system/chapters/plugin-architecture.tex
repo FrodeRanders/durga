@@ -44,7 +44,7 @@ category contract.
 All plugins implement \filepath{org.gautelis.durga.plugins.Plugin}:
 
 \begin{quote}
-\shellcmd{String execute(String payload, String config) throws Exception}
+\shellcmd{byte[] execute(byte[] payload, String config) throws Exception}
 \end{quote}
 
 Generated executor classes instantiate the plugin at field level and call

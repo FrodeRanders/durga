@@ -227,7 +227,8 @@ public class TransformDataPluginExecutor {
 
     @Incoming("%inputChannel%")
     public CompletionStage<Void> handle(Message<String> msg) {
-        String output = plugin.execute(payload, "%config%");
+        // Extract business payload from ProcessEvent, pass as bytes
+        byte[] output = plugin.execute(payload.getBytes(StandardCharsets.UTF_8), "%config%");
         // emit ACTIVITY_COMPLETED, route output, handle DLQ
     }
 }
