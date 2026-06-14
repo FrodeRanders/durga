@@ -256,6 +256,7 @@
                 <configuration>
                     <systemPropertyVariables>
                         <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+                        <DOCKER_HOST>${env.DOCKER_HOST}</DOCKER_HOST>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

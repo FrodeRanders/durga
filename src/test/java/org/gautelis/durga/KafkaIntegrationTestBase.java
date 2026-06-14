@@ -7,31 +7,27 @@ import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.io.IOException;
-import java.net.Socket;
 import java.net.UnixDomainSocketAddress;
 import java.nio.channels.SocketChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Base class for Kafka integration tests using Testcontainers.
  * <p>
- * Docker socket auto-detection tries several well-known locations before giving up:
+ * Docker socket auto-detection tries several well-known locations when
+ * {@code DOCKER_HOST} is not already set:
  * <ol>
- *   <li>{@code DOCKER_HOST} environment variable</li>
- *   <li>{@code TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE} environment variable</li>
  *   <li>{@code /var/run/docker.sock} (Linux default, macOS Docker Desktop symlink)</li>
  *   <li>{@code $HOME/.docker/run/docker.sock} (macOS Docker Desktop)</li>
+ *   <li>{@code $HOME/Library/Containers/com.docker.docker/Data/docker.raw.sock}</li>
+ *   <li>{@code /run/docker.sock}</li>
  * </ol>
  * <p>
- * To override, set {@code DOCKER_HOST=unix:///path/to/docker.sock} in your shell
- * or create {@code ~/.testcontainers.properties} with:
- * <pre>
- * docker.host=unix:///path/to/docker.sock
- * </pre>
+ * To override, set {@code DOCKER_HOST} in your environment before running Maven,
+ * or create {@code ~/.testcontainers.properties}. See {@code doc/testcontainers-setup.md}.
  */
 public abstract class KafkaIntegrationTestBase {
     protected static KafkaContainer kafka;
@@ -47,15 +43,13 @@ public abstract class KafkaIntegrationTestBase {
             DockerClientFactory.instance().client();
         } catch (Exception e) {
             System.err.println("Docker not available, skipping integration tests.");
-            System.err.println("Set DOCKER_HOST or create ~/.testcontainers.properties with docker.host.");
-            System.err.println("See doc/testcontainers-setup.md for details.");
+            System.err.println("See doc/testcontainers-setup.md for setup instructions.");
             org.junit.Assume.assumeTrue("Docker not available", false);
             return;
         }
         kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.8.0"));
         kafka.start();
         bootstrapServers = kafka.getBootstrapServers();
-        System.setProperty("kafka.bootstrap.servers", bootstrapServers);
     }
 
     @AfterClass
@@ -69,16 +63,13 @@ public abstract class KafkaIntegrationTestBase {
         return bootstrapServers;
     }
 
-    // ---- Docker socket detection ----
-
     private static void configureDockerHost() {
-        if (System.getenv("DOCKER_HOST") != null || System.getProperty("DOCKER_HOST") != null) {
+        String env = System.getenv("DOCKER_HOST");
+        if (env != null && !env.isBlank()) {
             return;
         }
-
-        String override = System.getenv("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE");
-        if (override != null && !override.isBlank()) {
-            System.setProperty("DOCKER_HOST", "unix://" + override);
+        String prop = System.getProperty("DOCKER_HOST");
+        if (prop != null && !prop.isBlank()) {
             return;
         }
 
@@ -117,7 +108,7 @@ public abstract class KafkaIntegrationTestBase {
 
     static boolean canConnect(String socketPath) {
         try {
-            var addr = UnixDomainSocketAddress.of(Paths.get(socketPath));
+            var addr = UnixDomainSocketAddress.of(Path.of(socketPath));
             try (var channel = SocketChannel.open(addr)) {
                 return channel.isConnected();
             }
