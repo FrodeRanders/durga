@@ -11,7 +11,8 @@ Durga is an active prototype with alpha-level engineering structure:
 - the Java unit suite covers core contracts, plugins, monitoring projections, and
   generated-project compilation,
 - Kafka-backed integration tests exist but require Docker,
-- the monitoring UI is buildable but has no dedicated test suite yet,
+- the monitoring UI has a small dedicated API-helper test suite and production
+  build gate,
 - BPMN support is broad but intentionally scoped.
 
 The project should not be described as production-ready until the beta gates
@@ -35,8 +36,8 @@ runtime behavior, monitoring, or plugins:
 # Java unit and generated-project checks, no Docker required
 mvn test -Dtest='!*IntegrationTest'
 
-# Monitoring UI build
-cd monitoring-ui && npm ci && npm run build
+# Monitoring UI tests and build
+cd monitoring-ui && npm ci && npm test && npm run build
 
 # Kafka/Testcontainers verification, Docker required
 mvn test -Dtest='*IntegrationTest' -Ddurga.integration.requireDocker=true
@@ -53,7 +54,7 @@ mvn verify -Ddurga.integration.requireDocker=true
 
 Durga can be considered beta-ready when the following are true:
 
-1. CI runs both the monitoring UI build and the Maven verification gate.
+1. CI runs both the monitoring UI test/build gate and the Maven verification gate.
 2. Integration tests are mandatory for release candidates and documented as
    Docker-dependent.
 3. The supported BPMN subset is treated as a compatibility contract.
@@ -84,5 +85,5 @@ Durga can be considered beta-ready when the following are true:
 2. Maintain the beta support boundary as BPMN and runtime coverage changes.
 3. Keep operations hardening guidance aligned with retention, state recovery,
    security, and upgrade compatibility changes.
-4. Add frontend linting or tests once monitoring UI behavior grows beyond the
-   current dashboard surface.
+4. Expand frontend tests as monitoring UI behavior grows beyond the current
+   dashboard API-helper surface.

@@ -24,11 +24,11 @@ The broker listens on `localhost:9094`.
 ## Running tests
 
 ```bash
-# Unit tests (196 tests, no Docker):
+# Unit tests and generated-project checks (no Docker):
 mvn test -Dtest='!*IntegrationTest'
 
-# Monitoring UI build:
-cd monitoring-ui && npm ci && npm run build
+# Monitoring UI tests and build:
+cd monitoring-ui && npm ci && npm test && npm run build
 
 # Integration tests (require Docker):
 mvn test -Dtest='*IntegrationTest'

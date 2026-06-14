@@ -18,7 +18,7 @@ Durga closer to beta readiness.
 Run and record the result of each gate:
 
 ```bash
-cd monitoring-ui && npm ci && npm run build
+cd monitoring-ui && npm ci && npm test && npm run build
 cd ..
 mvn test -Dtest='!*IntegrationTest'
 mvn test -Dtest='*IntegrationTest' -Ddurga.integration.requireDocker=true

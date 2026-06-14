@@ -1,3 +1,9 @@
+import {
+  dashboardRequestPaths,
+  instanceRequestPath,
+  normalizeDashboardResponses
+} from './api.js'
+
 let processId = $state('invoice_receipt')
 let threshold = $state(60)
 let refreshSecs = $state(3)
@@ -21,20 +27,15 @@ async function fetchJson(path) {
 export async function refresh() {
   error = null
   try {
-    const pid = encodeURIComponent(processId)
-    const age = encodeURIComponent(threshold)
-    const [h, c, l, s, t] = await Promise.all([
-      fetchJson('/api/health'),
-      fetchJson(`/api/processes/${pid}/counts`),
-      fetchJson(`/api/processes/${pid}/latency`),
-      fetchJson(`/api/stuck?processId=${pid}&olderThanSeconds=${age}`),
-      fetchJson(`/api/processes/${pid}/trends`)
-    ])
-    health = h.body
-    counts = c.body || []
-    latency = l.body || []
-    stuck = s.body || []
-    trends = t.body || []
+    const responses = await Promise.all(
+      dashboardRequestPaths(processId, threshold).map(fetchJson)
+    )
+    const normalized = normalizeDashboardResponses(responses)
+    health = normalized.health
+    counts = normalized.counts
+    latency = normalized.latency
+    stuck = normalized.stuck
+    trends = normalized.trends
   } catch (e) {
     error = e.message
   }
@@ -46,7 +47,7 @@ export async function refreshInstance() {
     return
   }
   try {
-    const res = await fetchJson(`/api/instances/${encodeURIComponent(instanceId)}`)
+    const res = await fetchJson(instanceRequestPath(instanceId))
     instanceView = res.body
   } catch (e) {
     instanceView = { error: e.message }
