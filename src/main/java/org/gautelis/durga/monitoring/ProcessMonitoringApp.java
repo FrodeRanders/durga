@@ -2,7 +2,6 @@ package org.gautelis.durga.monitoring;
 
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.annotations.QuarkusMain;
-import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 import org.apache.kafka.streams.KafkaStreams;

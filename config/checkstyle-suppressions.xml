@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+    "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+    "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+
+<suppressions>
+    <suppress files="[/\\]generated-test-sources[/\\]" checks=".*"/>
+    <suppress files="package-info\.java$" checks=".*"/>
+
+    <suppress files="[/\\]src[/\\]test[/\\]" checks="AvoidStarImport"/>
+    <suppress files="[/\\]src[/\\]test[/\\]" checks="StaticVariableName"/>
+    <suppress files="[/\\]src[/\\]test[/\\]" checks="MagicNumber"/>
+    <suppress files="[/\\]src[/\\]test[/\\]" checks="HideUtilityClassConstructor"/>
+    <suppress files="[/\\]src[/\\]test[/\\]" checks="InnerAssignment"/>
+</suppressions>

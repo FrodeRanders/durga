@@ -2,8 +2,6 @@ package org.gautelis.durga.plugins;
 
 import org.junit.Test;
 
-import java.util.Map;
-
 import static org.junit.Assert.*;
 
 public class JsonTransformTest {

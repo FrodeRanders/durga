@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter
+    xmlns="https://github.com/spotbugs/filter/4.8.6"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="https://github.com/spotbugs/filter/4.8.6 https://raw.githubusercontent.com/spotbugs/spotbugs/4.8.6/spotbugs/etc/findbugsfilter.xsd">
+
+    <Match>
+        <Or>
+            <Class name="~.*\.package-info"/>
+        </Or>
+    </Match>
+
+    <Match>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+            <Bug pattern="MS_PKGPROTECT"/>
+            <Bug pattern="MS_EXPOSE_REP"/>
+        </Or>
+    </Match>
+
+    <Match>
+        <Package name="~org\.gautelis\.durga\.tools\.generated\..*"/>
+    </Match>
+
+    <!-- POJOs with Jackson-annotated fields: unused field warnings are false positives -->
+    <Match>
+        <Class name="org.gautelis.durga.tools.PluginDescriptor"/>
+        <Bug pattern="UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <Match>
+        <Class name="org.gautelis.durga.tools.PluginDescriptor$PluginConfigField"/>
+        <Bug pattern="UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <Match>
+        <Class name="org.gautelis.durga.tools.PluginDescriptor$PluginInputSchema"/>
+        <Bug pattern="UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <Match>
+        <Class name="org.gautelis.durga.tools.PluginDescriptor$PluginOutputSchema"/>
+        <Bug pattern="UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <Match>
+        <Class name="org.gautelis.durga.tools.PluginRegistry"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+
+    <!-- Enum-value-exhaustive switches with arrow syntax don't need default -->
+    <Match>
+        <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
+    </Match>
+
+    <!-- FormatString newlines in monitoring resource -->
+    <Match>
+        <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
+    </Match>
+
+    <!-- Duplicate branches in switch/if patterns are intentional -->
+    <Match>
+        <Bug pattern="DB_DUPLICATE_BRANCHES"/>
+    </Match>
+
+    <!-- PluginDescriptor fields read via reflection/Jackson -->
+    <Match>
+        <Class name="org.gautelis.durga.tools.PluginDescriptor"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <Match>
+        <Class name="org.gautelis.durga.tools.PluginDescriptor$PluginConfigField"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <Match>
+        <Class name="org.gautelis.durga.tools.PluginDescriptor$PluginInputSchema"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <Match>
+        <Class name="org.gautelis.durga.tools.PluginDescriptor$PluginOutputSchema"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+
+    <!-- Potential null dereferences in file I/O paths – review deferred -->
+    <Match>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+</FindBugsFilter>

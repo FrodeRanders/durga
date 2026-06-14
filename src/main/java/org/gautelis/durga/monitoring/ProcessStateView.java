@@ -79,7 +79,11 @@ public record ProcessStateView(
         String newErrorMessage = event.error() != null ? event.error().message() : null;
 
         switch (event.eventType()) {
-            case PROCESS_STARTED -> newStartedAt = newStartedAt != null ? newStartedAt : eventTimestamp.toString();
+            case PROCESS_STARTED -> {
+                if (newStartedAt == null) {
+                    newStartedAt = eventTimestamp.toString();
+                }
+            }
             case ACTIVITY_ENTERED -> {
                 if (event.activityId() != null && !event.activityId().isBlank()) {
                     enteredAt.put(event.activityId(), eventTimestamp.toString());
@@ -94,6 +98,8 @@ public record ProcessStateView(
             case PROCESS_FAILED -> {
                 newRetryCount = retryCount + 1;
                 recordDuration(event.activityId(), eventTimestamp, enteredAt, durations);
+            }
+            default -> {
             }
         }
 
