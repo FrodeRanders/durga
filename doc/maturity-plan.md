@@ -20,6 +20,9 @@ below are satisfied.
 Operational assumptions and remaining hardening work are tracked in
 [`operations-hardening.md`](operations-hardening.md).
 
+The beta BPMN compatibility boundary is tracked in
+[`beta-support-boundary.md`](beta-support-boundary.md).
+
 ## Quality Gates
 
 Run these gates before merging changes that affect generated code, Kafka
@@ -77,7 +80,5 @@ Durga can be considered beta-ready when the following are true:
 2. Keep integration test execution visible in release instructions.
 3. Add an operations hardening guide covering retention, state recovery,
    security, and upgrade compatibility.
-4. Decide the beta boundary for multi-instance behavior and top-level event
-   subprocess semantics.
-5. Add frontend linting or tests once monitoring UI behavior grows beyond the
+4. Add frontend linting or tests once monitoring UI behavior grows beyond the
    current dashboard surface.

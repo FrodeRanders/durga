@@ -36,10 +36,14 @@ fixtures. Generated projects compile and run on Quarkus + Kafka.
 \subsection{Open decisions}
 
 \begin{description}
-\item[Top-level event subprocesses] Whether timer, error, and escalation
-  event subprocess starts should have first-class process-level semantics.
+\item[Top-level event subprocesses] Timer, error, and escalation starts are
+  out of the beta support boundary unless promoted with dedicated runtime
+  semantics and integration coverage.
 \item[Runtime fidelity] Whether to deepen true BPMN scope semantics as the
   project evolves.
+\item[Multi-instance runtime] Whether detected multi-instance loop
+  characteristics should be promoted from summary metadata to generated runtime
+  handlers after beta.
 \item[Plugin SDK] Whether to formalize a plugin development kit for third-party
   plugin authors beyond the current \texttt{Plugin} interface contract.
 \end{description}

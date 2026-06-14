@@ -1,6 +1,6 @@
 # BPMN to Kafka Coverage
 
-This matrix describes the current execution mapping in `durga`. It is a support matrix for the scaffolder, not a claim of full BPMN coverage.
+This matrix describes the current execution mapping in `durga`. It is a support matrix for the scaffolder, not a claim of full BPMN coverage. The beta compatibility boundary is defined separately in [`beta-support-boundary.md`](beta-support-boundary.md).
 
 | BPMN element | Kafka mapping in `durga` | Status | Notes |
 | --- | --- | --- | --- |
