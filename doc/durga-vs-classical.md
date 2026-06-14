@@ -126,12 +126,12 @@ be referenced from any BPMN diagram by name. No generated code changes.
 delegating worker with CDI injection. You write the implementation in a
 normal Java file — IDE support, compilation, unit tests. A build-time
 utility (`ModelEnricher`) detects your implementation via reflection,
-hashes the source file (not the bytecode), and writes `customImpl`,
-`customSource`, and `customHash` properties back into the BPMN model.
-On regeneration, the scaffolder sees the enriched model and preserves
-the connection — it regenerates the contract and worker but never
-touches your implementation class. This is the recommended path for
-any logic that doesn't fit a pre-built plugin.
+hashes the source file, and writes `customImpl`, `customSource`, and
+`customHash` properties back into the BPMN model. On regeneration, the
+scaffolder sees the enriched model and preserves the connection — it
+regenerates the contract and worker but never touches your implementation
+class. This is the recommended path for any logic that doesn't fit a
+pre-built plugin.
 
 **Modify the generated worker directly.** The generated code is clean
 Java. You can add custom logic. On regeneration, existing files under
