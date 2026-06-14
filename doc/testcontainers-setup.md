@@ -85,6 +85,22 @@ export DOCKER_TLS_VERIFY=1
 export DOCKER_CERT_PATH=$HOME/.docker
 ```
 
+## Running tests in a Linux container
+
+If the host platform has trouble with docker-java Unix socket transport
+(e.g. ARM64 macOS), run the integration tests inside a Linux container
+that mounts the Docker socket:
+
+```bash
+./setup/run-integration-tests.sh              # all integration tests
+./setup/run-integration-tests.sh ChaosIntegrationTest  # single test class
+```
+
+This script uses the `maven:3.9-eclipse-temurin-21` image, mounts the
+project directory, Docker socket, and `~/.m2` cache into the container,
+then runs the tests inside. The Linux container has native Unix socket
+support that docker-java works with.
+
 ## Troubleshooting
 
 **"Could not find a valid Docker environment"**

@@ -52,6 +52,7 @@ public class ProcessEventKafkaIntegrationTest extends KafkaIntegrationTestBase {
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         consumer = new KafkaConsumer<>(consumerProps);
         consumer.subscribe(List.of(TOPIC));
+        consumer.poll(Duration.ofSeconds(1));
     }
 
     @After

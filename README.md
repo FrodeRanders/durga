@@ -32,6 +32,9 @@ mvn test -Dtest='*IntegrationTest'
 
 # Toxiproxy chaos tests:
 mvn test -Dtest='ToxiproxyChaosIntegrationTest'
+
+# On macOS with Docker Desktop, run integration tests inside a Linux container:
+./setup/run-integration-tests.sh
 ```
 
 See [Testcontainers setup](doc/testcontainers-setup.md) if Docker detection fails.

@@ -3,7 +3,8 @@ package org.gautelis.durga;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
 import java.io.IOException;
@@ -11,26 +12,21 @@ import java.net.UnixDomainSocketAddress;
 import java.nio.channels.SocketChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Base class for Kafka integration tests using Testcontainers.
+ * Base class for Kafka integration tests.
  * <p>
- * Docker socket auto-detection tries several well-known locations when
- * {@code DOCKER_HOST} is not already set:
- * <ol>
- *   <li>{@code /var/run/docker.sock} (Linux default, macOS Docker Desktop symlink)</li>
- *   <li>{@code $HOME/.docker/run/docker.sock} (macOS Docker Desktop)</li>
- *   <li>{@code $HOME/Library/Containers/com.docker.docker/Data/docker.raw.sock}</li>
- *   <li>{@code /run/docker.sock}</li>
- * </ol>
- * <p>
- * To override, set {@code DOCKER_HOST} in your environment before running Maven,
- * or create {@code ~/.testcontainers.properties}. See {@code doc/testcontainers-setup.md}.
+ * Uses Testcontainers with a GenericContainer for Kafka (confluentinc/cp-kafka)
+ * to avoid module version coupling. Docker socket auto-detection probes
+ * well-known locations when DOCKER_HOST is not already set.
  */
 public abstract class KafkaIntegrationTestBase {
-    protected static KafkaContainer kafka;
+    private static final int KAFKA_PORT = 9092;
+
+    protected static GenericContainer<?> kafka;
     protected static String bootstrapServers;
 
     static {
@@ -47,9 +43,35 @@ public abstract class KafkaIntegrationTestBase {
             org.junit.Assume.assumeTrue("Docker not available", false);
             return;
         }
-        kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.8.0"));
+
+        int port = KAFKA_PORT;
+        int hostPort = port + 10000;
+        String containerHost = envOr("DURGA_DOCKER_HOST_IP", "localhost"); // fixed host port to avoid random mapping
+
+        kafka = new GenericContainer<>(DockerImageName.parse("confluentinc/cp-kafka:7.8.0"))
+                .withEnv("KAFKA_NODE_ID", "1")
+                .withEnv("KAFKA_LISTENER_SECURITY_PROTOCOL_MAP", "BROKER:PLAINTEXT,CONTROLLER:PLAINTEXT")
+                .withEnv("KAFKA_LISTENERS", "BROKER://0.0.0.0:" + port + ",CONTROLLER://0.0.0.0:9093")
+                .withEnv("KAFKA_ADVERTISED_LISTENERS", "BROKER://" + containerHost + ":" + hostPort)
+                .withEnv("KAFKA_PROCESS_ROLES", "broker,controller")
+                .withEnv("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@localhost:9093")
+                .withEnv("KAFKA_CONTROLLER_LISTENER_NAMES", "CONTROLLER")
+                .withEnv("KAFKA_INTER_BROKER_LISTENER_NAME", "BROKER")
+                .withEnv("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
+                .withEnv("KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS", "0")
+                .withEnv("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
+                .withEnv("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
+                .withEnv("CLUSTER_ID", "MkU3OEVBNTcwNTJENDM2Qk")
+                .withExposedPorts(port)
+                .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig()
+                        .withPortBindings(new com.github.dockerjava.api.model.PortBinding(
+                                com.github.dockerjava.api.model.Ports.Binding.bindPort(hostPort),
+                                new com.github.dockerjava.api.model.ExposedPort(port))))
+                .waitingFor(Wait.forLogMessage(".*Kafka Server started.*", 1)
+                        .withStartupTimeout(Duration.ofSeconds(90)));
         kafka.start();
-        bootstrapServers = kafka.getBootstrapServers();
+
+        bootstrapServers = containerHost + ":" + hostPort;
     }
 
     @AfterClass
@@ -63,47 +85,41 @@ public abstract class KafkaIntegrationTestBase {
         return bootstrapServers;
     }
 
-    private static void configureDockerHost() {
-        String env = System.getenv("DOCKER_HOST");
-        if (env != null && !env.isBlank()) {
-            return;
-        }
-        String prop = System.getProperty("DOCKER_HOST");
-        if (prop != null && !prop.isBlank()) {
-            return;
-        }
+    private static String envOr(String name, String fallback) {
+        String value = System.getenv(name);
+        return (value != null && !value.isBlank()) ? value : fallback;
+    }
 
+    private static void configureDockerHost() {
+        if (notBlank(System.getenv("DOCKER_HOST"))) return;
+        if (notBlank(System.getProperty("DOCKER_HOST"))) return;
         String socket = findDockerSocket();
         if (socket != null) {
             System.setProperty("DOCKER_HOST", "unix://" + socket);
         }
     }
 
+    private static boolean notBlank(String s) {
+        return s != null && !s.isBlank();
+    }
+
     private static String findDockerSocket() {
         List<String> candidates = new ArrayList<>();
-
         addIfSocket(candidates, "/var/run/docker.sock");
-
         String home = System.getProperty("user.home");
         if (home != null) {
             addIfSocket(candidates, home + "/.docker/run/docker.sock");
             addIfSocket(candidates, home + "/Library/Containers/com.docker.docker/Data/docker.raw.sock");
         }
-
         addIfSocket(candidates, "/run/docker.sock");
-
-        for (String candidate : candidates) {
-            if (canConnect(candidate)) {
-                return candidate;
-            }
+        for (String c : candidates) {
+            if (canConnect(c)) return c;
         }
         return null;
     }
 
     private static void addIfSocket(List<String> candidates, String path) {
-        if (Files.exists(Path.of(path))) {
-            candidates.add(path);
-        }
+        if (Files.exists(Path.of(path))) candidates.add(path);
     }
 
     static boolean canConnect(String socketPath) {
