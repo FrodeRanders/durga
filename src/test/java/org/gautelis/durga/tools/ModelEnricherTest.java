@@ -16,6 +16,7 @@ public class ModelEnricherTest {
 
     @Test
     public void shouldEnrichCustomActivityWithImplementationMetadata() throws Exception {
+        System.out.println("TC: Should enrich custom activity with implementation metadata");
         assumeCompilerAvailable();
 
         Path workDir = Files.createTempDirectory("test-enrich-");
@@ -84,6 +85,7 @@ public class ModelEnricherTest {
 
     @Test
     public void shouldNotModifyBpmnWhenNoImplementationFound() throws Exception {
+        System.out.println("TC: Should not modify bpmn when no implementation is found");
         assumeCompilerAvailable();
 
         Path workDir = Files.createTempDirectory("test-noimpl-");
@@ -123,6 +125,7 @@ public class ModelEnricherTest {
 
     @Test
     public void shouldUpdateExistingPropertiesOnReenrichment() throws Exception {
+        System.out.println("TC: Should update existing properties on reenrichment");
         assumeCompilerAvailable();
 
         Path workDir = Files.createTempDirectory("test-reenrich-");
