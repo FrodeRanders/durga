@@ -17,6 +17,9 @@ Durga is an active prototype with alpha-level engineering structure:
 The project should not be described as production-ready until the beta gates
 below are satisfied.
 
+Operational assumptions and remaining hardening work are tracked in
+[`operations-hardening.md`](operations-hardening.md).
+
 ## Quality Gates
 
 Run these gates before merging changes that affect generated code, Kafka
