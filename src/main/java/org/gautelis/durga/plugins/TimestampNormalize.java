@@ -4,6 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.Counter;
+import org.gautelis.durga.monitoring.Metrics;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -35,32 +40,40 @@ import java.util.stream.Collectors;
  */
 public final class TimestampNormalize implements Plugin {
 
+    private static final Logger LOG = LoggerFactory.getLogger(TimestampNormalize.class);
+
     @Override
     public String execute(String payload, String config) throws Exception {
-        String fieldsList = null;
-        String from = "epoch_ms";
-        String to = "ISO8601";
-        String zone = "UTC";
-        boolean removeOnError = false;
-        if (config != null && !config.isBlank()) {
-            String[] parts = config.split(";");
-            for (String part : parts) {
-                part = part.trim();
-                int eq = part.indexOf('=');
-                if (eq > 0) {
-                    String key = part.substring(0, eq).trim();
-                    String val = part.substring(eq + 1).trim();
-                    switch (key) {
-                        case "fields" -> fieldsList = val;
-                        case "from" -> from = val;
-                        case "to" -> to = val;
-                        case "zone" -> zone = val;
-                        case "removeOnError" -> removeOnError = "true".equalsIgnoreCase(val);
+        String pluginName = "timestamp-normalize";
+        Counter counter = Metrics.registry().counter("plugin.executions", "plugin", pluginName);
+        Timer timer = Metrics.registry().timer("plugin.duration", "plugin", pluginName);
+        counter.increment();
+        return timer.recordCallable(() -> {
+            String fieldsList = null;
+            String from = "epoch_ms";
+            String to = "ISO8601";
+            String zone = "UTC";
+            boolean removeOnError = false;
+            if (config != null && !config.isBlank()) {
+                String[] parts = config.split(";");
+                for (String part : parts) {
+                    part = part.trim();
+                    int eq = part.indexOf('=');
+                    if (eq > 0) {
+                        String key = part.substring(0, eq).trim();
+                        String val = part.substring(eq + 1).trim();
+                        switch (key) {
+                            case "fields" -> fieldsList = val;
+                            case "from" -> from = val;
+                            case "to" -> to = val;
+                            case "zone" -> zone = val;
+                            case "removeOnError" -> removeOnError = "true".equalsIgnoreCase(val);
+                        }
                     }
                 }
             }
-        }
-        return normalize(payload, fieldsList, from, to, zone, removeOnError);
+            return normalize(payload, fieldsList, from, to, zone, removeOnError);
+        });
     }
 
     private TimestampNormalize() {

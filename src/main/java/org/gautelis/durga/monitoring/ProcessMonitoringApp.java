@@ -7,6 +7,8 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
@@ -16,6 +18,8 @@ import java.util.Properties;
 @QuarkusMain
 public final class ProcessMonitoringApp {
 
+    private static final Logger LOG = LoggerFactory.getLogger(ProcessMonitoringApp.class);
+
     static String bootstrapServers;
     static String applicationId;
 
@@ -23,9 +27,16 @@ public final class ProcessMonitoringApp {
     }
 
     public static void main(String[] args) {
-        bootstrapServers = args.length > 0 ? args[0] : bootstrapServersDefault();
-        applicationId = args.length > 1 ? args[1] : "durga-monitoring";
-        Quarkus.run(args);
+        LOG.info("Starting ProcessMonitoringApp");
+        try {
+            bootstrapServers = args.length > 0 ? args[0] : bootstrapServersDefault();
+            applicationId = args.length > 1 ? args[1] : "durga-monitoring";
+            Quarkus.run(args);
+            LOG.info("ProcessMonitoringApp completed successfully");
+        } catch (Exception e) {
+            LOG.error("ProcessMonitoringApp failed", e);
+            throw e;
+        }
     }
 
     @Produces
@@ -49,8 +60,7 @@ public final class ProcessMonitoringApp {
                 new ProcessMonitoringQueryService(streams, topics);
 
         streams.start();
-        System.out.println("Monitoring topology started (state dir: "
-                + props.getProperty(StreamsConfig.STATE_DIR_CONFIG) + ")");
+        LOG.info("Monitoring topology started (state dir: {})", props.getProperty(StreamsConfig.STATE_DIR_CONFIG));
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             streams.close();

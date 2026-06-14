@@ -3,7 +3,7 @@
 BPMN-driven Kafka scaffolding tool. Reads a BPMN model and generates Kafka-oriented
 worker, gateway, orchestration, and topic setup skeletons for process implementations.
 
-[System manual](doc/system/sysdoc.pdf) | [BPMN coverage matrix](doc/bpmn-kafka-coverage.md) | [Deployment guide](doc/deployment.md) | [Plugin architecture](doc/data-pipeline-blueprint.md)
+[System manual](doc/system/sysdoc.pdf) | [BPMN coverage matrix](doc/bpmn-kafka-coverage.md) | [Deployment guide](doc/deployment.md) | [Plugin architecture](doc/data-pipeline-blueprint.md) | [Testcontainers setup](doc/testcontainers-setup.md)
 
 ## Quick start
 
@@ -20,6 +20,21 @@ cd setup && docker compose up
 
 Kafka UI will log transient connection errors until the broker is ready — this is normal.
 The broker listens on `localhost:9094`.
+
+## Running tests
+
+```bash
+# Unit tests (196 tests, no Docker):
+mvn test -Dtest='!*IntegrationTest'
+
+# Integration tests (require Docker):
+mvn test -Dtest='*IntegrationTest'
+
+# Toxiproxy chaos tests:
+mvn test -Dtest='ToxiproxyChaosIntegrationTest'
+```
+
+See [Testcontainers setup](doc/testcontainers-setup.md) if Docker detection fails.
 
 ## BPMN scaffolding
 

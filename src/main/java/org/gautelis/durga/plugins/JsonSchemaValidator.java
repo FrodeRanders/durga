@@ -2,6 +2,11 @@ package org.gautelis.durga.plugins;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.Counter;
+import org.gautelis.durga.monitoring.Metrics;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -26,18 +31,26 @@ import java.util.regex.PatternSyntaxException;
  */
 public final class JsonSchemaValidator implements Plugin {
 
+    private static final Logger LOG = LoggerFactory.getLogger(JsonSchemaValidator.class);
+
     private final ObjectMapper mapper = new ObjectMapper();
     private JsonNode schema;
 
     @Override
     public String execute(String payload, String config) throws Exception {
-        JsonNode schemaNode = mapper.readTree(config);
-        JsonNode input = mapper.readTree(payload);
-        String error = validate(input, schemaNode, "$");
-        if (error != null) {
-            throw new ValidationException(error);
-        }
-        return payload;
+        String pluginName = "json-schema-validator";
+        Counter counter = Metrics.registry().counter("plugin.executions", "plugin", pluginName);
+        Timer timer = Metrics.registry().timer("plugin.duration", "plugin", pluginName);
+        counter.increment();
+        return timer.recordCallable(() -> {
+            JsonNode schemaNode = mapper.readTree(config);
+            JsonNode input = mapper.readTree(payload);
+            String error = validate(input, schemaNode, "$");
+            if (error != null) {
+                throw new ValidationException(error);
+            }
+            return payload;
+        });
     }
 
     private String validate(JsonNode node, JsonNode schema, String path) {

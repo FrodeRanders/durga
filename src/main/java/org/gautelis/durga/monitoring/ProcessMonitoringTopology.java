@@ -17,6 +17,8 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.gautelis.durga.ProcessEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -28,6 +30,9 @@ import java.time.temporal.ChronoUnit;
  * latency summaries, an active-instance index, and coarse history/trend buckets.
  */
 public final class ProcessMonitoringTopology {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ProcessMonitoringTopology.class);
+
     public static final String DEFAULT_EVENTS_TOPIC = "process-events";
     public static final String DEFAULT_STATE_TOPIC = "process-state";
     public static final String DEFAULT_COUNTS_TOPIC = "process-state-counts";

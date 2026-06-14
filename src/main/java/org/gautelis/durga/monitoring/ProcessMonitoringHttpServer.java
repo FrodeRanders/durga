@@ -4,6 +4,8 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
@@ -16,10 +18,11 @@ import java.util.Optional;
 /**
  * Small embedded HTTP surface for the monitoring topology.
  * <p>
- * The server exposes health, instance lookup, aggregate queries, and the embedded dashboard
- * without introducing a second application framework.
+ * The server exposes health, instance lookup, aggregate queries, metrics,
+ * and the embedded dashboard without introducing a second application framework.
  */
 public final class ProcessMonitoringHttpServer implements AutoCloseable {
+    private static final Logger LOG = LoggerFactory.getLogger(ProcessMonitoringHttpServer.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final KafkaStreams streams;
@@ -49,6 +52,8 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         this.server.createContext("/processes", this::handleProcesses);
         this.server.createContext("/counts", this::handleCounts);
         this.server.createContext("/stuck", this::handleStuck);
+        this.server.createContext("/metrics", this::handleMetrics);
+        LOG.info("Monitoring HTTP server created on port {}", port);
     }
 
     /**
@@ -56,6 +61,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
      */
     public void start() {
         server.start();
+        LOG.info("Monitoring HTTP server started");
     }
 
     /**
@@ -64,6 +70,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
     @Override
     public void close() {
         server.stop(0);
+        LOG.info("Monitoring HTTP server stopped");
     }
 
     private void handleRoot(HttpExchange exchange) throws IOException {
@@ -176,6 +183,19 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             sendJson(exchange, 200, queryService.stuckInstances(processId, olderThanSeconds));
         } catch (InvalidStateStoreException e) {
             sendJson(exchange, 503, Map.of("error", "State store not queryable yet"));
+        }
+    }
+
+    private void handleMetrics(HttpExchange exchange) throws IOException {
+        if (!"GET".equals(exchange.getRequestMethod())) {
+            sendStatus(exchange, 405);
+            return;
+        }
+        exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
+        var body = org.gautelis.durga.monitoring.Metrics.scrape().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        exchange.sendResponseHeaders(200, body.length);
+        try (OutputStream output = exchange.getResponseBody()) {
+            output.write(body);
         }
     }
 

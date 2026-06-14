@@ -5,6 +5,8 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -21,6 +23,9 @@ import java.util.Optional;
  * indexes, and coarse trend buckets.
  */
 public final class ProcessMonitoringQueryService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ProcessMonitoringQueryService.class);
+
     private final KafkaStreams streams;
     private final ProcessMonitoringTopology.MonitoringTopics topics;
 

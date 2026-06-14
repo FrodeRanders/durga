@@ -4,6 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.Counter;
+import org.gautelis.durga.monitoring.Metrics;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -12,6 +17,8 @@ import java.util.Map;
  * Contracts and utilities shared by data pipeline plugin executors.
  */
 public final class PipelinePlugin {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PipelinePlugin.class);
 
     static final ObjectMapper MAPPER = new ObjectMapper();
 

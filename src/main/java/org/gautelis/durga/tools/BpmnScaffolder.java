@@ -1,5 +1,7 @@
 package org.gautelis.durga.tools;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.stringtemplate.v4.ST;
 import org.stringtemplate.v4.STGroupString;
 import org.camunda.bpm.model.bpmn.Bpmn;
@@ -61,6 +63,7 @@ import java.util.TreeSet;
  * so the generated project can be studied, modified, and demoed locally.
  */
 public class BpmnScaffolder {
+    private static final Logger LOG = LoggerFactory.getLogger(BpmnScaffolder.class);
     static String generatedPackage = "org.gautelis.durga.generated";
     static String generatedProbesPackage;
     static String eventsTopic;
@@ -71,14 +74,14 @@ public class BpmnScaffolder {
      *             BPMN file path
      */
     public static void main(String[] args) {
-        ParsedArgs parsed = parseArgs(args);
+        ParsedArgs parsed = CliParser.parse(args);
         if (parsed == null) {
             System.exit(1);
         }
 
         File bpmnFile = new File(parsed.bpmnPath);
         if (!bpmnFile.exists()) {
-            System.err.println("BPMN file not found: " + bpmnFile.getAbsolutePath());
+            LOG.error("BPMN file not found: {}", bpmnFile.getAbsolutePath());
             System.exit(1);
         }
 
@@ -86,7 +89,7 @@ public class BpmnScaffolder {
         String pkg = parsed.packageName;
         if (pkg == null || pkg.isBlank()) {
             pkg = generatedPackage;
-            System.err.println("Warning: no --package specified, defaulting to " + pkg);
+            LOG.warn("Warning: no --package specified, defaulting to " + pkg);
         }
         generatedPackage = pkg;
         generatedProbesPackage = pkg + ".probes";
@@ -97,12 +100,12 @@ public class BpmnScaffolder {
         long retentionMs;
         if (retention == null || retention.isBlank()) {
             retentionMs = 168 * 3600 * 1000L; // 7 days
-            System.err.println("Warning: no --retention specified, defaulting to 168h (7 days). "
+            LOG.warn("Warning: no --retention specified, defaulting to 168h (7 days). "
                     + "Topics older than this will be deleted. "
                     + "Use --retention 42h|5d|2w|1m or -1 for infinite.");
         } else if ("-1".equals(retention)) {
             retentionMs = -1;
-            System.err.println("Note: retention set to -1 (infinite). Topics will never be deleted.");
+            LOG.warn("Note: retention set to -1 (infinite). Topics will never be deleted.");
         } else {
             retentionMs = parseRetention(retention);
         }
@@ -125,28 +128,28 @@ public class BpmnScaffolder {
         }
         Map<String, NodeInfo> nodes = new LinkedHashMap<>();
         Map<String, List<FlowInfo>> flowsBySource = new LinkedHashMap<>();
-        List<EventSubProcessSpec> eventSubProcessSpecs = collectEventSubProcessSpecs(model, nodes);
-        List<SubProcessSpec> subProcessSpecs = collectSubProcessSpecs(model, nodes);
+        List<EventSubProcessSpec> eventSubProcessSpecs = BpmnModelCollector.collectEventSubProcessSpecs(model, nodes);
+        List<SubProcessSpec> subProcessSpecs = BpmnModelCollector.collectSubProcessSpecs(model, nodes);
         List<String> subProcesses = subProcessSpecs.stream().map(spec -> spec.name).toList();
-        List<TaskSpec> taskSpecs = collectTaskSpecs(model, nodes);
+        List<TaskSpec> taskSpecs = BpmnModelCollector.collectTaskSpecs(model, nodes);
         List<String> tasks = taskSpecs.stream().map(task -> task.name).toList();
-        List<TimerSpec> timerSpecs = collectTimerSpecs(model, nodes);
+        List<TimerSpec> timerSpecs = BpmnModelCollector.collectTimerSpecs(model, nodes);
         List<String> timers = timerSpecs.stream().map(timer -> timer.name).toList();
-        List<BoundaryTimerSpec> boundaryTimerSpecs = collectBoundaryTimerSpecs(model, nodes);
+        List<BoundaryTimerSpec> boundaryTimerSpecs = BpmnModelCollector.collectBoundaryTimerSpecs(model, nodes);
         List<String> boundaryTimers = boundaryTimerSpecs.stream().map(timer -> timer.name).toList();
-        List<BoundaryErrorSpec> boundaryErrorSpecs = collectBoundaryErrorSpecs(model, nodes);
+        List<BoundaryErrorSpec> boundaryErrorSpecs = BpmnModelCollector.collectBoundaryErrorSpecs(model, nodes);
         List<String> boundaryErrors = boundaryErrorSpecs.stream().map(error -> error.name).toList();
-        List<BoundaryEscalationSpec> boundaryEscalationSpecs = collectBoundaryEscalationSpecs(model, nodes);
+        List<BoundaryEscalationSpec> boundaryEscalationSpecs = BpmnModelCollector.collectBoundaryEscalationSpecs(model, nodes);
         List<String> boundaryEscalations = boundaryEscalationSpecs.stream().map(escalation -> escalation.name).toList();
-        List<MessageCatchSpec> messageCatchSpecs = collectMessageCatchSpecs(model, nodes);
-        List<MessageThrowSpec> messageThrowSpecs = collectMessageThrowSpecs(model, nodes);
-        List<String> messageEvents = collectMessageEvents(messageCatchSpecs, messageThrowSpecs, eventSubProcessSpecs);
-        List<String> messageTopics = collectMessageTopics(messageCatchSpecs, messageThrowSpecs, eventSubProcessSpecs);
-        List<SignalCatchSpec> signalCatchSpecs = collectSignalCatchSpecs(model, nodes);
-        List<SignalThrowSpec> signalThrowSpecs = collectSignalThrowSpecs(model, nodes);
-        List<String> signalEvents = collectSignalEvents(signalCatchSpecs, signalThrowSpecs, eventSubProcessSpecs);
-        List<String> signalTopics = collectSignalTopics(signalCatchSpecs, signalThrowSpecs, eventSubProcessSpecs);
-        List<CallActivitySpec> callActivitySpecs = collectCallActivitySpecs(model, nodes);
+        List<MessageCatchSpec> messageCatchSpecs = BpmnModelCollector.collectMessageCatchSpecs(model, nodes);
+        List<MessageThrowSpec> messageThrowSpecs = BpmnModelCollector.collectMessageThrowSpecs(model, nodes);
+        List<String> messageEvents = BpmnModelCollector.collectMessageEvents(messageCatchSpecs, messageThrowSpecs, eventSubProcessSpecs);
+        List<String> messageTopics = BpmnModelCollector.collectMessageTopics(messageCatchSpecs, messageThrowSpecs, eventSubProcessSpecs);
+        List<SignalCatchSpec> signalCatchSpecs = BpmnModelCollector.collectSignalCatchSpecs(model, nodes);
+        List<SignalThrowSpec> signalThrowSpecs = BpmnModelCollector.collectSignalThrowSpecs(model, nodes);
+        List<String> signalEvents = BpmnModelCollector.collectSignalEvents(signalCatchSpecs, signalThrowSpecs, eventSubProcessSpecs);
+        List<String> signalTopics = BpmnModelCollector.collectSignalTopics(signalCatchSpecs, signalThrowSpecs, eventSubProcessSpecs);
+        List<CallActivitySpec> callActivitySpecs = BpmnModelCollector.collectCallActivitySpecs(model, nodes);
         List<String> callActivities = callActivitySpecs.stream().map(call -> call.name).toList();
 
         List<NodeInfo> xors = new ArrayList<>();
@@ -179,17 +182,17 @@ public class BpmnScaffolder {
             ors.add(info);
         }
 
-        List<MultiInstanceSpec> multiInstanceSpecs = collectMultiInstanceSpecs(model);
+        List<MultiInstanceSpec> multiInstanceSpecs = BpmnModelCollector.collectMultiInstanceSpecs(model);
 
         for (StartEvent startEvent : model.getModelElementsByType(StartEvent.class)) {
-            if (enclosingSubProcessId(startEvent) != null) {
+            if (BpmnModelCollector.enclosingSubProcessId(startEvent) != null) {
                 continue;
             }
             nodes.put(startEvent.getId(), new NodeInfo(startEvent.getId(), "start", NodeType.START));
         }
 
         for (EndEvent endEvent : model.getModelElementsByType(EndEvent.class)) {
-            if (enclosingSubProcessId(endEvent) != null) {
+            if (BpmnModelCollector.enclosingSubProcessId(endEvent) != null) {
                 continue;
             }
             nodes.put(endEvent.getId(), new NodeInfo(
@@ -374,7 +377,7 @@ public class BpmnScaffolder {
                 writeFile(dockerfilePath, renderDockerfile(group, processId));
                 generatedFiles.add(outputRoot.relativize(dockerfilePath).toString());
             } catch (Exception e) {
-                System.err.println("Warning: failed to generate Dockerfile: " + e.getMessage());
+                LOG.warn("Warning: failed to generate Dockerfile: " + e.getMessage());
             }
 
             Path k8sPath = outputRoot.resolve("k8s.yml");
@@ -382,7 +385,7 @@ public class BpmnScaffolder {
                 writeFile(k8sPath, renderK8s(group, processId));
                 generatedFiles.add(outputRoot.relativize(k8sPath).toString());
             } catch (Exception e) {
-                System.err.println("Warning: failed to generate k8s.yml: " + e.getMessage());
+                LOG.warn("Warning: failed to generate k8s.yml: " + e.getMessage());
             }
 
             Path deployPath = outputRoot.resolve("deploy.sh");
@@ -390,7 +393,7 @@ public class BpmnScaffolder {
                 writeFile(deployPath, renderDeployScript(group, processId));
                 generatedFiles.add(outputRoot.relativize(deployPath).toString());
             } catch (Exception e) {
-                System.err.println("Warning: failed to generate deploy.sh: " + e.getMessage());
+                LOG.warn("Warning: failed to generate deploy.sh: " + e.getMessage());
             }
 
             Path composeTestPath = outputRoot.resolve("docker-compose.test.yml");
@@ -398,7 +401,7 @@ public class BpmnScaffolder {
                 writeFile(composeTestPath, renderDockerComposeTest(group, processId));
                 generatedFiles.add(outputRoot.relativize(composeTestPath).toString());
             } catch (Exception e) {
-                System.err.println("Warning: failed to generate docker-compose.test.yml: " + e.getMessage());
+                LOG.warn("Warning: failed to generate docker-compose.test.yml: " + e.getMessage());
             }
 
             Path payloadPath = outputRoot.resolve("task-payloads.json");
@@ -595,84 +598,6 @@ public class BpmnScaffolder {
         }
     }
 
-    private static ParsedArgs parseArgs(String[] args) {
-        if (args.length == 0) {
-            System.err.println("Usage: BpmnScaffolder <path-to-bpmn.xml> [--out <dir>] [--process-id <id>] [--package <pkg>] [--event-topic <topic>] [--retention <h|d|w>] [--dry-run] [--transactions] [--separate-workers] [--strimzi] [--connect]");
-            return null;
-        }
-        boolean dryRun = false;
-        boolean transactions = false;
-        boolean separateWorkers = false;
-        boolean connect = false;
-        boolean strimzi = false;
-        String outputDir = null;
-        String processIdOverride = null;
-        String packageName = null;
-        String retentionHours = null;
-        String eventsTopic = null;
-        List<String> positional = new ArrayList<>();
-
-        for (int i = 0; i < args.length; i++) {
-            String arg = args[i];
-            if ("--dry-run".equals(arg)) {
-                dryRun = true;
-            } else if ("--transactions".equals(arg)) {
-                transactions = true;
-            } else if ("--separate-workers".equals(arg)) {
-                separateWorkers = true;
-            } else if ("--connect".equals(arg)) {
-                connect = true;
-            } else if ("--strimzi".equals(arg)) {
-                strimzi = true;
-            } else if (arg.startsWith("--out=")) {
-                outputDir = arg.substring("--out=".length());
-            } else if ("--out".equals(arg)) {
-                if (i + 1 >= args.length) {
-                    System.err.println("Missing value for --out");
-                    return null;
-                }
-                outputDir = args[++i];
-            } else if ("--process-id".equals(arg)) {
-                if (i + 1 >= args.length) {
-                    System.err.println("Missing value for --process-id");
-                    return null;
-                }
-                processIdOverride = args[++i];
-            } else if ("--package".equals(arg)) {
-                if (i + 1 >= args.length) {
-                    System.err.println("Missing value for --package");
-                    return null;
-                }
-                packageName = args[++i];
-            } else if ("--retention".equals(arg)) {
-                if (i + 1 >= args.length) {
-                    System.err.println("Missing value for --retention");
-                    return null;
-                }
-                retentionHours = args[++i];
-            } else if ("--event-topic".equals(arg)) {
-                if (i + 1 >= args.length) {
-                    System.err.println("Missing value for --event-topic");
-                    return null;
-                }
-                eventsTopic = args[++i];
-            } else {
-                positional.add(arg);
-            }
-        }
-
-        if (positional.isEmpty()) {
-            System.err.println("Usage: BpmnScaffolder <path-to-bpmn.xml> [output-dir] [--out <dir>] [--dry-run] [--transactions]");
-            return null;
-        }
-
-        String bpmnPath = positional.get(0);
-        if (outputDir == null) {
-            outputDir = positional.size() > 1 ? positional.get(1) : "generated";
-        }
-        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi, processIdOverride, packageName, retentionHours, eventsTopic);
-    }
-
     private static String normalize(String value) {
         if (value == null || value.isBlank()) {
             return "unnamed";
@@ -790,603 +715,6 @@ public class BpmnScaffolder {
         ));
     }
 
-    private static List<TaskSpec> collectTaskSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
-        Map<String, TaskSpec> taskSpecs = new LinkedHashMap<>();
-
-        PluginRegistry pluginRegistry = loadPluginRegistry();
-
-        registerTaskSpecs(model.getModelElementsByType(UserTask.class), TaskKind.USER, taskSpecs, nodes);
-        registerTaskSpecs(model.getModelElementsByType(ManualTask.class), TaskKind.MANUAL, taskSpecs, nodes);
-        registerTaskSpecs(model.getModelElementsByType(SendTask.class), TaskKind.SEND, taskSpecs, nodes);
-        registerTaskSpecs(model.getModelElementsByType(ReceiveTask.class), TaskKind.RECEIVE, taskSpecs, nodes);
-        registerTaskSpecs(model.getModelElementsByType(ScriptTask.class), TaskKind.SCRIPT, taskSpecs, nodes);
-        registerTaskSpecs(model.getModelElementsByType(BusinessRuleTask.class), TaskKind.BUSINESS_RULE, taskSpecs, nodes);
-        for (CallActivity callActivity : model.getModelElementsByType(CallActivity.class)) {
-            String name = normalize(nameOrId(callActivity.getName(), callActivity.getId()));
-            taskSpecs.put(callActivity.getId(), new TaskSpec(callActivity.getId(), name, TaskKind.CALL));
-        }
-
-        for (ServiceTask task : model.getModelElementsByType(ServiceTask.class)) {
-            if (taskSpecs.containsKey(task.getId())) {
-                continue;
-            }
-            TaskSpec customSpec = resolveCustomTask(task);
-            if (customSpec != null) {
-                String name = normalize(nameOrId(task.getName(), task.getId()));
-                taskSpecs.put(task.getId(), customSpec);
-                nodes.put(task.getId(), new NodeInfo(task.getId(), name, NodeType.TASK, TaskKind.CUSTOM));
-                continue;
-            }
-            TaskSpec pluginSpec = resolvePluginTask(task, pluginRegistry);
-            if (pluginSpec != null) {
-                String name = normalize(nameOrId(task.getName(), task.getId()));
-                taskSpecs.put(task.getId(), pluginSpec);
-                nodes.put(task.getId(), new NodeInfo(task.getId(), name, NodeType.TASK, TaskKind.PLUGIN));
-            } else {
-                registerTaskSpec(task, TaskKind.SERVICE, taskSpecs, nodes);
-            }
-        }
-
-        for (Task task : model.getModelElementsByType(Task.class)) {
-            if (taskSpecs.containsKey(task.getId())) {
-                continue;
-            }
-            if (task instanceof ServiceTask) {
-                continue;
-            }
-            String name = normalize(nameOrId(task.getName(), task.getId()));
-            System.err.println("Warning: unknown BPMN task type for '" + name + "' (id=" + task.getId()
-                    + "), generating generic auto-completing worker");
-            taskSpecs.put(task.getId(), new TaskSpec(task.getId(), name, TaskKind.GENERIC));
-            nodes.put(task.getId(), new NodeInfo(task.getId(), name, NodeType.TASK, TaskKind.GENERIC));
-        }
-        return new ArrayList<>(taskSpecs.values());
-    }
-
-    private static PluginRegistry loadPluginRegistry() {
-        Path pluginDir = Path.of("plugins");
-        if (Files.exists(pluginDir)) {
-            try {
-                return PluginRegistry.load(pluginDir);
-            } catch (IOException e) {
-                System.err.println("Warning: failed to load plugin registry: " + e.getMessage());
-            }
-        }
-        java.net.URL catalogUrl = BpmnScaffolder.class.getResource("/plugins/catalog.yml");
-        if (catalogUrl != null) {
-            try {
-                return PluginRegistry.load(catalogUrl);
-            } catch (IOException e) {
-                System.err.println("Warning: failed to load plugin registry from classpath: " + e.getMessage());
-            }
-        }
-        return new PluginRegistry();
-    }
-
-    private static TaskSpec resolvePluginTask(ServiceTask task, PluginRegistry registry) {
-        String pluginId = null;
-        String pluginConfig = null;
-        if (task.getExtensionElements() != null) {
-            CamundaProperties props = task.getExtensionElements()
-                    .getElementsQuery()
-                    .filterByType(CamundaProperties.class)
-                    .singleResult();
-            if (props != null && props.getCamundaProperties() != null) {
-                for (CamundaProperty prop : props.getCamundaProperties()) {
-                    String name = prop.getCamundaName();
-                    String value = prop.getCamundaValue();
-                    if ("plugin".equals(name)) {
-                        pluginId = value;
-                    } else if ("pluginConfig".equals(name)) {
-                        pluginConfig = value;
-                    }
-                }
-            }
-        }
-        if (pluginId == null || pluginId.isBlank()) {
-            return null;
-        }
-        if (!registry.contains(pluginId)) {
-            System.err.println("Warning: plugin '" + pluginId + "' not found in registry for task "
-                    + task.getId() + ", falling back to generic worker");
-            return null;
-        }
-        PluginDescriptor desc = registry.get(pluginId);
-        String name = normalize(nameOrId(task.getName(), task.getId()));
-        return new TaskSpec(task.getId(), name, TaskKind.PLUGIN, pluginId, pluginConfig,
-                desc.implementation.className);
-    }
-
-    private static TaskSpec resolveCustomTask(ServiceTask task) {
-        String pluginId = null;
-        String pluginConfig = null;
-        String customImpl = null;
-        String customSource = null;
-        String customHash = null;
-        if (task.getExtensionElements() != null) {
-            CamundaProperties props = task.getExtensionElements()
-                    .getElementsQuery()
-                    .filterByType(CamundaProperties.class)
-                    .singleResult();
-            if (props != null && props.getCamundaProperties() != null) {
-                for (CamundaProperty prop : props.getCamundaProperties()) {
-                    String name = prop.getCamundaName();
-                    String value = prop.getCamundaValue();
-                    switch (name) {
-                        case "plugin" -> pluginId = value;
-                        case "pluginConfig" -> pluginConfig = value;
-                        case "customImpl" -> customImpl = value;
-                        case "customSource" -> customSource = value;
-                        case "customHash" -> customHash = value;
-                    }
-                }
-            }
-        }
-        if (pluginId == null || !"custom".equals(pluginId)) {
-            return null;
-        }
-        String contractName = parseContractName(pluginConfig, task);
-        String name = normalize(nameOrId(task.getName(), task.getId()));
-        return new TaskSpec(task.getId(), name, TaskKind.CUSTOM, pluginId, pluginConfig,
-                null, contractName, customImpl, customSource, customHash);
-    }
-
-    private static String parseContractName(String pluginConfig, ServiceTask task) {
-        if (pluginConfig == null || pluginConfig.isBlank()) {
-            String name = normalize(nameOrId(task.getName(), task.getId()));
-            return toClassName(name) + "Contract";
-        }
-        for (String part : pluginConfig.split(";")) {
-            part = part.trim();
-            if (part.startsWith("interface=")) {
-                return part.substring("interface=".length()).trim();
-            }
-        }
-        return pluginConfig.trim();
-    }
-
-    private static void registerTaskSpec(
-            Task task,
-            TaskKind kind,
-            Map<String, TaskSpec> taskSpecs,
-            Map<String, NodeInfo> nodes
-    ) {
-        String name = normalize(nameOrId(task.getName(), task.getId()));
-        taskSpecs.put(task.getId(), new TaskSpec(task.getId(), name, kind));
-        nodes.put(task.getId(), new NodeInfo(task.getId(), name, NodeType.TASK, kind));
-    }
-
-    private static List<TimerSpec> collectTimerSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
-        List<TimerSpec> timers = new ArrayList<>();
-        for (IntermediateCatchEvent event : model.getModelElementsByType(IntermediateCatchEvent.class)) {
-            TimerEventDefinition timerDefinition = event.getEventDefinitions().stream()
-                    .filter(TimerEventDefinition.class::isInstance)
-                    .map(TimerEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            if (timerDefinition == null) {
-                continue;
-            }
-            String name = normalize(nameOrId(event.getName(), event.getId()));
-            TimerSpec timerSpec = timerSpec(event.getId(), name, timerDefinition);
-            timers.add(timerSpec);
-            nodes.put(event.getId(), new NodeInfo(event.getId(), name, NodeType.TIMER));
-        }
-        return timers;
-    }
-
-    private static List<MultiInstanceSpec> collectMultiInstanceSpecs(BpmnModelInstance model) {
-        List<MultiInstanceSpec> specs = new ArrayList<>();
-        for (Task task : model.getModelElementsByType(Task.class)) {
-            if (!(task.getLoopCharacteristics() instanceof MultiInstanceLoopCharacteristics loop)) {
-                continue;
-            }
-            String name = normalize(nameOrId(task.getName(), task.getId()));
-            String cardinality = loop.getLoopCardinality() != null ? loop.getLoopCardinality().getTextContent() : null;
-            String completion = loop.getCompletionCondition() != null ? loop.getCompletionCondition().getTextContent() : null;
-            specs.add(new MultiInstanceSpec(task.getId(), name, loop.isSequential(), cardinality, completion));
-            System.err.println("Note: multi-instance task '" + name + "' (sequential="
-                    + loop.isSequential() + ", cardinality=" + cardinality + ")");
-        }
-        for (SubProcess sub : model.getModelElementsByType(SubProcess.class)) {
-            if (!(sub.getLoopCharacteristics() instanceof MultiInstanceLoopCharacteristics loop)) {
-                continue;
-            }
-            String name = normalize(nameOrId(sub.getName(), sub.getId()));
-            String cardinality = loop.getLoopCardinality() != null ? loop.getLoopCardinality().getTextContent() : null;
-            String completion = loop.getCompletionCondition() != null ? loop.getCompletionCondition().getTextContent() : null;
-            specs.add(new MultiInstanceSpec(sub.getId(), name, loop.isSequential(), cardinality, completion));
-            System.err.println("Note: multi-instance subprocess '" + name + "' (sequential="
-                    + loop.isSequential() + ", cardinality=" + cardinality + ")");
-        }
-        return specs;
-    }
-
-    private static List<EventSubProcessSpec> collectEventSubProcessSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
-        List<EventSubProcessSpec> specs = new ArrayList<>();
-        for (SubProcess subProcess : model.getModelElementsByType(SubProcess.class)) {
-            if (!isEventSubProcess(subProcess)) {
-                continue;
-            }
-            String name = normalize(nameOrId(subProcess.getName(), subProcess.getId()));
-            StartEvent triggerStart = subProcess.getChildElementsByType(StartEvent.class).stream().findFirst().orElse(null);
-            if (triggerStart == null) {
-                continue;
-            }
-
-            MessageEventDefinition messageDefinition = triggerStart.getEventDefinitions().stream()
-                    .filter(MessageEventDefinition.class::isInstance)
-                    .map(MessageEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            SignalEventDefinition signalDefinition = triggerStart.getEventDefinitions().stream()
-                    .filter(SignalEventDefinition.class::isInstance)
-                    .map(SignalEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            TimerEventDefinition timerDefinition = triggerStart.getEventDefinitions().stream()
-                    .filter(TimerEventDefinition.class::isInstance)
-                    .map(TimerEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            ErrorEventDefinition errorDefinition = triggerStart.getEventDefinitions().stream()
-                    .filter(ErrorEventDefinition.class::isInstance)
-                    .map(ErrorEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            EscalationEventDefinition escalationDefinition = triggerStart.getEventDefinitions().stream()
-                    .filter(EscalationEventDefinition.class::isInstance)
-                    .map(EscalationEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            if (messageDefinition == null && signalDefinition == null && timerDefinition == null
-                    && errorDefinition == null && escalationDefinition == null) {
-                continue;
-            }
-
-            EventTriggerKind triggerKind;
-            String triggerName;
-            String triggerTopic;
-            String timerType = null;
-            String timerExpression = null;
-            if (messageDefinition != null) {
-                triggerKind = EventTriggerKind.MESSAGE;
-                triggerName = messageName(name, messageDefinition);
-                triggerTopic = processMessageTopic(model, triggerName);
-            } else if (signalDefinition != null) {
-                triggerKind = EventTriggerKind.SIGNAL;
-                triggerName = signalName(name, signalDefinition);
-                triggerTopic = processSignalTopic(model, triggerName);
-            } else if (errorDefinition != null) {
-                String enclosingScopeId = enclosingSubProcessId(subProcess);
-                if (enclosingScopeId == null) {
-                    continue;
-                }
-                triggerKind = EventTriggerKind.ERROR;
-                triggerName = errorDefinition.getError() != null && errorDefinition.getError().getErrorCode() != null
-                        ? normalize(errorDefinition.getError().getErrorCode())
-                        : name + "_error";
-                triggerTopic = null;
-            } else if (escalationDefinition != null) {
-                String enclosingScopeId = enclosingSubProcessId(subProcess);
-                if (enclosingScopeId == null) {
-                    continue;
-                }
-                triggerKind = EventTriggerKind.ESCALATION;
-                triggerName = escalationDefinition.getEscalation() != null
-                        && escalationDefinition.getEscalation().getEscalationCode() != null
-                        ? normalize(escalationDefinition.getEscalation().getEscalationCode())
-                        : name + "_escalation";
-                triggerTopic = null;
-            } else {
-                String enclosingScopeId = enclosingSubProcessId(subProcess);
-                if (enclosingScopeId == null) {
-                    continue;
-                }
-                triggerKind = EventTriggerKind.TIMER;
-                TimerSpec timerSpec = timerSpec(triggerStart.getId(), name, timerDefinition);
-                triggerName = timerSpec.name;
-                triggerTopic = null;
-                timerType = timerSpec.timerType;
-                timerExpression = timerSpec.expression;
-            }
-
-            List<String> entryTargetIds = new ArrayList<>();
-            List<String> exitSourceIds = new ArrayList<>();
-            for (SequenceFlow flow : model.getModelElementsByType(SequenceFlow.class)) {
-                FlowNode source = flow.getSource();
-                FlowNode target = flow.getTarget();
-                if (source instanceof StartEvent && subProcess.getId().equals(enclosingSubProcessId(source))) {
-                    entryTargetIds.add(target.getId());
-                }
-                if (target instanceof EndEvent && subProcess.getId().equals(enclosingSubProcessId(target))) {
-                    exitSourceIds.add(source.getId());
-                }
-            }
-
-            List<String> scopeActivityIds = new ArrayList<>();
-            for (FlowNode flowNode : model.getModelElementsByType(FlowNode.class)) {
-                if (!isWithinSubProcess(flowNode, subProcess.getId())) {
-                    continue;
-                }
-                if (flowNode instanceof StartEvent || flowNode instanceof EndEvent) {
-                    continue;
-                }
-                scopeActivityIds.add(normalize(nameOrId(flowNode.getName(), flowNode.getId())));
-            }
-            String enclosingScopeId = enclosingSubProcessId(subProcess);
-            List<String> cancellationScopeActivityIds = collectEventSubProcessCancellationScopeActivityIds(
-                    model,
-                    subProcess.getId(),
-                    enclosingScopeId
-            );
-
-            specs.add(new EventSubProcessSpec(
-                    subProcess.getId(),
-                    name,
-                    triggerKind,
-                    triggerName,
-                    triggerTopic,
-                    timerType,
-                    timerExpression,
-                    enclosingScopeId != null ? normalize(nameOrId(
-                            ((SubProcess) model.getModelElementById(enclosingScopeId)).getName(),
-                            enclosingScopeId
-                    )) : null,
-                    isInterruptingStart(triggerStart),
-                    cancellationScopeActivityIds,
-                    distinct(entryTargetIds),
-                    distinct(exitSourceIds),
-                    distinct(scopeActivityIds)
-            ));
-        }
-        return specs;
-    }
-
-    private static List<String> collectEventSubProcessCancellationScopeActivityIds(
-            BpmnModelInstance model,
-            String eventSubProcessId,
-            String enclosingScopeId
-    ) {
-        List<String> activityIds = new ArrayList<>();
-        for (FlowNode flowNode : model.getModelElementsByType(FlowNode.class)) {
-            if (flowNode instanceof StartEvent || flowNode instanceof EndEvent) {
-                continue;
-            }
-            if (isWithinSubProcess(flowNode, eventSubProcessId)) {
-                continue;
-            }
-            String flowNodeEnclosingScope = enclosingSubProcessId(flowNode);
-            if (enclosingScopeId == null) {
-                if (flowNodeEnclosingScope != null) {
-                    continue;
-                }
-            } else if (!enclosingScopeId.equals(flowNodeEnclosingScope)) {
-                continue;
-            }
-            activityIds.add(normalize(nameOrId(flowNode.getName(), flowNode.getId())));
-        }
-        if (enclosingScopeId != null) {
-            ModelElementInstance enclosingScope = model.getModelElementById(enclosingScopeId);
-            if (enclosingScope instanceof SubProcess subProcess) {
-                activityIds.add(normalize(nameOrId(subProcess.getName(), subProcess.getId())));
-            }
-        }
-        return distinct(activityIds);
-    }
-
-    private static List<SubProcessSpec> collectSubProcessSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
-        List<SubProcessSpec> specs = new ArrayList<>();
-        for (SubProcess subProcess : model.getModelElementsByType(SubProcess.class)) {
-            if (isEventSubProcess(subProcess)) {
-                continue;
-            }
-            String name = normalize(nameOrId(subProcess.getName(), subProcess.getId()));
-            nodes.put(subProcess.getId(), new NodeInfo(subProcess.getId(), name, NodeType.SUB_PROCESS));
-            List<String> entryTargetIds = new ArrayList<>();
-            List<String> exitSourceIds = new ArrayList<>();
-            for (SequenceFlow flow : model.getModelElementsByType(SequenceFlow.class)) {
-                FlowNode source = flow.getSource();
-                FlowNode target = flow.getTarget();
-                if (source instanceof StartEvent && subProcess.getId().equals(enclosingSubProcessId(source))) {
-                    entryTargetIds.add(target.getId());
-                }
-                if (target instanceof EndEvent && subProcess.getId().equals(enclosingSubProcessId(target))) {
-                    exitSourceIds.add(source.getId());
-                }
-            }
-            List<String> scopeActivityIds = new ArrayList<>();
-            for (FlowNode flowNode : model.getModelElementsByType(FlowNode.class)) {
-                if (!isWithinSubProcess(flowNode, subProcess.getId())) {
-                    continue;
-                }
-                if (flowNode instanceof StartEvent || flowNode instanceof EndEvent) {
-                    continue;
-                }
-                scopeActivityIds.add(normalize(nameOrId(flowNode.getName(), flowNode.getId())));
-            }
-            specs.add(new SubProcessSpec(subProcess.getId(), name, distinct(entryTargetIds), distinct(exitSourceIds), distinct(scopeActivityIds)));
-        }
-        return specs;
-    }
-
-    private static List<MessageCatchSpec> collectMessageCatchSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
-        List<MessageCatchSpec> specs = new ArrayList<>();
-        for (IntermediateCatchEvent event : model.getModelElementsByType(IntermediateCatchEvent.class)) {
-            MessageEventDefinition messageDefinition = event.getEventDefinitions().stream()
-                    .filter(MessageEventDefinition.class::isInstance)
-                    .map(MessageEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            if (messageDefinition == null) {
-                continue;
-            }
-            String name = normalize(nameOrId(event.getName(), event.getId()));
-            String messageName = messageName(name, messageDefinition);
-            specs.add(new MessageCatchSpec(event.getId(), name, messageName, processMessageTopic(model, messageName)));
-            nodes.put(event.getId(), new NodeInfo(event.getId(), name, NodeType.MESSAGE_CATCH));
-        }
-        return specs;
-    }
-
-    private static List<CallActivitySpec> collectCallActivitySpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
-        List<CallActivitySpec> specs = new ArrayList<>();
-        for (CallActivity callActivity : model.getModelElementsByType(CallActivity.class)) {
-            String name = normalize(nameOrId(callActivity.getName(), callActivity.getId()));
-            String calledElement = callActivity.getCalledElement() != null && !callActivity.getCalledElement().isBlank()
-                    ? normalize(callActivity.getCalledElement())
-                    : name + "_called_process";
-            specs.add(new CallActivitySpec(callActivity.getId(), name, calledElement));
-            nodes.put(callActivity.getId(), new NodeInfo(callActivity.getId(), name, NodeType.CALL_ACTIVITY, TaskKind.CALL));
-        }
-        return specs;
-    }
-
-    private static List<MessageThrowSpec> collectMessageThrowSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
-        List<MessageThrowSpec> specs = new ArrayList<>();
-        for (IntermediateThrowEvent event : model.getModelElementsByType(IntermediateThrowEvent.class)) {
-            MessageEventDefinition messageDefinition = event.getEventDefinitions().stream()
-                    .filter(MessageEventDefinition.class::isInstance)
-                    .map(MessageEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            if (messageDefinition == null) {
-                continue;
-            }
-            String name = normalize(nameOrId(event.getName(), event.getId()));
-            String messageName = messageName(name, messageDefinition);
-            specs.add(new MessageThrowSpec(event.getId(), name, messageName, processMessageTopic(model, messageName)));
-            nodes.put(event.getId(), new NodeInfo(event.getId(), name, NodeType.MESSAGE_THROW));
-        }
-        return specs;
-    }
-
-    private static List<SignalCatchSpec> collectSignalCatchSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
-        List<SignalCatchSpec> specs = new ArrayList<>();
-        for (IntermediateCatchEvent event : model.getModelElementsByType(IntermediateCatchEvent.class)) {
-            SignalEventDefinition signalDefinition = event.getEventDefinitions().stream()
-                    .filter(SignalEventDefinition.class::isInstance)
-                    .map(SignalEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            if (signalDefinition == null) {
-                continue;
-            }
-            String name = normalize(nameOrId(event.getName(), event.getId()));
-            String signalName = signalName(name, signalDefinition);
-            specs.add(new SignalCatchSpec(event.getId(), name, signalName, processSignalTopic(model, signalName)));
-            nodes.put(event.getId(), new NodeInfo(event.getId(), name, NodeType.SIGNAL_CATCH));
-        }
-        return specs;
-    }
-
-    private static List<SignalThrowSpec> collectSignalThrowSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
-        List<SignalThrowSpec> specs = new ArrayList<>();
-        for (IntermediateThrowEvent event : model.getModelElementsByType(IntermediateThrowEvent.class)) {
-            SignalEventDefinition signalDefinition = event.getEventDefinitions().stream()
-                    .filter(SignalEventDefinition.class::isInstance)
-                    .map(SignalEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            if (signalDefinition == null) {
-                continue;
-            }
-            String name = normalize(nameOrId(event.getName(), event.getId()));
-            String signalName = signalName(name, signalDefinition);
-            specs.add(new SignalThrowSpec(event.getId(), name, signalName, processSignalTopic(model, signalName)));
-            nodes.put(event.getId(), new NodeInfo(event.getId(), name, NodeType.SIGNAL_THROW));
-        }
-        return specs;
-    }
-
-    private static List<String> collectMessageEvents(
-            List<MessageCatchSpec> catches,
-            List<MessageThrowSpec> throwsEvents,
-            List<EventSubProcessSpec> eventSubProcesses
-    ) {
-        List<String> events = new ArrayList<>();
-        catches.forEach(spec -> events.add(spec.name));
-        for (MessageThrowSpec spec : throwsEvents) {
-            if (!events.contains(spec.name)) {
-                events.add(spec.name);
-            }
-        }
-        for (EventSubProcessSpec spec : eventSubProcesses) {
-            if (spec.triggerKind == EventTriggerKind.MESSAGE && !events.contains(spec.triggerName)) {
-                events.add(spec.triggerName);
-            }
-        }
-        return events;
-    }
-
-    private static List<String> collectMessageTopics(
-            List<MessageCatchSpec> catches,
-            List<MessageThrowSpec> throwsEvents,
-            List<EventSubProcessSpec> eventSubProcesses
-    ) {
-        List<String> topics = new ArrayList<>();
-        for (MessageCatchSpec spec : catches) {
-            if (!topics.contains(spec.topic)) {
-                topics.add(spec.topic);
-            }
-        }
-        for (MessageThrowSpec spec : throwsEvents) {
-            if (!topics.contains(spec.topic)) {
-                topics.add(spec.topic);
-            }
-        }
-        for (EventSubProcessSpec spec : eventSubProcesses) {
-            if (spec.triggerKind == EventTriggerKind.MESSAGE && !topics.contains(spec.triggerTopic)) {
-                topics.add(spec.triggerTopic);
-            }
-        }
-        return topics;
-    }
-
-    private static List<String> collectSignalEvents(
-            List<SignalCatchSpec> catches,
-            List<SignalThrowSpec> throwsEvents,
-            List<EventSubProcessSpec> eventSubProcesses
-    ) {
-        List<String> events = new ArrayList<>();
-        catches.forEach(spec -> events.add(spec.name));
-        for (SignalThrowSpec spec : throwsEvents) {
-            if (!events.contains(spec.name)) {
-                events.add(spec.name);
-            }
-        }
-        for (EventSubProcessSpec spec : eventSubProcesses) {
-            if (spec.triggerKind == EventTriggerKind.SIGNAL && !events.contains(spec.triggerName)) {
-                events.add(spec.triggerName);
-            }
-        }
-        return events;
-    }
-
-    private static List<String> collectSignalTopics(
-            List<SignalCatchSpec> catches,
-            List<SignalThrowSpec> throwsEvents,
-            List<EventSubProcessSpec> eventSubProcesses
-    ) {
-        List<String> topics = new ArrayList<>();
-        for (SignalCatchSpec spec : catches) {
-            if (!topics.contains(spec.topic)) {
-                topics.add(spec.topic);
-            }
-        }
-        for (SignalThrowSpec spec : throwsEvents) {
-            if (!topics.contains(spec.topic)) {
-                topics.add(spec.topic);
-            }
-        }
-        for (EventSubProcessSpec spec : eventSubProcesses) {
-            if (spec.triggerKind == EventTriggerKind.SIGNAL && !topics.contains(spec.triggerTopic)) {
-                topics.add(spec.triggerTopic);
-            }
-        }
-        return topics;
-    }
-
     private static List<String> combineNames(List<String> primary, List<String> secondary) {
         List<String> combined = new ArrayList<>(primary);
         for (String value : secondary) {
@@ -1397,205 +725,6 @@ public class BpmnScaffolder {
         return combined;
     }
 
-    private static String messageName(String fallbackName, MessageEventDefinition definition) {
-        if (definition.getMessage() != null && definition.getMessage().getName() != null && !definition.getMessage().getName().isBlank()) {
-            return normalize(definition.getMessage().getName());
-        }
-        return fallbackName;
-    }
-
-    private static String processMessageTopic(BpmnModelInstance model, String messageName) {
-        Process process = model.getModelElementsByType(Process.class).stream().findFirst().orElse(null);
-        String processId = process != null ? normalize(process.getId()) : "process";
-        return processId + "_" + messageName + "_message";
-    }
-
-    private static String signalName(String fallbackName, SignalEventDefinition definition) {
-        if (definition.getSignal() != null && definition.getSignal().getName() != null && !definition.getSignal().getName().isBlank()) {
-            return normalize(definition.getSignal().getName());
-        }
-        return fallbackName;
-    }
-
-    private static String processSignalTopic(BpmnModelInstance model, String signalName) {
-        Process process = model.getModelElementsByType(Process.class).stream().findFirst().orElse(null);
-        String processId = process != null ? normalize(process.getId()) : "process";
-        return processId + "_" + signalName + "_signal";
-    }
-
-    private static List<BoundaryTimerSpec> collectBoundaryTimerSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
-        List<BoundaryTimerSpec> specs = new ArrayList<>();
-        for (BoundaryEvent event : model.getModelElementsByType(BoundaryEvent.class)) {
-            TimerEventDefinition timerDefinition = event.getEventDefinitions().stream()
-                    .filter(TimerEventDefinition.class::isInstance)
-                    .map(TimerEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            if (timerDefinition == null || event.getAttachedTo() == null) {
-                continue;
-            }
-            String name = normalize(nameOrId(event.getName(), event.getId()));
-            String attachedActivityId = normalize(nameOrId(event.getAttachedTo().getName(), event.getAttachedTo().getId()));
-            TimerSpec timerSpec = timerSpec(event.getId(), name, timerDefinition);
-            specs.add(new BoundaryTimerSpec(
-                    event.getId(),
-                    name,
-                    timerSpec.timerType,
-                    timerSpec.expression,
-                    attachedActivityId,
-                    event.cancelActivity()
-            ));
-            nodes.put(event.getId(), new NodeInfo(event.getId(), name, NodeType.BOUNDARY_TIMER));
-        }
-        return specs;
-    }
-
-    private static List<BoundaryErrorSpec> collectBoundaryErrorSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
-        List<BoundaryErrorSpec> specs = new ArrayList<>();
-        for (BoundaryEvent event : model.getModelElementsByType(BoundaryEvent.class)) {
-            ErrorEventDefinition errorDefinition = event.getEventDefinitions().stream()
-                    .filter(ErrorEventDefinition.class::isInstance)
-                    .map(ErrorEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            if (errorDefinition == null || event.getAttachedTo() == null) {
-                continue;
-            }
-            String name = normalize(nameOrId(event.getName(), event.getId()));
-            String attachedActivityId = normalize(nameOrId(event.getAttachedTo().getName(), event.getAttachedTo().getId()));
-            String errorCode = errorDefinition.getError() != null && errorDefinition.getError().getErrorCode() != null
-                    ? normalize(errorDefinition.getError().getErrorCode())
-                    : name + "_error";
-            specs.add(new BoundaryErrorSpec(event.getId(), name, attachedActivityId, errorCode, event.cancelActivity()));
-            nodes.put(event.getId(), new NodeInfo(event.getId(), name, NodeType.BOUNDARY_ERROR));
-        }
-        return specs;
-    }
-
-    private static List<BoundaryEscalationSpec> collectBoundaryEscalationSpecs(BpmnModelInstance model, Map<String, NodeInfo> nodes) {
-        List<BoundaryEscalationSpec> specs = new ArrayList<>();
-        for (BoundaryEvent event : model.getModelElementsByType(BoundaryEvent.class)) {
-            EscalationEventDefinition escalationDefinition = event.getEventDefinitions().stream()
-                    .filter(EscalationEventDefinition.class::isInstance)
-                    .map(EscalationEventDefinition.class::cast)
-                    .findFirst()
-                    .orElse(null);
-            if (escalationDefinition == null || event.getAttachedTo() == null) {
-                continue;
-            }
-            String name = normalize(nameOrId(event.getName(), event.getId()));
-            String attachedActivityId = normalize(nameOrId(event.getAttachedTo().getName(), event.getAttachedTo().getId()));
-            String escalationCode = escalationDefinition.getEscalation() != null
-                    && escalationDefinition.getEscalation().getEscalationCode() != null
-                    ? normalize(escalationDefinition.getEscalation().getEscalationCode())
-                    : name + "_escalation";
-            specs.add(new BoundaryEscalationSpec(event.getId(), name, attachedActivityId, escalationCode, event.cancelActivity()));
-            nodes.put(event.getId(), new NodeInfo(event.getId(), name, NodeType.BOUNDARY_ESCALATION));
-        }
-        return specs;
-    }
-
-    private static String enclosingSubProcessId(ModelElementInstance element) {
-        ModelElementInstance current = element != null ? element.getParentElement() : null;
-        while (current != null) {
-            if (current instanceof SubProcess subProcess) {
-                return subProcess.getId();
-            }
-            current = current.getParentElement();
-        }
-        return null;
-    }
-
-    private static boolean isWithinSubProcess(ModelElementInstance element, String subProcessId) {
-        ModelElementInstance current = element != null ? element.getParentElement() : null;
-        while (current != null) {
-            if (current instanceof SubProcess subProcess && subProcessId.equals(subProcess.getId())) {
-                return true;
-            }
-            current = current.getParentElement();
-        }
-        return false;
-    }
-
-    private static boolean isEventSubProcess(SubProcess subProcess) {
-        if (subProcess == null) {
-            return false;
-        }
-        String value = subProcess.getAttributeValue("triggeredByEvent");
-        return value != null && Boolean.parseBoolean(value);
-    }
-
-    private static boolean isInterruptingStart(StartEvent startEvent) {
-        if (startEvent == null) {
-            return false;
-        }
-        String value = startEvent.getAttributeValue("isInterrupting");
-        return value == null || value.isBlank() || Boolean.parseBoolean(value);
-    }
-
-    private static void linkSubProcessEntries(
-            NodeInfo sourceInfo,
-            List<SubProcessSpec> subProcessSpecs,
-            String subProcessId,
-            FlowInfo flowInfo,
-            Map<String, NodeInfo> nodes,
-            Map<String, List<FlowInfo>> flowsBySource
-    ) {
-        if (sourceInfo == null) {
-            return;
-        }
-        SubProcessSpec spec = findSubProcessSpec(subProcessSpecs, subProcessId);
-        if (spec == null) {
-            return;
-        }
-        for (String entryTargetId : spec.entryTargetIds) {
-            NodeInfo targetInfo = nodes.get(entryTargetId);
-            if (targetInfo == null) {
-                continue;
-            }
-            sourceInfo.outgoingIds.add(targetInfo.id);
-            targetInfo.incomingIds.add(sourceInfo.id);
-            flowsBySource.computeIfAbsent(sourceInfo.id, key -> new ArrayList<>())
-                    .add(new FlowInfo(flowInfo.id, targetInfo.id, flowInfo.condition));
-        }
-    }
-
-    private static void linkSubProcessExits(
-            NodeInfo targetInfo,
-            List<SubProcessSpec> subProcessSpecs,
-            String subProcessId,
-            FlowInfo flowInfo,
-            Map<String, NodeInfo> nodes,
-            Map<String, List<FlowInfo>> flowsBySource
-    ) {
-        if (targetInfo == null) {
-            return;
-        }
-        SubProcessSpec spec = findSubProcessSpec(subProcessSpecs, subProcessId);
-        if (spec == null) {
-            return;
-        }
-        for (String exitSourceId : spec.exitSourceIds) {
-            NodeInfo sourceInfo = nodes.get(exitSourceId);
-            if (sourceInfo == null) {
-                continue;
-            }
-            sourceInfo.outgoingIds.add(targetInfo.id);
-            targetInfo.incomingIds.add(sourceInfo.id);
-            flowsBySource.computeIfAbsent(sourceInfo.id, key -> new ArrayList<>())
-                    .add(new FlowInfo(flowInfo.id, targetInfo.id, flowInfo.condition));
-        }
-    }
-
-    private static SubProcessSpec findSubProcessSpec(List<SubProcessSpec> subProcessSpecs, String subProcessId) {
-        for (SubProcessSpec spec : subProcessSpecs) {
-            if (spec.id.equals(subProcessId)) {
-                return spec;
-            }
-        }
-        return null;
-    }
-
     private static List<String> distinct(List<String> values) {
         List<String> distinct = new ArrayList<>();
         for (String value : values) {
@@ -1604,35 +733,6 @@ public class BpmnScaffolder {
             }
         }
         return distinct;
-    }
-
-    private static TimerSpec timerSpec(String id, String name, TimerEventDefinition definition) {
-        TimeDuration timeDuration = definition.getTimeDuration();
-        if (timeDuration != null && timeDuration.getTextContent() != null) {
-            return new TimerSpec(id, name, "timeDuration", timeDuration.getTextContent().trim());
-        }
-        TimeDate timeDate = definition.getTimeDate();
-        if (timeDate != null && timeDate.getTextContent() != null) {
-            return new TimerSpec(id, name, "timeDate", timeDate.getTextContent().trim());
-        }
-        TimeCycle timeCycle = definition.getTimeCycle();
-        if (timeCycle != null && timeCycle.getTextContent() != null) {
-            return new TimerSpec(id, name, "timeCycle", timeCycle.getTextContent().trim());
-        }
-        return new TimerSpec(id, name, "timeDuration", "PT0S");
-    }
-
-    private static <T extends Task> void registerTaskSpecs(
-            Iterable<T> tasks,
-            TaskKind kind,
-            Map<String, TaskSpec> taskSpecs,
-            Map<String, NodeInfo> nodes
-    ) {
-        for (T task : tasks) {
-            String name = normalize(nameOrId(task.getName(), task.getId()));
-            taskSpecs.put(task.getId(), new TaskSpec(task.getId(), name, kind));
-            nodes.put(task.getId(), new NodeInfo(task.getId(), name, NodeType.TASK, kind));
-        }
     }
 
     static String templateForTask(TaskKind kind, boolean transactions) {
