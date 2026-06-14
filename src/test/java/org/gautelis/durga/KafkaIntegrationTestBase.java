@@ -19,9 +19,9 @@ import java.util.List;
 /**
  * Base class for Kafka integration tests.
  * <p>
- * Uses Testcontainers with a GenericContainer for Kafka (confluentinc/cp-kafka)
- * to avoid module version coupling. Docker socket auto-detection probes
- * well-known locations when DOCKER_HOST is not already set.
+ * Uses Testcontainers 2.0.2 (which auto-detects the Docker socket on all
+ * platforms) with a GenericContainer for Kafka in KRaft mode.
+ * Falls back to socket probing if DOCKER_HOST is not set.
  */
 public abstract class KafkaIntegrationTestBase {
     private static final int KAFKA_PORT = 9092;

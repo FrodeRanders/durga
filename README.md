@@ -28,16 +28,13 @@ The broker listens on `localhost:9094`.
 mvn test -Dtest='!*IntegrationTest'
 
 # Integration tests (require Docker):
-mvn test -Dtest='*IntegrationTest'
+mvn test -Dtest='*IntegrationTest' -DTESTCONTAINERS_RYUK_DISABLED=true
 
-# Toxiproxy chaos tests:
-mvn test -Dtest='ToxiproxyChaosIntegrationTest'
-
-# On macOS with Docker Desktop, run integration tests inside a Linux container:
+# Or via the Linux container fallback if Docker detection fails:
 ./setup/run-integration-tests.sh
 ```
 
-See [Testcontainers setup](doc/testcontainers-setup.md) if Docker detection fails.
+See [Testcontainers setup](doc/testcontainers-setup.md) for details.
 
 ## BPMN scaffolding
 
