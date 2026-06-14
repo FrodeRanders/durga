@@ -8,6 +8,7 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
 import java.io.IOException;
+import java.net.ServerSocket;
 import java.net.UnixDomainSocketAddress;
 import java.nio.channels.SocketChannel;
 import java.nio.file.Files;
@@ -19,9 +20,8 @@ import java.util.List;
 /**
  * Base class for Kafka integration tests.
  * <p>
- * Uses Testcontainers 2.0.2 (which auto-detects the Docker socket on all
- * platforms) with a GenericContainer for Kafka in KRaft mode.
- * Falls back to socket probing if DOCKER_HOST is not set.
+ * Uses Testcontainers 2.0.2 with a GenericContainer for Kafka in KRaft mode.
+ * Picks a random free host port per test class to avoid collisions.
  */
 public abstract class KafkaIntegrationTestBase {
     private static final int KAFKA_PORT = 9092;
@@ -44,9 +44,9 @@ public abstract class KafkaIntegrationTestBase {
             return;
         }
 
+        String containerHost = envOr("DURGA_DOCKER_HOST_IP", "localhost");
+        int hostPort = findFreePort();
         int port = KAFKA_PORT;
-        int hostPort = port + 10000;
-        String containerHost = envOr("DURGA_DOCKER_HOST_IP", "localhost"); // fixed host port to avoid random mapping
 
         kafka = new GenericContainer<>(DockerImageName.parse("confluentinc/cp-kafka:7.8.0"))
                 .withEnv("KAFKA_NODE_ID", "1")
@@ -72,6 +72,7 @@ public abstract class KafkaIntegrationTestBase {
         kafka.start();
 
         bootstrapServers = containerHost + ":" + hostPort;
+        waitForBrokerReady(bootstrapServers);
     }
 
     @AfterClass
@@ -83,6 +84,35 @@ public abstract class KafkaIntegrationTestBase {
 
     protected static String bootstrapServers() {
         return bootstrapServers;
+    }
+
+    private static int findFreePort() {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            socket.setReuseAddress(true);
+            return socket.getLocalPort();
+        } catch (IOException e) {
+            return KAFKA_PORT + 10000;
+        }
+    }
+
+    static void waitForBrokerReady(String servers) {
+        long deadline = System.currentTimeMillis() + 30_000;
+        Exception last = null;
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                var props = new java.util.Properties();
+                props.put("bootstrap.servers", servers);
+                props.put("request.timeout.ms", "3000");
+                try (var admin = org.apache.kafka.clients.admin.AdminClient.create(props)) {
+                    admin.describeCluster().nodes().get();
+                    return;
+                }
+            } catch (Exception e) {
+                last = e;
+                try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+            }
+        }
+        throw new IllegalStateException("Kafka broker not ready after 30s: " + (last != null ? last.getMessage() : "unknown"));
     }
 
     private static String envOr(String name, String fallback) {

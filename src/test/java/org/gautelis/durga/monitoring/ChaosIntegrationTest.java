@@ -43,7 +43,7 @@ public class ChaosIntegrationTest extends KafkaIntegrationTestBase {
             "process-latency-global-store" + SUFFIX,
             "process-trends-global-store" + SUFFIX
     );
-    private static final String APP_ID = "chaos-it-app" + UUID.randomUUID().toString().substring(0, 8);
+    private static String APP_ID;
 
     private KafkaProducer<String, String> producer;
     private KafkaStreams streams;
@@ -75,6 +75,7 @@ public class ChaosIntegrationTest extends KafkaIntegrationTestBase {
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producer = new KafkaProducer<>(producerProps);
+        APP_ID = "chaos-it-app" + UUID.randomUUID().toString().substring(0, 8);
     }
 
     @After
