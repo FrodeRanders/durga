@@ -278,7 +278,8 @@ public class BpmnScaffolder {
         List<String> externalTopics = combineNames(messageTopics, signalTopics);
         String yamlPreview = renderYamlPreview(group, processId, tasks, allTimers, externalTopics, callActivities, subProcesses);
         String topicsPreview = renderTopicsPreview(group, processId, tasks, allTimers, externalTopics, callActivities, subProcesses, retentionMs);
-        String pomPreview = renderPomPreview(group, processId);
+        String bpmnFileName = bpmnFile.toPath().getFileName().toString();
+        String pomPreview = renderPomPreview(group, processId, bpmnFileName);
         String runLocalPreview = renderRunLocalPreview(group, processId);
         String demoPreview = renderDemoPreview(group, processId, tasks);
         String taskInputPreview = renderTaskInputPreview(group, processId);
@@ -1240,10 +1241,11 @@ public class BpmnScaffolder {
         return topicsScript.render();
     }
 
-    private static String renderPomPreview(STGroupString group, String processId) {
+    private static String renderPomPreview(STGroupString group, String processId, String bpmnFileName) {
         ST pom = group.getInstanceOf("pomXml");
         pom.add("processId", processId);
         pom.add("starterClass", toClassName(processId));
+        pom.add("bpmnFileName", bpmnFileName);
         return pom.render();
     }
 
@@ -1365,6 +1367,12 @@ public class BpmnScaffolder {
                 "ProcessStateStore.java", "processStateStoreClass");
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "ScopeCancellationRegistry.java", "scopeCancellationRegistryClass");
+        writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
+                "tools/ModelEnricher.java", "modelEnricherClass");
+        writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
+                "plugins/Plugin.java", "pluginInterfaceClass");
+        writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
+                "plugins/PipelinePlugin.java", "pipelinePluginClass");
     }
 
     private static void writeCoreClass(

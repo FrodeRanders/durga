@@ -471,6 +471,34 @@ public class BpmnScaffolderTest {
         );
     }
 
+    private static void runGeneratedMavenPackage(Path outputDir) throws Exception {
+        Process process = new ProcessBuilder("mvn", "-q", "package")
+                .directory(outputDir.toFile())
+                .redirectErrorStream(true)
+                .start();
+
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        process.getInputStream().transferTo(captured);
+
+        boolean finished = process.waitFor(3, TimeUnit.MINUTES);
+        assertTrue("Generated project Maven package timed out for " + outputDir, finished);
+        assertEquals(
+                "Generated project Maven package failed for " + outputDir + "\n" + captured.toString(StandardCharsets.UTF_8),
+                0,
+                process.exitValue()
+        );
+    }
+
+    private static String extractCustomHash(String bpmn) {
+        String marker = "name=\"customHash\" value=\"";
+        int start = bpmn.indexOf(marker);
+        assertTrue("customHash property missing", start >= 0);
+        start += marker.length();
+        int end = bpmn.indexOf('"', start);
+        assertTrue("customHash property value not terminated", end > start);
+        return bpmn.substring(start, end);
+    }
+
     @Test
     public void dryRunIncludesPluginExecutorArtifacts() throws Exception {
         System.out.println("TC: dry-run generates plugin executor classes for data pipeline tasks");
@@ -569,6 +597,97 @@ public class BpmnScaffolderTest {
                 "src/main/java/org/gautelis/durga/generated/FlattenForIndexPluginExecutor.java")));
         assertTrue(Files.exists(outputDir.resolve(
                 "src/main/java/org/gautelis/durga/generated/MaskIpAddressPluginExecutor.java")));
+    }
+
+    @Test
+    public void generatedProjectPackageEnrichesEmbeddedBpmnWithLocalCustomImplementation() throws Exception {
+        System.out.println("TC: generated log processing project package enriches embedded BPMN with local custom implementation metadata");
+        Path workDir = Files.createTempDirectory("durga-log-custom-roundtrip-");
+        Path sourceBpmn = workDir.resolve("log_processing_pipeline.bpmn");
+        String model = Files.readString(Path.of("src/test/resources/bpmn/log_processing_pipeline.bpmn"));
+        model = model.replaceAll("(?s)\\s+<bpmn:extensionElements>.*?</bpmn:extensionElements>", "");
+        model = model.replace(
+                "    <bpmn:serviceTask id=\"mask_ip\" name=\"Mask IP Address\">\n",
+                """
+                    <bpmn:serviceTask id="mask_ip" name="Mask IP Address">
+                      <bpmn:extensionElements>
+                        <camunda:properties>
+                          <camunda:property name="plugin" value="custom" />
+                          <camunda:property name="pluginConfig" value="interface=org.gautelis.durga.generated.MaskIpAddressContract" />
+                        </camunda:properties>
+                      </bpmn:extensionElements>
+                """
+        );
+        Files.writeString(sourceBpmn, model, StandardCharsets.UTF_8);
+
+        Path outputDir = workDir.resolve("generated");
+        runGeneration(sourceBpmn.toString(), outputDir);
+
+        Path implFile = outputDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/MaskIpAddressLocalImplementation.java");
+        Files.writeString(implFile, """
+                package org.gautelis.durga.generated;
+
+                import jakarta.enterprise.context.ApplicationScoped;
+
+                @ApplicationScoped
+                public class MaskIpAddressLocalImplementation implements MaskIpAddressContract {
+                    public String execute(String payload, String config) {
+                        return payload.replace("127.0.0.1", "masked");
+                    }
+                }
+                """, StandardCharsets.UTF_8);
+
+        runGeneratedMavenPackage(outputDir);
+
+        Path embeddedModel = outputDir.resolve("src/main/resources/log_processing_pipeline.bpmn");
+        String enriched = Files.readString(embeddedModel, StandardCharsets.UTF_8);
+        assertTrue("customImpl not written to embedded BPMN",
+                enriched.contains("org.gautelis.durga.generated.MaskIpAddressLocalImplementation"));
+        assertTrue("customSource not written to embedded BPMN",
+                enriched.contains("MaskIpAddressLocalImplementation.java"));
+        assertTrue("customHash not written to embedded BPMN",
+                enriched.contains("customHash"));
+        String firstHash = extractCustomHash(enriched);
+
+        Files.writeString(implFile, """
+                package org.gautelis.durga.generated;
+
+                import jakarta.enterprise.context.ApplicationScoped;
+
+                @ApplicationScoped
+                public class MaskIpAddressLocalImplementation implements MaskIpAddressContract {
+                    public String execute(String payload, String config) {
+                        return payload.replace("127.0.0.1", "masked-again");
+                    }
+                }
+                """, StandardCharsets.UTF_8);
+
+        runGeneratedMavenPackage(outputDir);
+
+        String reEnriched = Files.readString(embeddedModel, StandardCharsets.UTF_8);
+        String secondHash = extractCustomHash(reEnriched);
+        assertFalse("customHash did not change after local source modification", firstHash.equals(secondHash));
+
+        Path regeneratedDir = workDir.resolve("regenerated");
+        runGeneration(embeddedModel.toString(), regeneratedDir);
+
+        Path regeneratedModel = regeneratedDir.resolve("src/main/resources/log_processing_pipeline.bpmn");
+        String regeneratedBpmn = Files.readString(regeneratedModel, StandardCharsets.UTF_8);
+        assertTrue("regenerated BPMN lost customImpl",
+                regeneratedBpmn.contains("org.gautelis.durga.generated.MaskIpAddressLocalImplementation"));
+        assertTrue("regenerated BPMN lost customSource",
+                regeneratedBpmn.contains("MaskIpAddressLocalImplementation.java"));
+        assertTrue("regenerated BPMN lost latest customHash",
+                regeneratedBpmn.contains(secondHash));
+
+        Path regeneratedWorker = regeneratedDir.resolve(
+                "src/main/java/org/gautelis/durga/generated/MaskIpAddressWorkerService.java");
+        String regeneratedWorkerSource = Files.readString(regeneratedWorker, StandardCharsets.UTF_8);
+        assertTrue("regenerated worker lost expected implementation metadata",
+                regeneratedWorkerSource.contains("MaskIpAddressLocalImplementation"));
+        assertTrue("regenerated worker lost expected implementation hash",
+                regeneratedWorkerSource.contains(secondHash));
     }
 
     private static String runDryRunWithConnect(String relativeBpmnPath) throws Exception {

@@ -746,26 +746,26 @@ import java.util.concurrent.CompletionStage;
 public class %className% {
     @Inject
     @Channel("process-events")
-    Emitter\<String> processEventsEmitter;
+    Emitter<String> processEventsEmitter;
 
     @Inject
     @Channel("%processId%_%taskId%_output")
-    Emitter\<String> outputEmitter;
+    Emitter<String> outputEmitter;
 
     @Inject
     @Channel("%processId%_%taskId%_send")
-    Emitter\<String> sendEmitter;
+    Emitter<String> sendEmitter;
 
     @Inject
     ScopeCancellationRegistry cancellationRegistry;
 
     @Incoming("%processId%_%taskId%_input")
-    public CompletionStage\<Void> handle(Message\<String> msg) {
+    public CompletionStage<Void> handle(Message<String> msg) {
         ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
         if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
             return msg.ack();
         }
-        Map\<String, Object> outputPayload = new HashMap\<>();
+        Map<String, Object> outputPayload = new HashMap<>();
         if (inputEvent.payload() != null) {
             outputPayload.putAll(inputEvent.payload());
         }
@@ -815,22 +815,22 @@ import java.util.concurrent.CompletionStage;
 public class %className% {
     @Inject
     @Channel("process-events")
-    Emitter\<String> processEventsEmitter;
+    Emitter<String> processEventsEmitter;
 
     @Inject
     @Channel("%processId%_%taskId%_output")
-    Emitter\<String> outputEmitter;
+    Emitter<String> outputEmitter;
 
     @Inject
     ScopeCancellationRegistry cancellationRegistry;
 
     @Incoming("%processId%_%taskId%_receive")
-    public CompletionStage\<Void> handle(Message\<String> msg) {
+    public CompletionStage<Void> handle(Message<String> msg) {
         ProcessEvent receiveEvent = ProcessEvent.fromJson(msg.getPayload());
         if (cancellationRegistry.isCancelled(receiveEvent.processInstanceId(), "%taskId%")) {
             return msg.ack();
         }
-        Map\<String, Object> outputPayload = new HashMap\<>();
+        Map<String, Object> outputPayload = new HashMap<>();
         if (receiveEvent.payload() != null) {
             outputPayload.putAll(receiveEvent.payload());
         }
@@ -879,22 +879,22 @@ import java.util.concurrent.CompletionStage;
 public class %className% {
     @Inject
     @Channel("process-events")
-    Emitter\<String> processEventsEmitter;
+    Emitter<String> processEventsEmitter;
 
     @Inject
     @Channel("%processId%_%taskId%_output")
-    Emitter\<String> outputEmitter;
+    Emitter<String> outputEmitter;
 
     @Inject
     ScopeCancellationRegistry cancellationRegistry;
 
     @Incoming("%processId%_%taskId%_input")
-    public CompletionStage\<Void> handle(Message\<String> msg) {
+    public CompletionStage<Void> handle(Message<String> msg) {
         ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
         if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
             return msg.ack();
         }
-        Map\<String, Object> outputPayload = new HashMap\<>();
+        Map<String, Object> outputPayload = new HashMap<>();
         if (inputEvent.payload() != null) {
             outputPayload.putAll(inputEvent.payload());
         }
@@ -947,22 +947,22 @@ import java.util.concurrent.CompletionStage;
 public class %className% {
     @Inject
     @Channel("process-events")
-    Emitter\<String> processEventsEmitter;
+    Emitter<String> processEventsEmitter;
 
     @Inject
     @Channel("%processId%_%taskId%_output")
-    Emitter\<String> outputEmitter;
+    Emitter<String> outputEmitter;
 
     @Inject
     ScopeCancellationRegistry cancellationRegistry;
 
     @Incoming("%processId%_%taskId%_input")
-    public CompletionStage\<Void> handle(Message\<String> msg) {
+    public CompletionStage<Void> handle(Message<String> msg) {
         ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
         if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
             return msg.ack();
         }
-        Map\<String, Object> outputPayload = new HashMap\<>();
+        Map<String, Object> outputPayload = new HashMap<>();
         if (inputEvent.payload() != null) {
             outputPayload.putAll(inputEvent.payload());
         }
@@ -1013,16 +1013,16 @@ import java.util.concurrent.CompletionStage;
 public class %className% {
     @Inject
     @Channel("process-events")
-    Emitter\<String> processEventsEmitter;
+    Emitter<String> processEventsEmitter;
 
 %outputs:{ output |
     @Inject
     @Channel("%output.channel%")
-    Emitter\<String> %output.emitter%;
+    Emitter<String> %output.emitter%;
 }%
 
     @Incoming("%inputChannel%")
-    public CompletionStage\<Void> handle(Message\<String> msg) {
+    public CompletionStage<Void> handle(Message<String> msg) {
         ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
 %outputs:{ output |
 %output.conditionBlock%
@@ -1283,16 +1283,16 @@ import java.util.concurrent.ConcurrentHashMap;
 public class %className% {
     @Inject
     @Channel("process-events")
-    Emitter\<String> processEventsEmitter;
+    Emitter<String> processEventsEmitter;
 
     @Inject
     @Channel("%outputChannel%")
-    Emitter\<String> outputEmitter;
+    Emitter<String> outputEmitter;
 
     private final ConcurrentHashMap arrivedByInstance = new ConcurrentHashMap();
 
 %incomingMethodsBlock%
-    private CompletionStage\<Void> handleJoin(String activityId, Message\<String> msg) {
+    private CompletionStage<Void> handleJoin(String activityId, Message<String> msg) {
         ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
         HashSet arrived = (HashSet) arrivedByInstance.get(event.processInstanceId());
         if (arrived == null) {
@@ -1371,8 +1371,8 @@ public class %className%Standalone {
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        try (KafkaConsumer\<String, String> consumer = new KafkaConsumer\<\>(consumerProps);
-             KafkaProducer\<String, String> producer = new KafkaProducer\<\>(producerProps)) {
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
+             KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps)) {
 
             consumer.subscribe(java.util.Collections.singletonList("%processId%_%taskId%_input"));
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -1381,11 +1381,11 @@ public class %className%Standalone {
             }));
 
             while (running.get()) {
-                ConsumerRecords\<String, String> records = consumer.poll(Duration.ofSeconds(1));
-                for (ConsumerRecord\<String, String> record : records) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
+                for (ConsumerRecord<String, String> record : records) {
                     try {
                         ProcessEvent inputEvent = ProcessEvent.fromJson(record.value());
-                        Map\<String, Object> payload = new HashMap\<\>();
+                        Map<String, Object> payload = new HashMap<>();
                         if (inputEvent.payload() != null) {
                             payload.putAll(inputEvent.payload());
                         }
@@ -1406,9 +1406,9 @@ public class %className%Standalone {
                                 null
                         );
 
-                        producer.send(new ProducerRecord\<\>("%processId%_%taskId%_output",
+                        producer.send(new ProducerRecord<>("%processId%_%taskId%_output",
                                 inputEvent.processInstanceId(), outputEvent.toJson()));
-                        producer.send(new ProducerRecord\<\>("process-events",
+                        producer.send(new ProducerRecord<>("process-events",
                                 inputEvent.processInstanceId(), outputEvent.toJson()));
                         producer.flush();
                         consumer.commitSync();
@@ -1492,15 +1492,15 @@ import java.util.concurrent.CompletionStage;
 public class %className% {
     @Inject
     @Channel("process-events")
-    Emitter\<String> processEventsEmitter;
+    Emitter<String> processEventsEmitter;
 
     @Inject
     @Channel("%processId%_%taskId%_output")
-    Emitter\<String> outputEmitter;
+    Emitter<String> outputEmitter;
 
     @Inject
     @Channel("%processId%_%taskId%_dlq")
-    Emitter\<String> dlqEmitter;
+    Emitter<String> dlqEmitter;
 
     @Inject
     ScopeCancellationRegistry cancellationRegistry;
@@ -1509,7 +1509,7 @@ public class %className% {
     %contractClassName% implementation;
 
     @Incoming("%processId%_%taskId%_input")
-    public CompletionStage\<Void> handle(Message\<String> msg) {
+    public CompletionStage<Void> handle(Message<String> msg) {
         ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
         if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
             return msg.ack();
@@ -1523,7 +1523,7 @@ public class %className% {
         }
         try {
             String payload = inputEvent.payload() != null
-                    ? new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
+                    ? new tools.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
                     : "{}";
             String output = implementation.execute(payload, "%pluginConfig%");
             ProcessEvent outputEvent = new ProcessEvent(
@@ -1585,15 +1585,15 @@ import java.util.concurrent.CompletionStage;
 public class %className% {
     @Inject
     @Channel("process-events")
-    Emitter\<String> processEventsEmitter;
+    Emitter<String> processEventsEmitter;
 
     @Inject
     @Channel("%processId%_%taskId%_output")
-    Emitter\<String> outputEmitter;
+    Emitter<String> outputEmitter;
 
     @Inject
     @Channel("%processId%_%taskId%_dlq")
-    Emitter\<String> dlqEmitter;
+    Emitter<String> dlqEmitter;
 
     @Inject
     ScopeCancellationRegistry cancellationRegistry;
@@ -1601,7 +1601,7 @@ public class %className% {
     private final Plugin plugin = new %pluginImplClass%();
 
     @Incoming("%processId%_%taskId%_input")
-    public CompletionStage\<Void> handle(Message\<String> msg) {
+    public CompletionStage<Void> handle(Message<String> msg) {
         ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
         if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
             return msg.ack();
