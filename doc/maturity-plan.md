@@ -23,6 +23,9 @@ Operational assumptions and remaining hardening work are tracked in
 The beta BPMN compatibility boundary is tracked in
 [`beta-support-boundary.md`](beta-support-boundary.md).
 
+Release-candidate evidence is tracked with
+[`release-checklist.md`](release-checklist.md).
+
 ## Quality Gates
 
 Run these gates before merging changes that affect generated code, Kafka
@@ -62,6 +65,7 @@ Durga can be considered beta-ready when the following are true:
    recovery, security assumptions, and upgrade compatibility.
 7. Release artifacts use non-SNAPSHOT versions and each release has a changelog
    entry.
+8. Release candidates record UI, unit, integration, and scaffold-smoke evidence.
 
 ## Known Prototype Limits
 
@@ -80,5 +84,6 @@ Durga can be considered beta-ready when the following are true:
 2. Keep integration test execution visible in release instructions.
 3. Add an operations hardening guide covering retention, state recovery,
    security, and upgrade compatibility.
-4. Add frontend linting or tests once monitoring UI behavior grows beyond the
+4. Move the project version off `1.0-SNAPSHOT` for the first release candidate.
+5. Add frontend linting or tests once monitoring UI behavior grows beyond the
    current dashboard surface.
