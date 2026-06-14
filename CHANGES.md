@@ -2,6 +2,16 @@
 
 ## [Current] — 2026-06-13
 
+### Maturity gates and release discipline
+- Added `doc/maturity-plan.md` with beta-readiness criteria and required quality gates
+- CI now builds the monitoring UI before Maven verification
+- Docker-backed integration tests can be required with `-Ddurga.integration.requireDocker=true`
+  or `DURGA_REQUIRE_DOCKER_TESTS=true`, preventing release gates from silently skipping Kafka tests
+- Added `doc/operations-hardening.md` for topic retention, state-store recovery,
+  security assumptions, and upgrade compatibility
+- Added `doc/beta-support-boundary.md` to define the beta BPMN compatibility contract
+- Added `doc/release-checklist.md` for release-candidate evidence capture
+
 ### 7 new data pipeline plugins
 - **type-coercer** — coerces fields between string/int/long/double/decimal/boolean
 - **string-template** — `${field}` token substitution with dot-notation field access
