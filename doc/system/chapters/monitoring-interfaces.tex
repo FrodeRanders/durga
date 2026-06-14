@@ -25,6 +25,10 @@ Endpoints:
 \item \texttt{/dashboard} --- browser dashboard.
 \end{itemize}
 
+The HTTP API is designed for internal operational use. Put it behind the same
+network and identity controls used for other production admin surfaces before
+exposing it outside a trusted environment.
+
 \subsection{CLI client}
 
 The repository includes a convenience script at \filepath{durga-monitor}:
@@ -49,9 +53,10 @@ java -cp target/durga-0.1.0-beta.1.jar \
 \subsection{Dashboard}
 
 Served from \texttt{/dashboard}. Polls the same HTTP endpoints and presents
-health, counts, latency, stuck instances, and instance details. Built as a
-standalone Svelte application (\filepath{monitoring-ui/}) that compiles to
-static assets served by the Quarkus backend.
+cluster-level process inventory, selected-process state mix, lifecycle trends,
+latency percentiles, stuck instances and instance details. Built as a standalone
+Svelte application (\filepath{monitoring-ui/}) that compiles to static assets
+served by the Quarkus backend.
 
 \subsection{How the interfaces fit together}
 

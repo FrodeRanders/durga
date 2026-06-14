@@ -10,6 +10,9 @@ cancellation.
 
 This separates execution transport from queryable state. Execution topics remain useful for
 routing, but the monitoring model depends on projections built from explicit lifecycle events.
+For production use, treat the lifecycle topic as an operational contract: retention,
+access control, schema compatibility and replay policy determine how far back monitoring can
+recover and how safely downstream tools can consume process state.
 
 \subsection{Kafka Streams topology}
 
@@ -28,7 +31,7 @@ HTTP service and a CLI client.
 \subsection{HTTP API}
 
 The monitoring service exposes endpoints for health, instance lookup, counts, latency,
-stuck instances and a lightweight dashboard. The local operator loop is:
+stuck instances and a dashboard. The local development loop is:
 \begin{enumerate}
 \item generate a process,
 \item publish scenarios or task inputs,
@@ -36,3 +39,9 @@ stuck instances and a lightweight dashboard. The local operator loop is:
 \item query current state and latency,
 \item iterate on the BPMN model or generated runtime.
 \end{enumerate}
+
+In production, the loop is stricter: monitor Streams state, query-store
+readiness, consumer lag on lifecycle and monitoring topics, stuck-instance
+counts, latency percentiles, DLQ volume and failed lifecycle events. The
+dashboard is an operator view over the Kafka Streams read model, not a
+replacement for Kafka broker, consumer group and infrastructure monitoring.

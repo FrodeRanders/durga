@@ -3,7 +3,8 @@
 
 Durga runtime components communicate through Kafka topics, which act as
 durable mailboxes. This architecture enables an Erlang/OTP--like supervision
-model: workers can crash and restart independently without losing messages.
+model: workers can crash and restart independently while Kafka preserves
+unconsumed records according to topic durability and retention settings.
 
 \subsection{Architecture}
 
@@ -74,12 +75,14 @@ available via JMX metrics. \\
 
 \begin{description}
 \item[Message durability] Messages are not lost on worker crash. Kafka
-      retains them until consumed and committed.
+      retains uncommitted records according to the topic's replication,
+      acknowledgement and retention configuration.
 \item[At-most-once vs at-least-once] Standalone workers commit after
       processing (\texttt{commitSync}). The poll loop catches and logs
       errors without crashing. Plugin-generated executors route failures
       to the DLQ. The architecture provides at-least-once delivery with
-      idempotent output being the operator's responsibility.
+      idempotent output and external side-effect handling being the application
+      owner's responsibility.
 \item[Process continuity] If the starter crashes, the process never starts
       (one-shot job, retried by K8s). If a worker crashes, Kafka consumer
       group rebalancing reassigns its partitions. If the final orchestrator
@@ -91,7 +94,8 @@ available via JMX metrics. \\
 
 \begin{itemize}
 \item Worker state is external (Kafka). In-memory state such as running
-      aggregations or cancellation registrations is lost on crash.
+      aggregations or cancellation registrations is lost on crash unless that
+      specific generated handler persists it.
 \item The \texttt{--separate-workers} model generates poll-loop workers
       rather than Quarkus CDI beans. These trade CDI features
       (dependency injection, reactive messaging) for isolated fault
@@ -100,4 +104,7 @@ available via JMX metrics. \\
       on the \texttt{ProcessStateStore}, which is itself a Kafka
       consumer. Its crash characteristics are the same as any other
       worker.
+\item Kafka durability does not imply business-level exactly-once semantics.
+      Handlers that call databases, HTTP services or file systems must be
+      idempotent or protected by application-level deduplication.
 \end{itemize}

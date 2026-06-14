@@ -2,7 +2,8 @@
 
 Durga is a BPMN-driven Kafka scaffolding tool. It reads BPMN models, extracts
 an executable subset of process semantics, and generates Java and Kafka-oriented
-project skeletons that run as production-grade applications on Kafka.
+project skeletons intended to be built, reviewed, deployed and operated as
+normal Kafka applications.
 
 The project is a generator, not a workflow engine:
 \begin{itemize}
@@ -19,5 +20,15 @@ The project is a generator, not a workflow engine:
 
 This manual describes the current system. It focuses on what Durga generates,
 what runtime model those artifacts implement, and where the support boundary ends.
+It is written for two audiences: developers who own the generated process code,
+and platform or DevOps engineers who must provision Kafka topics, deploy workers,
+monitor process health, and decide which generated artifacts are acceptable for
+their production environment.
+
+The generated output is not a managed workflow service. Durga supplies source
+code, topic manifests, helper scripts and monitoring projections; the operating
+team remains responsible for Kafka durability settings, credentials, deployment
+topology, alerting, backup/replay policy, and compatibility review before
+promoting a generated process.
 
 The document is organized in that order. Section~\ref{sec:SystemOverview} describes the major subsystems. Section~\ref{sec:ExecutionModel} explains the BPMN-to-Kafka execution mapping. Section~\ref{sec:Monitoring} describes the canonical process-event and monitoring model. Section~\ref{sec:GeneratedProjects} describes the generated project output, and Section~\ref{sec:CurrentStatus} summarizes maturity, constraints and current gaps.

@@ -31,6 +31,11 @@ into both \texttt{topics.sh} and Strimzi \texttt{topics.yml}.
 Accepts \texttt{h}, \texttt{d}, \texttt{w}, \texttt{m} suffixes
 for hours, days, weeks, or 30-day months.
 
+For production, do not accept generated retention defaults without review.
+Retention is part of the process contract: it controls replay windows,
+diagnostic history, storage cost and monitoring recovery. Infinite retention
+requires an explicit storage and compaction strategy.
+
 \texttt{--package <pkg>} sets the Java package for generated code
 (defaults to \texttt{org.gautelis.durga.generated} with a warning).
 Operational classes are placed directly in the package; probe and
@@ -62,7 +67,10 @@ The normal local environment consists of:
 \end{itemize}
 
 The repository is intentionally optimized for a local single-broker loop so the generated
-processes and monitoring projections can be explored quickly.
+processes and monitoring projections can be explored quickly. This local
+baseline is not a production topology; production deployments need broker
+replication, authenticated clients, managed secrets, resource limits, topic
+ownership and backup/replay policy.
 
 \subsection{Important configuration surfaces}
 
@@ -93,7 +101,12 @@ Durga uses several layers of state:
 \item local waiting and cancellation bookkeeping inside some generated handlers.
 \end{itemize}
 
-\subsection{Recommended local operator loop}
+Operationally, the first three layers are Kafka-backed and can be recovered or
+replayed within their configured retention windows. The last layer is process
+memory and should be treated as transient unless the generated handler explicitly
+persists its coordination state.
+
+\subsection{Recommended local development loop}
 
 For practical local work:
 \begin{enumerate}

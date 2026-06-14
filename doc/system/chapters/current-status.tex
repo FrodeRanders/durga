@@ -3,9 +3,12 @@
 
 \subsection{Maturity}
 
-Active prototype. The generator covers the BPMN execution subset described in
-the execution model chapter and is regression-tested against 23 BPMN
-fixtures. Generated projects compile and run on Quarkus + Kafka.
+Active prototype with beta-oriented hardening work underway. The generator
+covers the BPMN execution subset described in the execution model chapter and
+is regression-tested against the BPMN fixtures under
+\filepath{src/test/resources/bpmn/}. Generated projects compile and run on
+Quarkus + Kafka, but production adoption still requires the operational review
+described in the deployment, supervision and configuration chapters.
 
 \subsection{Solid}
 
@@ -15,7 +18,7 @@ fixtures. Generated projects compile and run on Quarkus + Kafka.
 \item core runtime contracts are unit-tested,
 \item monitoring topology with global-table query model,
 \item interrupting boundary cancellation via in-memory registry,
-\item GitHub Actions CI on push/PR (JDK 21),
+\item GitHub Actions CI on push/PR (JDK 21 plus monitoring UI test/build gate),
 \item \texttt{SendTask}, \texttt{ReceiveTask}, \texttt{ScriptTask}, \texttt{BusinessRuleTask} generate dedicated handlers,
 \item inclusive gateway (OR) split/join,
 \item multi-instance loop characteristics detected and reported,
@@ -30,7 +33,9 @@ fixtures. Generated projects compile and run on Quarkus + Kafka.
 \item BPMN subset (no complex gateways, no data objects),
 \item advanced scope semantics approximated,
 \item event subprocess semantics scoped, not generalized to all top-level cases,
-\item history retention is intentionally coarse.
+\item history retention is intentionally coarse,
+\item production deployment requires site-specific review of topic retention,
+  replication, authentication, secrets, resource limits and alerting.
 \end{itemize}
 
 \subsection{Open decisions}

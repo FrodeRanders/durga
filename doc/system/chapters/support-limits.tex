@@ -21,16 +21,19 @@
 \item subprocess scope handling is explicit but lighter than a full BPMN execution scope manager,
 \item monitoring includes current-state indexes and coarse trend buckets, but is
   optimized for current-state inspection over long-term analytics,
-\item generated runtimes prioritize inspectability over minimalism.
+\item generated runtimes prioritize inspectability over minimalism,
+\item production readiness depends on the generated process implementation and
+  deployment environment, not only on successful scaffolding.
 \end{itemize}
 
 \subsection{Outside current scope}
 
 \begin{itemize}
-\item full production-grade workflow-engine semantics,
+\item full managed workflow-engine semantics,
 \item compensation and advanced BPMN exception orchestration,
-\item large-scale operational hardening,
-\item generalized multi-node monitoring and query deployment.
+\item turnkey production operation without Kafka, Kubernetes, security and
+  observability review,
+\item long-term analytics beyond the current monitoring projections.
 \end{itemize}
 
 See \filepath{doc/bpmn-kafka-coverage.md} for the per-element support matrix.
