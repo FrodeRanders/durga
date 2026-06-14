@@ -7,6 +7,7 @@ Durga closer to beta readiness.
 
 - Confirm the release version is not `1.0-SNAPSHOT`.
 - Add or update the `CHANGES.md` entry for the release.
+- Confirm the candidate currently resolves as `0.1.0-beta.1`.
 - Confirm the supported BPMN scope still matches
   `doc/beta-support-boundary.md`.
 - Record any intentionally unsupported BPMN semantics in
@@ -42,7 +43,7 @@ For at least one representative BPMN model:
 
 ```bash
 mvn -q clean package
-java -jar target/durga-1.0-SNAPSHOT.jar src/test/resources/bpmn/invoice_receipt.bpmn
+java -jar target/durga-0.1.0-beta.1.jar src/test/resources/bpmn/invoice_receipt.bpmn
 cd generated
 mvn test
 ```

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-JAR="target/durga-1.0-SNAPSHOT.jar"
+JAR="$(find target -maxdepth 1 -name 'durga-*.jar' ! -name '*original*' -type f -exec ls -t {} + 2>/dev/null | head -n 1 || true)"
 URL="${DURGA_URL:-http://localhost:8081}"
 
-if [[ ! -f "$JAR" ]]; then
+if [[ -z "$JAR" || ! -f "$JAR" ]]; then
     echo "Run 'mvn -q package -DskipTests' first" >&2
     exit 1
 fi

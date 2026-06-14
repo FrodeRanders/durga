@@ -9,6 +9,6 @@ RUN apk add --no-cache libstdc++
 RUN addgroup -S durga && adduser -S durga -G durga
 USER durga
 RUN mkdir -p /tmp/logs
-COPY --from=builder /build/target/durga-1.0-SNAPSHOT.jar /app/durga.jar
+COPY --from=builder /build/target/durga-*.jar /app/durga.jar
 ENTRYPOINT ["java", "-Dlog-path=/tmp/logs", "-cp", "/app/durga.jar", \
   "org.gautelis.durga.demo.ContinuousFeedPublisher"]

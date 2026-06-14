@@ -19,7 +19,7 @@
 - `mvn compile` compiles sources without running tests.
 - `mvn dependency:tree` prints the resolved dependency graph.
 - `mvn -Dtest=XxxTest test` runs a single test class.
-- `java -jar target/durga-1.0-SNAPSHOT.jar <path-to-bpmn.xml>` runs the packaged BPMN scaffolder.
+- `java -jar target/durga-0.1.0-beta.1.jar <path-to-bpmn.xml>` runs the packaged BPMN scaffolder.
 - `cd setup && docker compose up` starts a local Kafka broker and Kafka UI for development.
 - `mvn -Pdeps validate` prints dependency update information.
 

@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-JAR="target/durga-1.0-SNAPSHOT.jar"
 BPMN="${1:?Usage: durga <path-to-bpmn.bpmn> [--dry-run] [--out <dir>] [--transactions] [--separate-workers] [--strimzi] [--connect]}"
 shift
 
-if [[ ! -f "$JAR" ]]; then
+find_durga_jar() {
+    find target -maxdepth 1 -name 'durga-*.jar' ! -name '*original*' -type f -exec ls -t {} + 2>/dev/null | head -n 1 || true
+}
+
+JAR="$(find_durga_jar)"
+if [[ -z "$JAR" || ! -f "$JAR" ]]; then
     echo "Building..."
     mvn -q package -DskipTests
+    JAR="$(find_durga_jar)"
+fi
+
+if [[ -z "$JAR" || ! -f "$JAR" ]]; then
+    echo "Could not find built Durga JAR under target/" >&2
+    exit 1
 fi
 
 exec java -jar "$JAR" "$BPMN" "$@"

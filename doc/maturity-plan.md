@@ -80,10 +80,9 @@ Durga can be considered beta-ready when the following are true:
 
 ## Next Implementation Priorities
 
-1. Make CI enforce the monitoring UI build before Maven verification.
-2. Keep integration test execution visible in release instructions.
-3. Add an operations hardening guide covering retention, state recovery,
-   security, and upgrade compatibility.
-4. Move the project version off `1.0-SNAPSHOT` for the first release candidate.
-5. Add frontend linting or tests once monitoring UI behavior grows beyond the
+1. Keep integration test execution visible in release instructions.
+2. Maintain the beta support boundary as BPMN and runtime coverage changes.
+3. Keep operations hardening guidance aligned with retention, state recovery,
+   security, and upgrade compatibility changes.
+4. Add frontend linting or tests once monitoring UI behavior grows beyond the
    current dashboard surface.

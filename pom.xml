@@ -4,7 +4,7 @@
 
     <groupId>org.gautelis</groupId>
     <artifactId>durga</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>0.1.0-beta.1</version>
     <packaging>jar</packaging>
 
     <name>durga</name>
@@ -311,7 +311,7 @@
 
                             </filters>
                             <artifactSet>
-                                <!-- jar tf target/kafka-1.0-SNAPSHOT.jar | egrep '\/$' | sort -->
+                                <!-- jar tf target/durga-0.1.0-beta.1.jar | egrep '\/$' | sort -->
                                 <excludes>
                                     <exclude>log4j:log4j:jar:*</exclude>
                                     <exclude>org.slf4j:slf4j-log4j12:jar:*</exclude>

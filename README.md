@@ -9,7 +9,7 @@ worker, gateway, orchestration, and topic setup skeletons for process implementa
 
 ```bash
 mvn -q clean package
-java -jar target/durga-1.0-SNAPSHOT.jar path/to/process.bpmn
+java -jar target/durga-0.1.0-beta.1.jar path/to/process.bpmn
 ```
 
 ## Local Kafka setup
@@ -68,7 +68,7 @@ All sample models live under `src/test/resources/bpmn/`. Run any with:
 
 ```bash
 mvn -q clean package
-java -jar target/durga-1.0-SNAPSHOT.jar src/test/resources/bpmn/<model>.bpmn
+java -jar target/durga-0.1.0-beta.1.jar src/test/resources/bpmn/<model>.bpmn
 ```
 
 | Model | Feature |
@@ -110,7 +110,7 @@ A Kafka Streams topology consumes the canonical `process-events` topic and mater
 ### Start the monitoring app
 
 ```bash
-java -cp target/durga-1.0-SNAPSHOT.jar \
+java -cp target/durga-0.1.0-beta.1.jar \
   org.gautelis.durga.monitoring.ProcessMonitoringApp \
   localhost:9094 durga-monitoring 8081
 ```
@@ -129,11 +129,11 @@ java -cp target/durga-1.0-SNAPSHOT.jar \
 ### CLI client
 
 ```bash
-java -cp target/durga-1.0-SNAPSHOT.jar \
+java -cp target/durga-0.1.0-beta.1.jar \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   http://localhost:8081 health
 
-java -cp target/durga-1.0-SNAPSHOT.jar \
+java -cp target/durga-0.1.0-beta.1.jar \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   http://localhost:8081 counts invoice_receipt
 ```
@@ -141,7 +141,7 @@ java -cp target/durga-1.0-SNAPSHOT.jar \
 ### Demo scenarios (without a generated process)
 
 ```bash
-java -cp target/durga-1.0-SNAPSHOT.jar \
+java -cp target/durga-0.1.0-beta.1.jar \
   org.gautelis.durga.demo.ProcessEventScenarioRunner \
   localhost:9094 happy invoice_receipt register_invoice,review_invoice,notify_requester
 ```

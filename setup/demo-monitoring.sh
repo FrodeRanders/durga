@@ -20,7 +20,13 @@ cd "${PROJECT_ROOT}"
 
 mvn -q package
 
-java -cp target/durga-1.0-SNAPSHOT.jar \
+JAR="$(find target -maxdepth 1 -name 'durga-*.jar' ! -name '*original*' -type f -exec ls -t {} + 2>/dev/null | head -n 1 || true)"
+if [[ -z "${JAR}" || ! -f "${JAR}" ]]; then
+  echo "Could not find built Durga JAR under target/" >&2
+  exit 1
+fi
+
+java -cp "${JAR}" \
   org.gautelis.durga.monitoring.ProcessMonitoringApp \
   "${BOOTSTRAP}" \
   "${APPLICATION_ID}" \
@@ -36,7 +42,7 @@ cleanup() {
 trap cleanup EXIT
 
 for _ in $(seq 1 30); do
-  if java -cp target/durga-1.0-SNAPSHOT.jar \
+  if java -cp "${JAR}" \
     org.gautelis.durga.monitoring.ProcessMonitoringClient \
     "http://localhost:${HTTP_PORT}" \
     health >/dev/null 2>&1; then
@@ -45,7 +51,7 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
-publish_output=$(java -cp target/durga-1.0-SNAPSHOT.jar \
+publish_output=$(java -cp "${JAR}" \
   org.gautelis.durga.demo.ProcessEventScenarioRunner \
   "${BOOTSTRAP}" \
   "${SCENARIO}" \
@@ -59,14 +65,14 @@ sleep 2
 
 echo
 echo "Health"
-java -cp target/durga-1.0-SNAPSHOT.jar \
+java -cp "${JAR}" \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   "http://localhost:${HTTP_PORT}" \
   health
 
 echo
 echo "Counts"
-java -cp target/durga-1.0-SNAPSHOT.jar \
+java -cp "${JAR}" \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   "http://localhost:${HTTP_PORT}" \
   counts \
@@ -74,7 +80,7 @@ java -cp target/durga-1.0-SNAPSHOT.jar \
 
 echo
 echo "Latency"
-java -cp target/durga-1.0-SNAPSHOT.jar \
+java -cp "${JAR}" \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   "http://localhost:${HTTP_PORT}" \
   latency \
@@ -82,7 +88,7 @@ java -cp target/durga-1.0-SNAPSHOT.jar \
 
 echo
 echo "Stuck"
-java -cp target/durga-1.0-SNAPSHOT.jar \
+java -cp "${JAR}" \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   "http://localhost:${HTTP_PORT}" \
   stuck \
@@ -91,7 +97,7 @@ java -cp target/durga-1.0-SNAPSHOT.jar \
 
 echo
 echo "Instance"
-java -cp target/durga-1.0-SNAPSHOT.jar \
+java -cp "${JAR}" \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   "http://localhost:${HTTP_PORT}" \
   instance \
