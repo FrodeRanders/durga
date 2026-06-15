@@ -21,6 +21,7 @@ public final class ProcessMonitoringApp {
 
     static String bootstrapServers;
     static String applicationId;
+    static String processId;
 
     private ProcessMonitoringApp() {
     }
@@ -30,6 +31,7 @@ public final class ProcessMonitoringApp {
         try {
             bootstrapServers = args.length > 0 ? args[0] : bootstrapServersDefault();
             applicationId = args.length > 1 ? args[1] : "durga-monitoring";
+            processId = args.length > 2 ? args[2] : defaultProcessId();
             Quarkus.run(args);
             LOG.info("ProcessMonitoringApp completed successfully");
         } catch (Exception e) {
@@ -42,7 +44,7 @@ public final class ProcessMonitoringApp {
     @Singleton
     MonitoringState monitoringState() {
         ProcessMonitoringTopology.MonitoringTopics topics =
-                ProcessMonitoringTopology.MonitoringTopics.defaults();
+                ProcessMonitoringTopology.MonitoringTopics.forProcess(processId);
 
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
@@ -77,5 +79,9 @@ public final class ProcessMonitoringApp {
 
     private static String bootstrapServersDefault() {
         return System.getProperty("kafka.bootstrap.servers", "localhost:9094");
+    }
+
+    private static String defaultProcessId() {
+        return System.getProperty("durga.monitoring.process.id", "default");
     }
 }

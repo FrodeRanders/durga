@@ -22,8 +22,9 @@ public final class MonitoringContainer {
         String bootstrap = args.length > 0 ? args[0] : bootstrapServersDefault();
         String appId = args.length > 1 ? args[1] : "durga-monitoring";
         int port = args.length > 2 ? Integer.parseInt(args[2]) : 8081;
+        String processId = args.length > 3 && !args[3].isBlank() ? args[3] : defaultProcessId();
 
-        var topics = ProcessMonitoringTopology.MonitoringTopics.defaults();
+        var topics = ProcessMonitoringTopology.MonitoringTopics.forProcess(processId);
 
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
@@ -40,8 +41,12 @@ public final class MonitoringContainer {
         Properties adminProps = new Properties();
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
         try (var admin = AdminClient.create(adminProps)) {
-            for (String topic : List.of("process-state", "process-state-counts",
-                    "process-active-state", "process-latency", "process-trends")) {
+            for (String topic : List.of(
+                    topics.stateTopic(),
+                    topics.countsTopic(),
+                    topics.activeTopic(),
+                    topics.latencyTopic(),
+                    topics.trendsTopic())) {
                 admin.createTopics(List.of(new NewTopic(topic, 2, (short) 1)));
             }
         }
@@ -63,5 +68,9 @@ public final class MonitoringContainer {
 
     private static String bootstrapServersDefault() {
         return System.getProperty("kafka.bootstrap.servers", "localhost:9094");
+    }
+
+    private static String defaultProcessId() {
+        return System.getProperty("durga.monitoring.process.id", "default");
     }
 }

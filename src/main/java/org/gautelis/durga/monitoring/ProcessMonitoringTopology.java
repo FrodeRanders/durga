@@ -223,23 +223,31 @@ public final class ProcessMonitoringTopology {
             String trendsStore
     ) {
         /**
-         * Returns the default monitoring topic and store names used throughout the repo.
+         * Returns monitoring topic and store names qualified with a process identifier.
+         * <p>
+         * Each topic and store name gets a {@code -<processId>} suffix so multiple process
+         * definitions can coexist without competing for the same topics or state stores.
          *
-         * @return default topic and store names
+         * @param processId process definition identifier (must not be blank)
+         * @return qualified topic and store names
          */
-        public static MonitoringTopics defaults() {
+        public static MonitoringTopics forProcess(String processId) {
+            if (processId == null || processId.isBlank()) {
+                throw new IllegalArgumentException("processId must not be blank");
+            }
+            String suffix = "-" + processId;
             return new MonitoringTopics(
-                    DEFAULT_EVENTS_TOPIC,
-                    DEFAULT_STATE_TOPIC,
-                    DEFAULT_COUNTS_TOPIC,
-                    DEFAULT_ACTIVE_TOPIC,
-                    DEFAULT_LATENCY_TOPIC,
-                    DEFAULT_TRENDS_TOPIC,
-                    DEFAULT_STATE_STORE,
-                    DEFAULT_COUNTS_STORE,
-                    DEFAULT_ACTIVE_STORE,
-                    DEFAULT_LATENCY_STORE,
-                    DEFAULT_TRENDS_STORE
+                    DEFAULT_EVENTS_TOPIC + suffix,
+                    DEFAULT_STATE_TOPIC + suffix,
+                    DEFAULT_COUNTS_TOPIC + suffix,
+                    DEFAULT_ACTIVE_TOPIC + suffix,
+                    DEFAULT_LATENCY_TOPIC + suffix,
+                    DEFAULT_TRENDS_TOPIC + suffix,
+                    DEFAULT_STATE_STORE + suffix,
+                    DEFAULT_COUNTS_STORE + suffix,
+                    DEFAULT_ACTIVE_STORE + suffix,
+                    DEFAULT_LATENCY_STORE + suffix,
+                    DEFAULT_TRENDS_STORE + suffix
             );
         }
     }
