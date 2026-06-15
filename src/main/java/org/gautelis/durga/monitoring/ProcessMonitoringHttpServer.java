@@ -28,6 +28,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
     private final KafkaStreams streams;
     private final ProcessMonitoringQueryService queryService;
     private final HttpServer server;
+    private final String apiKey;
 
     /**
      * Creates the HTTP server bound to an existing monitoring topology.
@@ -44,6 +45,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
     ) throws IOException {
         this.streams = streams;
         this.queryService = new ProcessMonitoringQueryService(streams, topics);
+        this.apiKey = resolveApiKey();
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.createContext("/", this::handleRoot);
         this.server.createContext("/dashboard", this::handleDashboard);
@@ -73,11 +75,26 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         LOG.info("Monitoring HTTP server stopped");
     }
 
+    private boolean requireAuth(HttpExchange exchange) throws IOException {
+        if (apiKey == null) {
+            return true;
+        }
+        String auth = exchange.getRequestHeaders().getFirst("Authorization");
+        String expected = "Bearer " + apiKey;
+        if (auth == null || !auth.equals(expected)) {
+            exchange.getResponseHeaders().set("WWW-Authenticate", "Bearer");
+            sendJson(exchange, 401, Map.of("error", "unauthorized"));
+            return false;
+        }
+        return true;
+    }
+
     private void handleRoot(HttpExchange exchange) throws IOException {
         if (!"GET".equals(exchange.getRequestMethod())) {
             sendStatus(exchange, 405);
             return;
         }
+        if (!requireAuth(exchange)) return;
         String path = exchange.getRequestURI().getPath();
         if ("/".equals(path)) {
             redirect(exchange, "/dashboard");
@@ -91,6 +108,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             sendStatus(exchange, 405);
             return;
         }
+        if (!requireAuth(exchange)) return;
         sendHtml(exchange, 200, dashboardHtml());
     }
 
@@ -99,6 +117,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             sendStatus(exchange, 405);
             return;
         }
+        if (!requireAuth(exchange)) return;
         sendJson(exchange, 200, Map.of("streamsState", streams.state().name()));
     }
 
@@ -107,6 +126,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             sendStatus(exchange, 405);
             return;
         }
+        if (!requireAuth(exchange)) return;
         List<String> parts = pathParts(exchange.getRequestURI().getPath());
         if (parts.size() != 2) {
             sendJson(exchange, 400, Map.of("error", "Expected /instances/{processInstanceId}"));
@@ -130,6 +150,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             sendStatus(exchange, 405);
             return;
         }
+        if (!requireAuth(exchange)) return;
         List<String> parts = pathParts(exchange.getRequestURI().getPath());
         if (parts.size() != 3) {
             sendJson(exchange, 400, Map.of("error", "Expected /processes/{processId}/counts, /latency, or /trends"));
@@ -162,6 +183,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             sendStatus(exchange, 405);
             return;
         }
+        if (!requireAuth(exchange)) return;
         try {
             sendJson(exchange, 200, queryService.allCounts());
         } catch (InvalidStateStoreException e) {
@@ -174,6 +196,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             sendStatus(exchange, 405);
             return;
         }
+        if (!requireAuth(exchange)) return;
         try {
             // "Stuck" is query-time configurable, so the threshold remains an HTTP parameter
             // instead of being baked into the monitoring topology itself.
@@ -197,6 +220,20 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         try (OutputStream output = exchange.getResponseBody()) {
             output.write(body);
         }
+    }
+
+    private static String resolveApiKey() {
+        String key = System.getProperty("durga.monitoring.api.key");
+        if (key == null) {
+            key = System.getenv("DURGA_MONITORING_API_KEY");
+        }
+        if (key != null && key.isBlank()) {
+            key = null;
+        }
+        if (key == null) {
+            LOG.warn("No DURGA_MONITORING_API_KEY set — monitoring API is unauthenticated");
+        }
+        return key;
     }
 
     private static List<String> pathParts(String path) {

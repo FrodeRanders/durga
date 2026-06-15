@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.stringtemplate.v4.ST;
 import org.stringtemplate.v4.STGroupString;
-import org.camunda.bpm.model.bpmn.Bpmn;
 import org.camunda.bpm.model.bpmn.BpmnModelInstance;
 import org.camunda.bpm.model.bpmn.instance.BoundaryEvent;
 import org.camunda.bpm.model.bpmn.instance.BusinessRuleTask;
@@ -85,7 +84,7 @@ public class BpmnScaffolder {
             System.exit(1);
         }
 
-        Path outputRoot = Path.of(parsed.outputDir);
+        Path outputRoot = SafeXml.safePath(parsed.outputDir);
         String pkg = parsed.packageName;
         if (pkg == null || pkg.isBlank()) {
             pkg = generatedPackage;
@@ -113,7 +112,7 @@ public class BpmnScaffolder {
         Path coreJavaOutput = outputRoot.resolve("src/main/java/org/gautelis/durga");
         Path mainSourceRoot = Path.of("src/main/java");
 
-        BpmnModelInstance model = Bpmn.readModelFromFile(bpmnFile);
+        BpmnModelInstance model = SafeXml.readModelFromFile(bpmnFile);
         Process process = model.getModelElementsByType(Process.class).stream()
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("No <process> element found."));

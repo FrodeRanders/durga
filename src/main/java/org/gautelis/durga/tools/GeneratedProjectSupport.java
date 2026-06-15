@@ -247,7 +247,7 @@ final class GeneratedProjectSupport {
      * for regeneration and is enriched by the build with custom implementation metadata.
      */
     static void copyBpmnModel(Path outputRoot, String bpmnPath, List<String> generatedFiles) {
-        Path source = Path.of(bpmnPath);
+        Path source = SafeXml.safePath(bpmnPath);
         if (!Files.exists(source)) {
             System.err.println("Warning: BPMN source file not found for copy: " + source);
             return;

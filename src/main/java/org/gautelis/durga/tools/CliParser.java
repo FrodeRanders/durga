@@ -13,6 +13,11 @@ final class CliParser {
                     + "[--event-topic <topic>] [--retention <h|d|w>] [--dry-run] [--transactions] "
                     + "[--separate-workers] [--strimzi] [--connect]";
 
+    private static final String PROCESS_ID_PATTERN = "[a-zA-Z0-9][a-zA-Z0-9_-]*";
+    private static final String PACKAGE_PATTERN = "[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*";
+    private static final String TOPIC_PATTERN = "[a-zA-Z0-9._-]+";
+    private static final int MAX_ARG_LENGTH = 255;
+
     private CliParser() {
     }
 
@@ -58,13 +63,15 @@ final class CliParser {
                     System.err.println("Missing value for --process-id");
                     return null;
                 }
-                processIdOverride = args[++i];
+                processIdOverride = validateArg(args[++i], PROCESS_ID_PATTERN, "--process-id");
+                if (processIdOverride == null) return null;
             } else if ("--package".equals(arg)) {
                 if (i + 1 >= args.length) {
                     System.err.println("Missing value for --package");
                     return null;
                 }
-                packageName = args[++i];
+                packageName = validateArg(args[++i], PACKAGE_PATTERN, "--package");
+                if (packageName == null) return null;
             } else if ("--retention".equals(arg)) {
                 if (i + 1 >= args.length) {
                     System.err.println("Missing value for --retention");
@@ -76,7 +83,8 @@ final class CliParser {
                     System.err.println("Missing value for --event-topic");
                     return null;
                 }
-                eventsTopic = args[++i];
+                eventsTopic = validateArg(args[++i], TOPIC_PATTERN, "--event-topic");
+                if (eventsTopic == null) return null;
             } else {
                 positional.add(arg);
             }
@@ -92,5 +100,21 @@ final class CliParser {
             outputDir = positional.size() > 1 ? positional.get(1) : "generated";
         }
         return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi, processIdOverride, packageName, retentionHours, eventsTopic);
+    }
+
+    private static String validateArg(String value, String pattern, String argName) {
+        if (value == null || value.isBlank()) {
+            System.err.println(argName + " must not be blank");
+            return null;
+        }
+        if (value.length() > MAX_ARG_LENGTH) {
+            System.err.println(argName + " exceeds maximum length of " + MAX_ARG_LENGTH);
+            return null;
+        }
+        if (!value.matches(pattern)) {
+            System.err.println(argName + " contains invalid characters. Allowed pattern: " + pattern);
+            return null;
+        }
+        return value;
     }
 }

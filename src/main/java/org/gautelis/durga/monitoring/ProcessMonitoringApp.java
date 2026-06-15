@@ -9,6 +9,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Properties;
 
 /**
@@ -60,12 +61,12 @@ public final class ProcessMonitoringApp {
         ProcessMonitoringQueryService queryService =
                 new ProcessMonitoringQueryService(streams, topics);
 
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            streams.close(Duration.ofSeconds(30));
+        }));
+
         streams.start();
         LOG.info("Monitoring topology started (state dir: {})", props.getProperty(StreamsConfig.STATE_DIR_CONFIG));
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            streams.close();
-        }));
 
         return new MonitoringState(streams, queryService);
     }

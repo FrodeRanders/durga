@@ -5,6 +5,8 @@ import org.camunda.bpm.model.bpmn.BpmnModelInstance;
 import org.camunda.bpm.model.bpmn.instance.ServiceTask;
 import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperties;
 import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,6 +41,8 @@ import java.util.List;
  */
 public final class ModelEnricher {
 
+    private static final Logger LOG = LoggerFactory.getLogger(ModelEnricher.class);
+
     private ModelEnricher() {
     }
 
@@ -47,9 +51,9 @@ public final class ModelEnricher {
             System.err.println("Usage: ModelEnricher <classes-dir> <bpmn-file> [sources-dir]");
             System.exit(1);
         }
-        Path classesDir = Path.of(args[0]);
-        Path bpmnFile = Path.of(args[1]);
-        Path sourcesDir = args.length >= 3 ? Path.of(args[2]) : null;
+        Path classesDir = SafeXml.safePath(args[0]);
+        Path bpmnFile = SafeXml.safePath(args[1]);
+        Path sourcesDir = args.length >= 3 ? SafeXml.safePath(args[2]) : null;
 
         if (!Files.exists(classesDir) || !Files.isDirectory(classesDir)) {
             System.err.println("Classes directory not found: " + classesDir);
@@ -85,71 +89,62 @@ public final class ModelEnricher {
         }
 
         String bpmnContent = Files.readString(bpmnFile, StandardCharsets.UTF_8);
-        BpmnModelInstance model = Bpmn.readModelFromStream(
-                new java.io.ByteArrayInputStream(bpmnContent.getBytes(StandardCharsets.UTF_8)));
+        BpmnModelInstance model = SafeXml.readModelFromString(bpmnContent);
 
-        URLClassLoader classLoader = null;
         boolean modified = false;
         Collection<ServiceTask> serviceTasks = model.getModelElementsByType(ServiceTask.class);
 
-        for (ServiceTask task : serviceTasks) {
-            String pluginId = getProperty(task, "plugin");
-            if (!"custom".equals(pluginId)) {
-                continue;
-            }
+        try (URLClassLoader classLoader = new URLClassLoader(
+                new URL[]{classesDir.toUri().toURL()},
+                ClassLoader.getSystemClassLoader())) {
 
-            String pluginConfig = getProperty(task, "pluginConfig");
-            String contractFqName = parseContractFqName(pluginConfig, task);
-            if (contractFqName == null) {
-                continue;
-            }
+            for (ServiceTask task : serviceTasks) {
+                String pluginId = getProperty(task, "plugin");
+                if (!"custom".equals(pluginId)) {
+                    continue;
+                }
 
-            if (classLoader == null) {
-                classLoader = new URLClassLoader(new URL[]{classesDir.toUri().toURL()},
-                        ClassLoader.getSystemClassLoader());
-            }
+                String pluginConfig = getProperty(task, "pluginConfig");
+                String contractFqName = parseContractFqName(pluginConfig, task);
+                if (contractFqName == null) {
+                    continue;
+                }
 
-            Path implClassPath = findImplementation(classesDir, contractFqName, classLoader);
-            if (implClassPath == null) {
-                continue;
-            }
+                Path implClassPath = findImplementation(classesDir, contractFqName, classLoader);
+                if (implClassPath == null) {
+                    continue;
+                }
 
-            String implClassName = classNameFromPath(classesDir, implClassPath);
-            Path implSourcePath = classToSource(sourcesDir, implClassPath, classesDir);
-            String hash = implSourcePath != null && Files.exists(implSourcePath)
-                    ? sha256(implSourcePath) : sha256(implClassPath);
-            String sourceName = implSourcePath != null
-                    ? sourcesDir.relativize(implSourcePath).toString()
-                    : implClassPath.getFileName().toString();
-            String knownHash = getProperty(task, "customHash");
+                String implClassName = classNameFromPath(classesDir, implClassPath);
+                Path implSourcePath = classToSource(sourcesDir, implClassPath, classesDir);
+                String hash = implSourcePath != null && Files.exists(implSourcePath)
+                        ? sha256(implSourcePath) : sha256(implClassPath);
+                String sourceName = implSourcePath != null
+                        ? sourcesDir.relativize(implSourcePath).toString()
+                        : implClassPath.getFileName().toString();
+                String knownHash = getProperty(task, "customHash");
 
-            if (hash.equals(knownHash) && implClassName.equals(getProperty(task, "customImpl"))) {
-                continue;
-            }
+                if (hash.equals(knownHash) && implClassName.equals(getProperty(task, "customImpl"))) {
+                    continue;
+                }
 
-            setOrUpdateProperty(task, "customImpl", implClassName);
-            setOrUpdateProperty(task, "customSource", sourceName);
-            setOrUpdateProperty(task, "customHash", hash);
+                setOrUpdateProperty(task, "customImpl", implClassName);
+                setOrUpdateProperty(task, "customSource", sourceName);
+                setOrUpdateProperty(task, "customHash", hash);
 
-            System.out.println("Enriched custom activity '" + task.getId()
-                    + "': impl=" + implClassName + ", source=" + sourceName
-                    + (knownHash != null && !hash.equals(knownHash) ? " (hash changed)" : ""));
-            modified = true;
-        }
-
-        if (classLoader != null) {
-            try {
-                classLoader.close();
-            } catch (IOException ignored) {
+                LOG.info("Enriched custom activity '{}': impl={}, source={}{}",
+                        task.getId(), implClassName, sourceName,
+                        knownHash != null && !hash.equals(knownHash) ? " (hash changed)" : "");
+                modified = true;
             }
         }
 
         if (modified) {
             String updatedBpmn = Bpmn.convertToString(model);
             Files.writeString(bpmnFile, updatedBpmn, StandardCharsets.UTF_8);
-            System.out.println("BPMN model enriched: " + bpmnFile);
+            LOG.info("BPMN model enriched: {}", bpmnFile);
         } else {
-            System.out.println("No changes needed for: " + bpmnFile);
+            LOG.info("No changes needed for: {}", bpmnFile);
         }
     }
 
@@ -316,7 +311,8 @@ public final class ModelEnricher {
             }
             return HexFormat.of().formatHex(digest.digest());
         } catch (Exception e) {
-            return "error:" + e.getMessage();
+            LOG.error("Failed to compute SHA-256 for {}", file, e);
+            return "error";
         }
     }
 }
