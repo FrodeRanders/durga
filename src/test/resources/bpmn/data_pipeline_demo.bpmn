@@ -7,7 +7,80 @@
                   id="Definitions_1"
                   targetNamespace="http://bpmn.io/schema/bpmn">
 
+  <bpmn:itemDefinition id="RawCustomerDataItem" structureRef="RawCustomerData" />
+  <bpmn:itemDefinition id="NormalizedCustomerDataItem" structureRef="NormalizedCustomerData" />
+  <bpmn:itemDefinition id="FilteredCustomerDataItem" structureRef="FilteredCustomerData" />
+  <bpmn:itemDefinition id="EnrichedCustomerDataItem" structureRef="EnrichedCustomerData" />
+  <bpmn:dataStore id="S3WarehouseStore" name="S3 Warehouse" isUnlimited="true" />
+  <bpmn:dataStore id="Neo4jCustomerGraphStore" name="Neo4j Customer Graph" isUnlimited="true" />
+  <bpmn:dataStore id="PostgresCustomerStore" name="PostgreSQL Customer Store" isUnlimited="true" />
+
   <bpmn:process id="data_pipeline_demo" name="Data Pipeline Demo" isExecutable="true">
+
+    <bpmn:dataObjectReference id="raw_customer_data" name="Raw Customer Data" dataObjectRef="raw_customer_data_object">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="schema" value="schemas/raw-customer-data.schema.json" />
+          <camunda:property name="mediaType" value="application/json" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+    </bpmn:dataObjectReference>
+    <bpmn:dataObject id="raw_customer_data_object" name="Raw Customer Data" itemSubjectRef="RawCustomerDataItem" />
+
+    <bpmn:dataObjectReference id="normalized_customer_data" name="Normalized Customer Data" dataObjectRef="normalized_customer_data_object">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="schema" value="schemas/normalized-customer-data.schema.json" />
+          <camunda:property name="mediaType" value="application/json" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+    </bpmn:dataObjectReference>
+    <bpmn:dataObject id="normalized_customer_data_object" name="Normalized Customer Data" itemSubjectRef="NormalizedCustomerDataItem" />
+
+    <bpmn:dataObjectReference id="filtered_customer_data" name="Filtered Customer Data" dataObjectRef="filtered_customer_data_object">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="schema" value="schemas/filtered-customer-data.schema.json" />
+          <camunda:property name="mediaType" value="application/json" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+    </bpmn:dataObjectReference>
+    <bpmn:dataObject id="filtered_customer_data_object" name="Filtered Customer Data" itemSubjectRef="FilteredCustomerDataItem" />
+
+    <bpmn:dataObjectReference id="enriched_customer_data" name="Enriched Customer Data" dataObjectRef="enriched_customer_data_object">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="schema" value="schemas/enriched-customer-data.schema.json" />
+          <camunda:property name="mediaType" value="application/json" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+    </bpmn:dataObjectReference>
+    <bpmn:dataObject id="enriched_customer_data_object" name="Enriched Customer Data" itemSubjectRef="EnrichedCustomerDataItem" />
+
+    <bpmn:dataStoreReference id="s3_warehouse" name="S3 Warehouse" dataStoreRef="S3WarehouseStore">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="kind" value="s3" />
+          <camunda:property name="uri" value="s3://warehouse/customer/enriched/" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+    </bpmn:dataStoreReference>
+    <bpmn:dataStoreReference id="neo4j_customer_graph" name="Neo4j Customer Graph" dataStoreRef="Neo4jCustomerGraphStore">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="kind" value="neo4j" />
+          <camunda:property name="uri" value="neo4j://customer-graph" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+    </bpmn:dataStoreReference>
+    <bpmn:dataStoreReference id="postgres_customer_store" name="PostgreSQL Customer Store" dataStoreRef="PostgresCustomerStore">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="kind" value="postgresql" />
+          <camunda:property name="uri" value="jdbc:postgresql://postgres/customers" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+    </bpmn:dataStoreReference>
 
     <bpmn:startEvent id="StartEvent_1" name="Pipeline Start">
       <bpmn:outgoing>Flow_to_transform</bpmn:outgoing>
@@ -22,6 +95,24 @@
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_to_transform</bpmn:incoming>
       <bpmn:outgoing>Flow_transform_to_filter</bpmn:outgoing>
+      <bpmn:ioSpecification>
+        <bpmn:dataInput id="transform_data_input" name="Raw Customer Data" itemSubjectRef="RawCustomerDataItem" />
+        <bpmn:dataOutput id="transform_data_output" name="Normalized Customer Data" itemSubjectRef="NormalizedCustomerDataItem" />
+        <bpmn:inputSet id="transform_data_input_set">
+          <bpmn:dataInputRefs>transform_data_input</bpmn:dataInputRefs>
+        </bpmn:inputSet>
+        <bpmn:outputSet id="transform_data_output_set">
+          <bpmn:dataOutputRefs>transform_data_output</bpmn:dataOutputRefs>
+        </bpmn:outputSet>
+      </bpmn:ioSpecification>
+      <bpmn:dataInputAssociation id="transform_reads_raw">
+        <bpmn:sourceRef>raw_customer_data</bpmn:sourceRef>
+        <bpmn:targetRef>transform_data_input</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataOutputAssociation id="transform_writes_normalized">
+        <bpmn:sourceRef>transform_data_output</bpmn:sourceRef>
+        <bpmn:targetRef>normalized_customer_data</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
     </bpmn:serviceTask>
 
     <bpmn:serviceTask id="filter_fields" name="Filter Fields">
@@ -33,6 +124,24 @@
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_transform_to_filter</bpmn:incoming>
       <bpmn:outgoing>Flow_filter_to_enrich</bpmn:outgoing>
+      <bpmn:ioSpecification>
+        <bpmn:dataInput id="filter_fields_input" name="Normalized Customer Data" itemSubjectRef="NormalizedCustomerDataItem" />
+        <bpmn:dataOutput id="filter_fields_output" name="Filtered Customer Data" itemSubjectRef="FilteredCustomerDataItem" />
+        <bpmn:inputSet id="filter_fields_input_set">
+          <bpmn:dataInputRefs>filter_fields_input</bpmn:dataInputRefs>
+        </bpmn:inputSet>
+        <bpmn:outputSet id="filter_fields_output_set">
+          <bpmn:dataOutputRefs>filter_fields_output</bpmn:dataOutputRefs>
+        </bpmn:outputSet>
+      </bpmn:ioSpecification>
+      <bpmn:dataInputAssociation id="filter_reads_normalized">
+        <bpmn:sourceRef>normalized_customer_data</bpmn:sourceRef>
+        <bpmn:targetRef>filter_fields_input</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataOutputAssociation id="filter_writes_filtered">
+        <bpmn:sourceRef>filter_fields_output</bpmn:sourceRef>
+        <bpmn:targetRef>filtered_customer_data</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
     </bpmn:serviceTask>
 
     <bpmn:serviceTask id="enrich_data" name="Enrich Data">
@@ -44,6 +153,36 @@
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_filter_to_enrich</bpmn:incoming>
       <bpmn:outgoing>Flow_to_end</bpmn:outgoing>
+      <bpmn:ioSpecification>
+        <bpmn:dataInput id="enrich_data_input" name="Filtered Customer Data" itemSubjectRef="FilteredCustomerDataItem" />
+        <bpmn:dataOutput id="enrich_data_output" name="Enriched Customer Data" itemSubjectRef="EnrichedCustomerDataItem" />
+        <bpmn:inputSet id="enrich_data_input_set">
+          <bpmn:dataInputRefs>enrich_data_input</bpmn:dataInputRefs>
+        </bpmn:inputSet>
+        <bpmn:outputSet id="enrich_data_output_set">
+          <bpmn:dataOutputRefs>enrich_data_output</bpmn:dataOutputRefs>
+        </bpmn:outputSet>
+      </bpmn:ioSpecification>
+      <bpmn:dataInputAssociation id="enrich_reads_filtered">
+        <bpmn:sourceRef>filtered_customer_data</bpmn:sourceRef>
+        <bpmn:targetRef>enrich_data_input</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataOutputAssociation id="enrich_writes_enriched">
+        <bpmn:sourceRef>enrich_data_output</bpmn:sourceRef>
+        <bpmn:targetRef>enriched_customer_data</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:dataOutputAssociation id="enrich_writes_s3">
+        <bpmn:sourceRef>enrich_data_output</bpmn:sourceRef>
+        <bpmn:targetRef>s3_warehouse</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:dataOutputAssociation id="enrich_writes_neo4j">
+        <bpmn:sourceRef>enrich_data_output</bpmn:sourceRef>
+        <bpmn:targetRef>neo4j_customer_graph</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:dataOutputAssociation id="enrich_writes_postgres">
+        <bpmn:sourceRef>enrich_data_output</bpmn:sourceRef>
+        <bpmn:targetRef>postgres_customer_store</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
     </bpmn:serviceTask>
 
     <bpmn:endEvent id="EndEvent_1" name="Pipeline End">

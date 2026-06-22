@@ -1,10 +1,11 @@
 \section{Kafka Connect Integration}
 \label{sec:Connect}
 
-Kafka Connect handles data acquisition. Durga owns the topic topology;
-Connect owns the I/O to external systems. The scaffolder's \texttt{--connect}
-flag generates ready-to-deploy connector configurations for the pipeline's
-intake and output topics.
+Kafka Connect handles edge I/O. Durga owns the process and topic topology;
+Connect owns the movement between Kafka and external systems. The scaffolder's
+\texttt{--connect} flag generates connector skeletons for the pipeline's
+generic intake/output topics and, when BPMN data stores are present, for
+data-store-specific source and sink edges.
 
 \subsection{Architecture}
 
@@ -53,6 +54,7 @@ This adds a \filepath{connect/} directory to the generated project:
 \begin{verbatim}
 connect/connect-source.json
 connect/connect-sink.json
+connect/data-stores/*.json
 connect.sh
 \end{verbatim}
 
@@ -88,9 +90,36 @@ The user fills in the connector class and system-specific settings:
 \item message throw and send task topics.
 \end{itemize}
 
+\subsection{Data-store connectors}
+
+When BPMN data stores are connected to tasks by data associations, Durga also
+generates one connector skeleton per data-store edge:
+
+\begin{itemize}
+\item a data store used as a task input source becomes a source connector
+      skeleton that writes to the corresponding task input topic,
+\item a data store used as a task output target becomes a sink connector
+      skeleton that reads from the corresponding task output topic.
+\end{itemize}
+
+For example, a task \texttt{enrich\_data} that writes to
+\texttt{s3\_warehouse}, \texttt{neo4j\_customer\_graph}, and
+\texttt{postgresql\_customer\_store} produces files such as:
+
+\begin{verbatim}
+connect/data-stores/data_pipeline_demo-s3-warehouse-sink.json
+connect/data-stores/data_pipeline_demo-neo4j-customer-graph-sink.json
+connect/data-stores/data_pipeline_demo-postgresql-customer-store-sink.json
+\end{verbatim}
+
+These skeletons consume the existing Durga task output topic, for example
+\texttt{data\_pipeline\_demo\_enrich\_data\_output}. The BPMN data object
+remains a logical asset; it is not converted into a Kafka topic.
+
 \subsection{Deploying}
 
-The generated \texttt{connect.sh} posts both configs to the Connect REST API:
+The generated \texttt{connect.sh} posts all connector JSON files under
+\filepath{connect/} and \filepath{connect/data-stores/} to the Connect REST API:
 
 \begin{verbatim}
 CONNECT_URL=http://kafka-connect:8083 ./connect.sh
@@ -101,6 +130,7 @@ Connector status can be checked with:
 \begin{verbatim}
 curl http://kafka-connect:8083/connectors/invoice_receipt-source/status
 curl http://kafka-connect:8083/connectors/invoice_receipt-sink/status
+curl http://kafka-connect:8083/connectors/data_pipeline_demo-s3-warehouse-sink/status
 \end{verbatim}
 
 \subsection{Common connector classes}
@@ -115,6 +145,7 @@ curl http://kafka-connect:8083/connectors/invoice_receipt-sink/status
 \texttt{ElasticsearchSinkConnector} & Index to Elasticsearch \\
 \texttt{HttpSinkConnector} & POST to REST APIs \\
 \texttt{JdbcSinkConnector} & Write to relational databases \\
+\texttt{Neo4jSinkConnector} & Write graph changes to Neo4j \\
 \texttt{BigQuerySinkConnector} & Load into Google BigQuery \\
 \hline
 \end{longtable}
@@ -124,7 +155,9 @@ curl http://kafka-connect:8083/connectors/invoice_receipt-sink/status
 \begin{itemize}
 \item Connector configs are generated as stubs. The user must fill in
       connector-specific settings (connection URLs, credentials, table names,
-      bucket names).
+      bucket names, converters and transforms).
+\item Connector class names for data stores are hints. The deployed Connect
+      cluster must actually have the selected connector plugin installed.
 \item The scaffolder does not validate connector configs against a live
       Connect instance.
 \item Single Message Transform (SMT) chains are not generated. The user

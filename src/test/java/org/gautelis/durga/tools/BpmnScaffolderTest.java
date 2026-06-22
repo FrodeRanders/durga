@@ -504,6 +504,8 @@ public class BpmnScaffolderTest {
         System.out.println("TC: dry-run generates plugin executor classes for data pipeline tasks");
         String output = runDryRun("src/test/resources/bpmn/data_pipeline_demo.bpmn");
         assertTrue(output.contains("Tasks: [transform_data, filter_fields, enrich_data]"));
+        assertTrue(output.contains("Data objects: [raw_customer_data, normalized_customer_data, filtered_customer_data, enriched_customer_data"));
+        assertTrue(output.contains("Data stores: [s3_warehouse, neo4j_customer_graph, postgresql_customer_store]"));
         assertTrue(output.contains("TransformDataPluginExecutor"));
         assertTrue(output.contains("FilterFieldsPluginExecutor"));
         assertTrue(output.contains("EnrichDataPluginExecutor"));
@@ -523,6 +525,30 @@ public class BpmnScaffolderTest {
         assertTrue(content.contains("outputPayload"));
         assertTrue(content.contains("mapper.readTree(outputText)"));
         assertTrue(content.contains("outputPayload,"));
+    }
+
+    @Test
+    public void generatedDataPipelineProjectContainsDataAssetMetadata() throws Exception {
+        System.out.println("TC: generated data pipeline project contains data object and store metadata");
+        Path outputDir = Files.createTempDirectory("durga-pipeline-data-test-");
+        runGeneration("src/test/resources/bpmn/data_pipeline_demo.bpmn", outputDir);
+
+        String summary = Files.readString(outputDir.resolve("summary.json"));
+        assertTrue(summary.contains("\"dataObjects\""));
+        assertTrue(summary.contains("\"name\" : \"normalized_customer_data\""));
+        assertTrue(summary.contains("\"schema\" : \"schemas/normalized-customer-data.schema.json\""));
+        assertTrue(summary.contains("\"dataStores\""));
+        assertTrue(summary.contains("\"kind\" : \"s3\""));
+        assertTrue(summary.contains("\"uri\" : \"s3://warehouse/customer/enriched/\""));
+        assertTrue(summary.contains("\"target\" : \"neo4j_customer_graph\""));
+
+        String readme = Files.readString(outputDir.resolve("README.md"));
+        assertTrue(readme.contains("## Data Objects"));
+        assertTrue(readme.contains("normalized_customer_data"));
+        assertTrue(readme.contains("## Data Stores"));
+        assertTrue(readme.contains("s3_warehouse kind=s3"));
+
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/DataHandle.java")));
     }
 
     @Test
@@ -560,6 +586,37 @@ public class BpmnScaffolderTest {
                 sinkContent.contains("order_events_pipeline_normalize_timestamp_output")
                 || sinkContent.contains("order_events_pipeline_mask_customer_email_low_value_output"));
         assertTrue("sink missing connector.class", sinkContent.contains("connector.class"));
+    }
+
+    @Test
+    public void connectGenerationWritesDataStoreConnectorSkeletons() throws Exception {
+        System.out.println("TC: --connect generates connector skeletons for BPMN data stores");
+        Path outputDir = Files.createTempDirectory("durga-data-store-connect-test-");
+        runGenerationWithConnect("src/test/resources/bpmn/data_pipeline_demo.bpmn", outputDir);
+
+        Path s3Sink = outputDir.resolve("connect/data-stores/data_pipeline_demo-s3-warehouse-sink.json");
+        Path neo4jSink = outputDir.resolve("connect/data-stores/data_pipeline_demo-neo4j-customer-graph-sink.json");
+        Path postgresSink = outputDir.resolve("connect/data-stores/data_pipeline_demo-postgresql-customer-store-sink.json");
+
+        assertTrue("S3 data-store connector not created", Files.exists(s3Sink));
+        assertTrue("Neo4j data-store connector not created", Files.exists(neo4jSink));
+        assertTrue("PostgreSQL data-store connector not created", Files.exists(postgresSink));
+
+        String s3Content = Files.readString(s3Sink);
+        assertTrue(s3Content.contains("io.confluent.connect.s3.S3SinkConnector"));
+        assertTrue(s3Content.contains("data_pipeline_demo_enrich_data_output"));
+        assertTrue(s3Content.contains("s3://warehouse/customer/enriched/"));
+
+        String neo4jContent = Files.readString(neo4jSink);
+        assertTrue(neo4jContent.contains("streams.kafka.connect.sink.Neo4jSinkConnector"));
+        assertTrue(neo4jContent.contains("neo4j://customer-graph"));
+
+        String postgresContent = Files.readString(postgresSink);
+        assertTrue(postgresContent.contains("io.confluent.connect.jdbc.JdbcSinkConnector"));
+        assertTrue(postgresContent.contains("jdbc:postgresql://postgres/customers"));
+
+        String script = Files.readString(outputDir.resolve("connect.sh"));
+        assertTrue(script.contains("connect/data-stores/*.json"));
     }
 
     @Test

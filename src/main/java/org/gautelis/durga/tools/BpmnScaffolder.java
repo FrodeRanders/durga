@@ -132,6 +132,11 @@ public class BpmnScaffolder {
         List<String> subProcesses = subProcessSpecs.stream().map(spec -> spec.name).toList();
         List<TaskSpec> taskSpecs = BpmnModelCollector.collectTaskSpecs(model, nodes);
         List<String> tasks = taskSpecs.stream().map(task -> task.name).toList();
+        List<DataObjectSpec> dataObjectSpecs = BpmnModelCollector.collectDataObjectSpecs(model);
+        List<String> dataObjects = dataObjectSpecs.stream().map(spec -> spec.name).toList();
+        List<DataStoreSpec> dataStoreSpecs = BpmnModelCollector.collectDataStoreSpecs(model);
+        List<String> dataStores = dataStoreSpecs.stream().map(spec -> spec.name).toList();
+        List<DataAssociationSpec> dataAssociationSpecs = BpmnModelCollector.collectDataAssociationSpecs(model);
         List<TimerSpec> timerSpecs = BpmnModelCollector.collectTimerSpecs(model, nodes);
         List<String> timers = timerSpecs.stream().map(timer -> timer.name).toList();
         List<BoundaryTimerSpec> boundaryTimerSpecs = BpmnModelCollector.collectBoundaryTimerSpecs(model, nodes);
@@ -455,6 +460,9 @@ public class BpmnScaffolder {
 
         if (parsed.connect) {
             List<String> outputTopics = collectTerminalOutputs(nodes);
+            List<DataStoreConnectSpec> dataStoreConnectSpecs = collectDataStoreConnectSpecs(
+                    processId, dataStoreSpecs, dataAssociationSpecs
+            );
 
             StringBuilder sourceTopics = new StringBuilder();
             sourceTopics.append(processId).append("_start");
@@ -484,10 +492,18 @@ public class BpmnScaffolder {
                 sinkSt.add("sinkTopics", sinkTopics.toString());
                 System.out.println("--- connect-sink.json ---");
                 System.out.println(sinkSt.render());
+
+                for (DataStoreConnectSpec spec : dataStoreConnectSpecs) {
+                    ST dataStoreSt = group.getInstanceOf("dataStoreConnectConfig");
+                    dataStoreSt.add("spec", spec);
+                    System.out.println("--- connect/data-stores/" + spec.name + ".json ---");
+                    System.out.println(dataStoreSt.render());
+                }
             } else {
                 Path connectDir = outputRoot.resolve("connect");
                 try {
                     Files.createDirectories(connectDir);
+                    Files.createDirectories(connectDir.resolve("data-stores"));
                 } catch (IOException e) {
                     throw new IllegalStateException("Failed to create connect directory", e);
                 }
@@ -506,6 +522,14 @@ public class BpmnScaffolder {
                 writeFile(sinkPath, sinkSt.render());
                 generatedFiles.add(outputRoot.relativize(sinkPath).toString());
 
+                for (DataStoreConnectSpec spec : dataStoreConnectSpecs) {
+                    ST dataStoreSt = group.getInstanceOf("dataStoreConnectConfig");
+                    dataStoreSt.add("spec", spec);
+                    Path dataStorePath = connectDir.resolve("data-stores").resolve(spec.name + ".json");
+                    writeFile(dataStorePath, dataStoreSt.render());
+                    generatedFiles.add(outputRoot.relativize(dataStorePath).toString());
+                }
+
                 Path connectScriptPath = outputRoot.resolve("connect.sh");
                 ST scriptSt = group.getInstanceOf("connectScript");
                 scriptSt.add("processId", processId);
@@ -517,7 +541,8 @@ public class BpmnScaffolder {
         List<String> boundaryEvents = combineNames(combineNames(boundaryTimers, boundaryErrors), boundaryEscalations);
         Map<String, Object> summary = GeneratedProjectSupport.buildSummary(
                 processId, tasks, allTimers, messageEvents, messageTopics, signalEvents, signalTopics,
-                boundaryEvents, callActivities, subProcesses, xors, ands, ors, multiInstanceSpecs, generatedFiles
+                boundaryEvents, callActivities, subProcesses, dataObjectSpecs, dataStoreSpecs,
+                dataAssociationSpecs, xors, ands, ors, multiInstanceSpecs, generatedFiles
         );
         String summaryJson = GeneratedProjectSupport.renderSummaryJson(summary);
 
@@ -525,8 +550,9 @@ public class BpmnScaffolder {
             GeneratedProjectSupport.writeSummary(outputRoot, summaryJson);
             GeneratedProjectSupport.writeGeneratedReadme(
                     outputRoot, processId, tasks, allTimers, messageEvents, messageTopics, signalEvents,
-                    signalTopics, boundaryEvents, callActivities, subProcesses, xors, ands, ors,
-                    multiInstanceSpecs, generatedFiles, payloadPreview
+                    signalTopics, boundaryEvents, callActivities, subProcesses, dataObjectSpecs,
+                    dataStoreSpecs, dataAssociationSpecs, xors, ands, ors, multiInstanceSpecs,
+                    generatedFiles, payloadPreview
             );
             GeneratedProjectSupport.copyBpmnModel(outputRoot, parsed.bpmnPath, generatedFiles);
         }
@@ -536,6 +562,8 @@ public class BpmnScaffolder {
         System.out.println("Tasks: " + tasks);
         System.out.println("Call activities: " + callActivities);
         System.out.println("Embedded subprocesses: " + subProcesses);
+        System.out.println("Data objects: " + dataObjects);
+        System.out.println("Data stores: " + dataStores);
         System.out.println("OR gateways: " + ors.stream().map(o -> o.name).toList());
         System.out.println("Multi-instance tasks: " + multiInstanceSpecs.stream().map(m -> m.taskName).toList());
         System.out.println("Event subprocesses: " + eventSubProcessSpecs.stream().map(spec -> spec.name).toList());
@@ -1363,6 +1391,8 @@ public class BpmnScaffolder {
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "ProcessState.java", "processStateClass");
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
+                "DataHandle.java", "dataHandleClass");
+        writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "ProcessStateStore.java", "processStateStoreClass");
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "ScopeCancellationRegistry.java", "scopeCancellationRegistryClass");
@@ -1757,6 +1787,76 @@ public class BpmnScaffolder {
         }
         value = value.substring(0, value.length() - 1);
         return Long.parseLong(value) * multiplier;
+    }
+
+    private static List<DataStoreConnectSpec> collectDataStoreConnectSpecs(
+            String processId,
+            List<DataStoreSpec> dataStores,
+            List<DataAssociationSpec> dataAssociations
+    ) {
+        List<DataStoreConnectSpec> specs = new ArrayList<>();
+        for (DataStoreSpec store : dataStores) {
+            List<String> sourceTopics = new ArrayList<>();
+            List<String> sinkTopics = new ArrayList<>();
+            for (DataAssociationSpec association : dataAssociations) {
+                if (association.taskName == null) {
+                    continue;
+                }
+                if ("input".equals(association.direction) && association.sources.contains(store.name)) {
+                    sourceTopics.add(processId + "_" + association.taskName + "_input");
+                }
+                if ("output".equals(association.direction) && store.name.equals(association.target)) {
+                    sinkTopics.add(processId + "_" + association.taskName + "_output");
+                }
+            }
+            if (!sourceTopics.isEmpty()) {
+                specs.add(dataStoreConnectSpec(processId, store, "source", distinct(sourceTopics)));
+            }
+            if (!sinkTopics.isEmpty()) {
+                specs.add(dataStoreConnectSpec(processId, store, "sink", distinct(sinkTopics)));
+            }
+        }
+        return specs;
+    }
+
+    private static DataStoreConnectSpec dataStoreConnectSpec(
+            String processId,
+            DataStoreSpec store,
+            String mode,
+            List<String> topics
+    ) {
+        String kind = store.kind != null && !store.kind.isBlank() ? store.kind : "unknown";
+        String uri = store.uri != null && !store.uri.isBlank() ? store.uri : "<fill in data store URI>";
+        String connectorName = processId + "-" + store.name.replace('_', '-') + "-" + mode;
+        String topicList = String.join(", ", topics);
+        String connectorClass = connectorClassHint(kind, mode);
+        String comment = ("source".equals(mode)
+                ? "Source connector skeleton for BPMN data store '" + store.name
+                + "'. It should write records to the listed Durga task input topic(s)."
+                : "Sink connector skeleton for BPMN data store '" + store.name
+                + "'. It should read records from the listed Durga task output topic(s).")
+                + " Fill in connector-specific settings, credentials, converters, and transforms.";
+        return new DataStoreConnectSpec(connectorName, store.name, mode, kind, uri, topicList,
+                connectorClass, comment);
+    }
+
+    private static String connectorClassHint(String kind, String mode) {
+        String normalized = kind.toLowerCase(Locale.ROOT);
+        if ("s3".equals(normalized) && "sink".equals(mode)) {
+            return "io.confluent.connect.s3.S3SinkConnector";
+        }
+        if (("postgres".equals(normalized) || "postgresql".equals(normalized) || "jdbc".equals(normalized))
+                && "source".equals(mode)) {
+            return "io.confluent.connect.jdbc.JdbcSourceConnector";
+        }
+        if (("postgres".equals(normalized) || "postgresql".equals(normalized) || "jdbc".equals(normalized))
+                && "sink".equals(mode)) {
+            return "io.confluent.connect.jdbc.JdbcSinkConnector";
+        }
+        if ("neo4j".equals(normalized) && "sink".equals(mode)) {
+            return "streams.kafka.connect.sink.Neo4jSinkConnector";
+        }
+        return "<fill in connector class>";
     }
 
     private static List<String> collectTerminalOutputs(Map<String, NodeInfo> nodes) {

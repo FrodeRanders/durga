@@ -4,12 +4,21 @@ import org.camunda.bpm.model.bpmn.BpmnModelInstance;
 import org.camunda.bpm.model.bpmn.instance.BoundaryEvent;
 import org.camunda.bpm.model.bpmn.instance.BusinessRuleTask;
 import org.camunda.bpm.model.bpmn.instance.CallActivity;
+import org.camunda.bpm.model.bpmn.instance.BaseElement;
+import org.camunda.bpm.model.bpmn.instance.DataAssociation;
+import org.camunda.bpm.model.bpmn.instance.DataInputAssociation;
+import org.camunda.bpm.model.bpmn.instance.DataObject;
+import org.camunda.bpm.model.bpmn.instance.DataObjectReference;
+import org.camunda.bpm.model.bpmn.instance.DataOutputAssociation;
+import org.camunda.bpm.model.bpmn.instance.DataStoreReference;
 import org.camunda.bpm.model.bpmn.instance.EndEvent;
 import org.camunda.bpm.model.bpmn.instance.ErrorEventDefinition;
 import org.camunda.bpm.model.bpmn.instance.EscalationEventDefinition;
 import org.camunda.bpm.model.bpmn.instance.FlowNode;
 import org.camunda.bpm.model.bpmn.instance.IntermediateCatchEvent;
 import org.camunda.bpm.model.bpmn.instance.IntermediateThrowEvent;
+import org.camunda.bpm.model.bpmn.instance.ItemAwareElement;
+import org.camunda.bpm.model.bpmn.instance.ItemDefinition;
 import org.camunda.bpm.model.bpmn.instance.ManualTask;
 import org.camunda.bpm.model.bpmn.instance.MessageEventDefinition;
 import org.camunda.bpm.model.bpmn.instance.MultiInstanceLoopCharacteristics;
@@ -265,6 +274,167 @@ class BpmnModelCollector {
             taskSpecs.put(task.getId(), new TaskSpec(task.getId(), name, kind));
             nodes.put(task.getId(), new NodeInfo(task.getId(), name, NodeType.TASK, kind));
         }
+    }
+
+    // ---- data asset collection ----
+
+    static List<DataObjectSpec> collectDataObjectSpecs(BpmnModelInstance model) {
+        Map<String, DataObjectSpec> specs = new LinkedHashMap<>();
+        List<String> referencedObjectIds = new ArrayList<>();
+        for (DataObjectReference reference : model.getModelElementsByType(DataObjectReference.class)) {
+            if (reference.getDataObject() != null) {
+                referencedObjectIds.add(reference.getDataObject().getId());
+            }
+            String name = normalize(nameOrId(reference.getName(), reference.getId()));
+            DataObject referenced = reference.getDataObject();
+            boolean collection = referenced != null ? referenced.isCollection() : false;
+            specs.put(reference.getId(), dataObjectSpec(reference.getId(), name, reference,
+                    referenced, collection));
+        }
+        for (DataObject dataObject : model.getModelElementsByType(DataObject.class)) {
+            if (referencedObjectIds.contains(dataObject.getId())) {
+                continue;
+            }
+            String name = normalize(nameOrId(dataObject.getName(), dataObject.getId()));
+            specs.put(dataObject.getId(), dataObjectSpec(dataObject.getId(), name, dataObject,
+                    null, dataObject.isCollection()));
+        }
+        return new ArrayList<>(specs.values());
+    }
+
+    static List<DataStoreSpec> collectDataStoreSpecs(BpmnModelInstance model) {
+        List<DataStoreSpec> specs = new ArrayList<>();
+        for (DataStoreReference reference : model.getModelElementsByType(DataStoreReference.class)) {
+            String name = normalize(nameOrId(reference.getName(), reference.getId()));
+            ItemDefinition item = reference.getItemSubject();
+            Map<String, String> props = extensionProperties(reference);
+            specs.add(new DataStoreSpec(
+                    reference.getId(),
+                    name,
+                    item != null ? item.getId() : null,
+                    item != null ? item.getStructureRef() : null,
+                    firstNonBlank(props.get("kind"), props.get("type"), inferStoreKind(props.get("uri"))),
+                    props.get("uri"),
+                    unlimited(reference)
+            ));
+        }
+        return specs;
+    }
+
+    static List<DataAssociationSpec> collectDataAssociationSpecs(BpmnModelInstance model) {
+        List<DataAssociationSpec> specs = new ArrayList<>();
+        for (DataInputAssociation association : model.getModelElementsByType(DataInputAssociation.class)) {
+            specs.add(dataAssociationSpec(association, "input"));
+        }
+        for (DataOutputAssociation association : model.getModelElementsByType(DataOutputAssociation.class)) {
+            specs.add(dataAssociationSpec(association, "output"));
+        }
+        return specs;
+    }
+
+    private static DataObjectSpec dataObjectSpec(
+            String id,
+            String name,
+            ItemAwareElement element,
+            DataObject referenced,
+            boolean collection
+    ) {
+        ItemDefinition item = element.getItemSubject();
+        if (item == null && referenced != null) {
+            item = referenced.getItemSubject();
+        }
+        Map<String, String> props = extensionProperties(element);
+        return new DataObjectSpec(
+                id,
+                name,
+                item != null ? item.getId() : null,
+                item != null ? item.getStructureRef() : null,
+                props.get("mediaType"),
+                firstNonBlank(props.get("schema"), item != null ? item.getStructureRef() : null),
+                collection
+        );
+    }
+
+    private static DataAssociationSpec dataAssociationSpec(DataAssociation association, String direction) {
+        ModelElementInstance parent = association.getParentElement();
+        String taskId = parent instanceof FlowNode flowNode ? flowNode.getId() : null;
+        String taskName = parent instanceof FlowNode flowNode
+                ? normalize(nameOrId(flowNode.getName(), flowNode.getId()))
+                : null;
+        List<String> sources = association.getSources().stream()
+                .map(BpmnModelCollector::itemAwareName)
+                .toList();
+        ItemAwareElement target = association.getTarget();
+        return new DataAssociationSpec(
+                association.getId(),
+                taskId,
+                taskName,
+                direction,
+                sources,
+                target != null ? itemAwareName(target) : null,
+                association.getTransformation() != null
+                        ? association.getTransformation().getTextContent()
+                        : null
+        );
+    }
+
+    private static String itemAwareName(ItemAwareElement element) {
+        if (element instanceof DataObjectReference reference) {
+            return normalize(nameOrId(reference.getName(), reference.getId()));
+        }
+        if (element instanceof DataObject object) {
+            return normalize(nameOrId(object.getName(), object.getId()));
+        }
+        if (element instanceof DataStoreReference reference) {
+            return normalize(nameOrId(reference.getName(), reference.getId()));
+        }
+        if (element instanceof BaseElement base && base.getId() != null) {
+            return normalize(base.getId());
+        }
+        return "unnamed";
+    }
+
+    private static Map<String, String> extensionProperties(ItemAwareElement element) {
+        if (!(element instanceof BaseElement base) || base.getExtensionElements() == null) {
+            return Map.of();
+        }
+        CamundaProperties props = base.getExtensionElements()
+                .getElementsQuery()
+                .filterByType(CamundaProperties.class)
+                .singleResult();
+        if (props == null || props.getCamundaProperties() == null) {
+            return Map.of();
+        }
+        Map<String, String> values = new LinkedHashMap<>();
+        for (CamundaProperty prop : props.getCamundaProperties()) {
+            values.put(prop.getCamundaName(), prop.getCamundaValue());
+        }
+        return values;
+    }
+
+    private static boolean unlimited(DataStoreReference reference) {
+        return reference.getDataStore() != null
+                && Boolean.TRUE.equals(reference.getDataStore().isUnlimited());
+    }
+
+    private static String inferStoreKind(String uri) {
+        if (uri == null || uri.isBlank()) {
+            return null;
+        }
+        int idx = uri.indexOf(':');
+        return idx > 0 ? uri.substring(0, idx).toLowerCase(Locale.ROOT) : null;
+    }
+
+    private static String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        return second != null && !second.isBlank() ? second : null;
+    }
+
+    private static String firstNonBlank(String first, String second, String third) {
+        String value = firstNonBlank(first, second);
+        return value != null ? value : firstNonBlank(third, null);
     }
 
     // ---- timer collection ----

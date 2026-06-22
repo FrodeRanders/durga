@@ -37,7 +37,7 @@ tests.
 Four dedicated tests verify:
 \begin{itemize}
 \item the plugin-annotated pipeline (\filepath{data\_pipeline\_demo.bpmn})
-  generates correct plugin executor classes,
+  generates correct plugin executor classes and data-asset metadata,
 \item the order events pipeline (\filepath{order\_events\_pipeline.bpmn})
   generates workers for 8 plugin types and an XOR gateway with
   runtime-evaluated conditions,
@@ -50,9 +50,11 @@ Four dedicated tests verify:
 
 \subsection{Connect verification}
 
-Two tests verify that \texttt{--connect} generates source and sink
-connector configs with correct topic lists for both dry-run and full
-generation modes.
+Connect tests verify that \texttt{--connect} generates generic source and sink
+connector configs with correct topic lists for both dry-run and full generation
+modes. A dedicated data-store test verifies that BPMN data stores generate
+per-store connector skeletons under \filepath{connect/data-stores/}, including
+S3, Neo4j and PostgreSQL sink examples.
 
 \subsection{Model enricher verification}
 

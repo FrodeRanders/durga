@@ -1,0 +1,82 @@
+\section{Data Assets}
+\label{sec:DataAssets}
+
+Durga treats BPMN data objects as logical pipeline assets, not as Kafka
+topics. Sequence flows still drive execution and Kafka still carries process
+events, worker input/output messages, BPMN messages and BPMN signals. Data
+objects describe the business artifacts that tasks read and write.
+
+\subsection{Model}
+
+A BPMN data object represents a named dataset or artifact, for example
+\texttt{RawCustomerData}, \texttt{NormalizedCustomerData}, or
+\texttt{CustomerGraphDelta}. A BPMN data store represents a physical source or
+target such as S3, PostgreSQL, Neo4j, a local file store, or an API.
+
+Data input and output associations connect executable activities to those
+assets:
+
+\begin{verbatim}
+Transform Data
+  input:  RawCustomerData
+  output: NormalizedCustomerData
+
+Enrich Data
+  input:  FilteredCustomerData
+  output: EnrichedCustomerData
+  stores: S3Warehouse, Neo4jCustomerGraph, PostgresCustomerStore
+\end{verbatim}
+
+The scaffolder collects these declarations into \filepath{summary.json} and
+the generated README. The declarations are metadata and contracts; they do not
+change routing by themselves.
+
+\subsection{Runtime handles}
+
+Large datasets should normally travel by reference rather than as Kafka message
+payload bytes. The generated runtime includes \texttt{DataHandle}:
+
+\begin{verbatim}
+DataHandle(
+    name,
+    uri,
+    mediaType,
+    schema,
+    metadata)
+\end{verbatim}
+
+A process event payload can carry a serialized data handle such as an S3 URI,
+media type, schema identifier, row count, checksum, or partition metadata. This
+keeps lifecycle events small while preserving enough information for monitoring
+and lineage.
+
+\subsection{Extension properties}
+
+Data objects and data stores may use Camunda extension properties for Durga
+metadata:
+
+\begin{verbatim}
+schema    = schemas/enriched-customer-data.schema.json
+mediaType = application/json
+kind      = s3
+uri       = s3://warehouse/customer/enriched/
+\end{verbatim}
+
+For data stores, \texttt{kind} identifies the adapter family. Current examples
+include \texttt{s3}, \texttt{postgresql}, and \texttt{neo4j}. If \texttt{kind}
+is omitted, later tooling may infer it from the URI scheme.
+
+\subsection{Lineage direction}
+
+The immediate implementation records data objects, data stores, and task
+associations in generated metadata. The next runtime step is to promote this
+metadata into lineage events, so task completions can report:
+
+\begin{verbatim}
+read:   [RawCustomerData]
+wrote:  [EnrichedCustomerData]
+stores: [S3Warehouse, Neo4jCustomerGraph]
+\end{verbatim}
+
+This keeps the process engine focused on orchestration while giving pipeline
+operators the data-plane visibility needed for real workloads.

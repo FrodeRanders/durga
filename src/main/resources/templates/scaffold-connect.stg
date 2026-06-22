@@ -22,42 +22,47 @@ connectSinkConfig(processId, sinkTopics) ::= <<
 }
 >>
 
+dataStoreConnectConfig(spec) ::= <<
+{
+  "name": "%spec.name%",
+  "config": {
+    "connector.class": "%spec.connectorClass%",
+    "tasks.max": "1",
+    "topics": "%spec.topics%",
+    "durga.data.store": "%spec.storeName%",
+    "durga.data.store.kind": "%spec.kind%",
+    "durga.data.store.uri": "%spec.uri%"
+  },
+  "_comment": "%spec.comment%"
+}
+>>
+
 connectScript(processId) ::= <<
 #!/usr/bin/env bash
 set -euo pipefail
 CONNECT_URL=${CONNECT_URL:-http://localhost:8083}
 
-echo "===> Posting source connector for %processId%"
-HTTP_CODE=$(curl -s -o /dev/null -w "\%{http_code}" -X POST \
-  -H "Content-Type: application/json" \
-  -d @connect/connect-source.json \
-  "${CONNECT_URL}/connectors" || true)
-if [ "$HTTP_CODE" = "201" ]; then
-  echo "  Created"
-elif [ "$HTTP_CODE" = "409" ]; then
-  echo "  Already exists (HTTP 409)"
-else
-  echo "  Unexpected response: HTTP ${HTTP_CODE}"
-fi
+shopt -s nullglob
 
-echo "===> Posting sink connector for %processId%"
-HTTP_CODE=$(curl -s -o /dev/null -w "\%{http_code}" -X POST \
-  -H "Content-Type: application/json" \
-  -d @connect/connect-sink.json \
-  "${CONNECT_URL}/connectors" || true)
-if [ "$HTTP_CODE" = "201" ]; then
-  echo "  Created"
-elif [ "$HTTP_CODE" = "409" ]; then
-  echo "  Already exists (HTTP 409)"
-else
-  echo "  Unexpected response: HTTP ${HTTP_CODE}"
-fi
+for config in connect/*.json connect/data-stores/*.json; do
+  name=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["name"])' "$config")
+  echo "===> Posting connector ${name} from ${config}"
+  HTTP_CODE=$(curl -s -o /dev/null -w "\%{http_code}" -X POST \
+    -H "Content-Type: application/json" \
+    -d @"$config" \
+    "${CONNECT_URL}/connectors" || true)
+  if [ "$HTTP_CODE" = "201" ]; then
+    echo "  Created"
+  elif [ "$HTTP_CODE" = "409" ]; then
+    echo "  Already exists (HTTP 409)"
+  else
+    echo "  Unexpected response: HTTP ${HTTP_CODE}"
+  fi
 
-echo "===> Source connector status"
-curl -s "${CONNECT_URL}/connectors/%processId%-source/status" | python3 -m json.tool 2>/dev/null || true
-echo ""
-echo "===> Sink connector status"
-curl -s "${CONNECT_URL}/connectors/%processId%-sink/status" | python3 -m json.tool 2>/dev/null || true
+  echo "===> Connector status: ${name}"
+  curl -s "${CONNECT_URL}/connectors/${name}/status" | python3 -m json.tool 2>/dev/null || true
+  echo ""
+done
 >>
 
 kedaScalers(processId, tasks) ::= <<

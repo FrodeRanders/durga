@@ -88,4 +88,4 @@ Message and signal event subprocesses consume from dedicated external topics. Ti
 
 \subsection{Current execution boundary}
 
-The current execution boundary is broad enough for local process experimentation, but it is not full BPMN coverage. Inclusive gateways, complex gateways, BPMN-native data objects, and more advanced scope semantics are still out of scope. That boundary should be treated as a deliberate implementation limit, not as an accidental omission.
+The current execution boundary is broad enough for local process experimentation, but it is not full BPMN coverage. Complex gateways and more advanced scope semantics are still out of scope. BPMN data objects and data stores are collected as pipeline metadata and connector scaffolding inputs, but they are not executable flow nodes. That boundary should be treated as a deliberate implementation limit, not as an accidental omission.

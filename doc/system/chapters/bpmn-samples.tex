@@ -81,7 +81,7 @@ Embedded event subprocess with error start. Demonstrates start-on-failure semant
 Embedded event subprocess with escalation start. Demonstrates start-on-escalation semantics within a subprocess scope. \\
 \hline
 \filepath{data_pipeline_demo.bpmn} &
-Minimal data pipeline with three plugin-annotated tasks: JSON Transform, Field Filter, and KV Enricher. The simplest plugin catalog example. \\
+Minimal data pipeline with three plugin-annotated tasks, BPMN data objects, and S3/Neo4j/PostgreSQL data stores. Demonstrates plugin execution plus data-asset metadata and data-store connector skeleton generation. \\
 \hline
 \filepath{order_events_pipeline.bpmn} &
 Realistic order event pipeline with 8 plugin tasks (transform, coerce, filter, enrich, validate, UUID-inject, timestamp-normalize, mask) and an XOR gateway routing by amount using runtime-evaluated conditions. Designed to be used with \texttt{--connect} for source/sink generation. \\

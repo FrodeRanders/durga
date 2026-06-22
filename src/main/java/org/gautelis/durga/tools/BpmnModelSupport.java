@@ -256,6 +256,134 @@ final class BoundaryEscalationSpec {
 }
 
 /**
+ * Logical dataset or artifact declared in BPMN. Data objects are not executable nodes and do not
+ * become Kafka topics; they describe business data read or written by tasks.
+ */
+final class DataObjectSpec {
+    final String id;
+    final String name;
+    final String itemSubjectRef;
+    final String structureRef;
+    final String mediaType;
+    final String schema;
+    final boolean collection;
+
+    DataObjectSpec(
+            String id,
+            String name,
+            String itemSubjectRef,
+            String structureRef,
+            String mediaType,
+            String schema,
+            boolean collection
+    ) {
+        this.id = id;
+        this.name = name;
+        this.itemSubjectRef = itemSubjectRef;
+        this.structureRef = structureRef;
+        this.mediaType = mediaType;
+        this.schema = schema;
+        this.collection = collection;
+    }
+}
+
+/**
+ * Physical source or target for data assets, for example S3, PostgreSQL, Neo4j, or local files.
+ */
+final class DataStoreSpec {
+    final String id;
+    final String name;
+    final String itemSubjectRef;
+    final String structureRef;
+    final String kind;
+    final String uri;
+    final boolean unlimited;
+
+    DataStoreSpec(
+            String id,
+            String name,
+            String itemSubjectRef,
+            String structureRef,
+            String kind,
+            String uri,
+            boolean unlimited
+    ) {
+        this.id = id;
+        this.name = name;
+        this.itemSubjectRef = itemSubjectRef;
+        this.structureRef = structureRef;
+        this.kind = kind;
+        this.uri = uri;
+        this.unlimited = unlimited;
+    }
+}
+
+/**
+ * Task-level read/write association between an executable activity and logical data assets/stores.
+ */
+final class DataAssociationSpec {
+    final String id;
+    final String taskId;
+    final String taskName;
+    final String direction;
+    final List<String> sources;
+    final String target;
+    final String transformation;
+
+    DataAssociationSpec(
+            String id,
+            String taskId,
+            String taskName,
+            String direction,
+            List<String> sources,
+            String target,
+            String transformation
+    ) {
+        this.id = id;
+        this.taskId = taskId;
+        this.taskName = taskName;
+        this.direction = direction;
+        this.sources = sources;
+        this.target = target;
+        this.transformation = transformation;
+    }
+}
+
+/**
+ * Generated Kafka Connect skeleton for a BPMN data store edge.
+ */
+final class DataStoreConnectSpec {
+    public final String name;
+    public final String storeName;
+    public final String mode;
+    public final String kind;
+    public final String uri;
+    public final String topics;
+    public final String connectorClass;
+    public final String comment;
+
+    DataStoreConnectSpec(
+            String name,
+            String storeName,
+            String mode,
+            String kind,
+            String uri,
+            String topics,
+            String connectorClass,
+            String comment
+    ) {
+        this.name = name;
+        this.storeName = storeName;
+        this.mode = mode;
+        this.kind = kind;
+        this.uri = uri;
+        this.topics = topics;
+        this.connectorClass = connectorClass;
+        this.comment = comment;
+    }
+}
+
+/**
  * Internal descriptor for intermediate message catch events.
  */
 final class MessageCatchSpec {

@@ -2063,6 +2063,24 @@ public record ProcessState(
 }
 >>
 
+dataHandleClass() ::= <<
+package org.gautelis.durga;
+
+import java.util.Map;
+
+public record DataHandle(
+        String name,
+        String uri,
+        String mediaType,
+        String schema,
+        Map<String, Object> metadata
+) {
+    public DataHandle {
+        metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
+    }
+}
+>>
+
 processStateStoreClass() ::= <<
 package org.gautelis.durga;
 

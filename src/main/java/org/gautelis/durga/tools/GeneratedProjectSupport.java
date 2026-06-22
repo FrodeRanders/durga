@@ -187,6 +187,9 @@ final class GeneratedProjectSupport {
             List<String> boundaryEvents,
             List<String> callActivities,
             List<String> subProcesses,
+            List<DataObjectSpec> dataObjects,
+            List<DataStoreSpec> dataStores,
+            List<DataAssociationSpec> dataAssociations,
             List<NodeInfo> xors,
             List<NodeInfo> ands,
             List<NodeInfo> ors,
@@ -204,6 +207,9 @@ final class GeneratedProjectSupport {
         summary.put("boundaryEvents", boundaryEvents);
         summary.put("callActivities", callActivities);
         summary.put("subProcesses", subProcesses);
+        summary.put("dataObjects", dataObjects.stream().map(GeneratedProjectSupport::dataObjectSummary).toList());
+        summary.put("dataStores", dataStores.stream().map(GeneratedProjectSupport::dataStoreSummary).toList());
+        summary.put("dataAssociations", dataAssociations.stream().map(GeneratedProjectSupport::dataAssociationSummary).toList());
         summary.put("xorGateways", xors.stream().map(info -> info.name).toList());
         summary.put("orGateways", ors.stream().map(info -> info.name).toList());
         summary.put("andGateways", ands.stream().map(info -> info.name).toList());
@@ -278,6 +284,9 @@ final class GeneratedProjectSupport {
             List<String> boundaryEvents,
             List<String> callActivities,
             List<String> subProcesses,
+            List<DataObjectSpec> dataObjects,
+            List<DataStoreSpec> dataStores,
+            List<DataAssociationSpec> dataAssociations,
             List<NodeInfo> xors,
             List<NodeInfo> ands,
             List<NodeInfo> ors,
@@ -335,6 +344,45 @@ final class GeneratedProjectSupport {
             builder.append("\n## Embedded Subprocesses\n");
             for (String subProcess : subProcesses) {
                 builder.append("- ").append(subProcess).append(" (generated with explicit subprocess scope handlers)\n");
+            }
+        }
+        if (!dataObjects.isEmpty()) {
+            builder.append("\n## Data Objects\n");
+            for (DataObjectSpec dataObject : dataObjects) {
+                builder.append("- ").append(dataObject.name);
+                if (dataObject.schema != null) {
+                    builder.append(" schema=").append(dataObject.schema);
+                }
+                if (dataObject.mediaType != null) {
+                    builder.append(" mediaType=").append(dataObject.mediaType);
+                }
+                if (dataObject.collection) {
+                    builder.append(" collection=true");
+                }
+                builder.append("\n");
+            }
+        }
+        if (!dataStores.isEmpty()) {
+            builder.append("\n## Data Stores\n");
+            for (DataStoreSpec dataStore : dataStores) {
+                builder.append("- ").append(dataStore.name);
+                if (dataStore.kind != null) {
+                    builder.append(" kind=").append(dataStore.kind);
+                }
+                if (dataStore.uri != null) {
+                    builder.append(" uri=").append(dataStore.uri);
+                }
+                builder.append("\n");
+            }
+        }
+        if (!dataAssociations.isEmpty()) {
+            builder.append("\n## Data Associations\n");
+            for (DataAssociationSpec association : dataAssociations) {
+                builder.append("- ").append(association.taskName)
+                        .append(" ").append(association.direction)
+                        .append(" sources=").append(association.sources)
+                        .append(" target=").append(association.target)
+                        .append("\n");
             }
         }
         builder.append("\n## Gateways\n");
@@ -423,12 +471,56 @@ final class GeneratedProjectSupport {
         builder.append("- XOR/OR gateway conditions from BPMN conditionExpression are evaluated at runtime.\n");
         builder.append("- Embedded subprocesses generate explicit scope entry/completion handlers.\n");
         builder.append("- Call activities use request/reply topics and generated completion helpers.\n");
+        builder.append("- BPMN data objects are modeled as logical data assets, not Kafka topics.\n");
+        builder.append("- BPMN data stores describe physical source/sink targets for plugins and connectors.\n");
         builder.append("- `application.yml` was merged with new channels; formatting/comments may change.\n");
         try {
             Files.createDirectories(readmePath.getParent());
             Files.writeString(readmePath, builder.toString(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to write generated README", e);
+        }
+    }
+
+    private static Map<String, Object> dataObjectSummary(DataObjectSpec spec) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", spec.id);
+        map.put("name", spec.name);
+        putIfNotNull(map, "itemSubjectRef", spec.itemSubjectRef);
+        putIfNotNull(map, "structureRef", spec.structureRef);
+        putIfNotNull(map, "mediaType", spec.mediaType);
+        putIfNotNull(map, "schema", spec.schema);
+        map.put("collection", spec.collection);
+        return map;
+    }
+
+    private static Map<String, Object> dataStoreSummary(DataStoreSpec spec) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", spec.id);
+        map.put("name", spec.name);
+        putIfNotNull(map, "itemSubjectRef", spec.itemSubjectRef);
+        putIfNotNull(map, "structureRef", spec.structureRef);
+        putIfNotNull(map, "kind", spec.kind);
+        putIfNotNull(map, "uri", spec.uri);
+        map.put("unlimited", spec.unlimited);
+        return map;
+    }
+
+    private static Map<String, Object> dataAssociationSummary(DataAssociationSpec spec) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", spec.id);
+        putIfNotNull(map, "taskId", spec.taskId);
+        putIfNotNull(map, "taskName", spec.taskName);
+        map.put("direction", spec.direction);
+        map.put("sources", spec.sources);
+        putIfNotNull(map, "target", spec.target);
+        putIfNotNull(map, "transformation", spec.transformation);
+        return map;
+    }
+
+    private static void putIfNotNull(Map<String, Object> map, String key, Object value) {
+        if (value != null) {
+            map.put(key, value);
         }
     }
 
