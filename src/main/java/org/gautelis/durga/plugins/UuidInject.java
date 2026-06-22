@@ -4,11 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.uuid.Generators;
 
 import java.util.Arrays;
 import java.security.SecureRandom;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -22,8 +22,8 @@ import java.util.stream.Collectors;
  * <p>Parameters:
  * <ul>
  *   <li>{@code fields} — comma-separated field paths (dot-notation for nested)</li>
- *   <li>{@code strategy} — {@code uuid4} (default), {@code uuid1} (time-based v1),
- *       {@code random} (alias for uuid4)</li>
+ *   <li>{@code strategy} — {@code uuid7} (default), {@code uuid1} (time-based v1),
+ *       {@code random} (alias for uuid7)</li>
  * </ul>
  */
 public final class UuidInject implements Plugin {
@@ -33,7 +33,7 @@ public final class UuidInject implements Plugin {
     @Override
     public String execute(String payload, String config) throws Exception {
         String fieldsList = "id";
-        String strategy = "uuid4";
+        String strategy = "uuid7";
         if (config != null && !config.isBlank()) {
             String[] parts = config.split(";");
             for (String part : parts) {
@@ -100,7 +100,9 @@ public final class UuidInject implements Plugin {
                         (int) clockSeq,
                         node);
             }
-            default -> UUID.randomUUID().toString();
+            case "uuid4" -> Generators.randomBasedGenerator().generate().toString();
+            //case "uuid7" -> Generators.timeBasedEpochGenerator().generate().toString();
+            default -> Generators.timeBasedEpochGenerator().generate().toString(); // UUIDv7
         };
     }
 }
