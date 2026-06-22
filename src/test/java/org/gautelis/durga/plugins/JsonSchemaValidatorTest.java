@@ -16,6 +16,24 @@ public class JsonSchemaValidatorTest {
         assertEquals("{\"name\":\"Alice\"}", Plugin.toString(result));
     }
 
+    @Test
+    public void shouldPassCompactRequiredConfigViaPluginInterface() throws Exception {
+        System.out.println("TC: execute accepts compact required field config used by BPMN fixtures");
+        String config = "required=order_id,amount,customer.email";
+        byte[] result = validator.execute(
+                Plugin.toBytes("{\"order_id\":7,\"amount\":12.5,\"customer\":{\"email\":\"a@b.com\"}}"),
+                config);
+        assertEquals(
+                "{\"order_id\":7,\"amount\":12.5,\"customer\":{\"email\":\"a@b.com\"}}",
+                Plugin.toString(result));
+    }
+
+    @Test(expected = JsonSchemaValidator.ValidationException.class)
+    public void shouldFailCompactRequiredConfigViaPluginInterface() throws Exception {
+        System.out.println("TC: execute rejects payload missing compact required field");
+        validator.execute(Plugin.toBytes("{\"order_id\":7}"), "required=order_id,amount");
+    }
+
     @Test(expected = JsonSchemaValidator.ValidationException.class)
     public void shouldFailMissingRequired() throws Exception {
         System.out.println("TC: throws ValidationException when required field is missing");
@@ -105,6 +123,13 @@ public class JsonSchemaValidatorTest {
         System.out.println("TC: accepts string matching regex pattern for email format");
         String config = "{\"type\":\"object\",\"properties\":{\"email\":{\"type\":\"string\",\"pattern\":\".+@.+\\\\..+\"}}}";
         validator.execute(Plugin.toBytes("{\"email\":\"a@b.com\"}"), config);
+    }
+
+    @Test(expected = JsonSchemaValidator.ValidationException.class)
+    public void shouldRejectUnsafeRegexPattern() throws Exception {
+        System.out.println("TC: rejects unsafe regex patterns in schema validation");
+        String config = "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\",\"pattern\":\"(a+)+$\"}}}";
+        validator.execute(Plugin.toBytes("{\"value\":\"aaaa\"}"), config);
     }
 
     @Test

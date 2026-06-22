@@ -108,10 +108,10 @@
       <bpmn:incoming>Flow_normalize_to_high_end</bpmn:incoming>
     </bpmn:endEvent>
 
-    <bpmn:serviceTask id="mask_pii_low_value" name="Mask PII (Low Value)">
+    <bpmn:serviceTask id="mask_customer_email_low_value" name="Mask Customer Email (Low Value)">
       <bpmn:extensionElements>
         <camunda:properties>
-          <camunda:property name="plugin" value="pii-mask" />
+          <camunda:property name="plugin" value="mask" />
           <camunda:property name="pluginConfig" value="fields=customer_email;mask=*;preserve=2" />
         </camunda:properties>
       </bpmn:extensionElements>
@@ -130,14 +130,14 @@
     <bpmn:sequenceFlow id="Flow_high_value" sourceRef="route_by_amount" targetRef="enrich_high_value">
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount > 1000}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
-    <bpmn:sequenceFlow id="Flow_low_value" sourceRef="route_by_amount" targetRef="mask_pii_low_value">
+    <bpmn:sequenceFlow id="Flow_low_value" sourceRef="route_by_amount" targetRef="mask_customer_email_low_value">
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &lt;= 1000}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_high_enrich_to_validate" sourceRef="enrich_high_value" targetRef="validate_high_value" />
     <bpmn:sequenceFlow id="Flow_high_validate_to_inject" sourceRef="validate_high_value" targetRef="inject_trace_id" />
     <bpmn:sequenceFlow id="Flow_inject_to_normalize_ts" sourceRef="inject_trace_id" targetRef="normalize_timestamp" />
     <bpmn:sequenceFlow id="Flow_normalize_to_high_end" sourceRef="normalize_timestamp" targetRef="EndEvent_High" />
-    <bpmn:sequenceFlow id="Flow_mask_to_low_end" sourceRef="mask_pii_low_value" targetRef="EndEvent_Low" />
+    <bpmn:sequenceFlow id="Flow_mask_to_low_end" sourceRef="mask_customer_email_low_value" targetRef="EndEvent_Low" />
 
   </bpmn:process>
 

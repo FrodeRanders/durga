@@ -84,6 +84,17 @@ public class TimestampNormalizeTest {
         assertTrue(result.contains("\"ts\":\"garbage\""));
     }
 
+    @Test
+    public void shouldExecuteViaPluginInterface() throws Exception {
+        System.out.println("TC: execute parses fields, from and to config");
+        Plugin plugin = new TimestampNormalize();
+        byte[] result = plugin.execute(
+                Plugin.toBytes("{\"timestamp\":1700000000000}"),
+                "fields=timestamp;from=epoch_ms;to=ISO8601");
+        JsonNode node = mapper.readTree(Plugin.toString(result));
+        assertEquals("2023-11-14T22:13:20Z", node.get("timestamp").asText());
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidJson() {
         System.out.println("TC: throws on malformed input JSON");

@@ -24,7 +24,7 @@ public final class TypeCoercion implements Plugin {
         return coerce(payload, config);
     }
 
-    private TypeCoercion() {
+    public TypeCoercion() {
     }
 
     public static String coerce(String json, String expression) {

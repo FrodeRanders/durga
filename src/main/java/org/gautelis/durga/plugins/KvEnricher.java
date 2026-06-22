@@ -26,10 +26,14 @@ public final class KvEnricher implements Plugin {
         String keyField = "_id";
         java.util.Map<String, String> inline = new java.util.LinkedHashMap<>();
         if (config != null && !config.isBlank()) {
-            int eq = config.indexOf('=');
-            if (eq > 0) {
-                String key = config.substring(0, eq).trim();
-                String val = config.substring(eq + 1).trim();
+            String[] parts = config.split(";");
+            for (String part : parts) {
+                int eq = part.indexOf('=');
+                if (eq <= 0) {
+                    continue;
+                }
+                String key = part.substring(0, eq).trim();
+                String val = part.substring(eq + 1).trim();
                 switch (key) {
                     case "keyField" -> keyField = val;
                     case "inline" -> {
@@ -53,6 +57,10 @@ public final class KvEnricher implements Plugin {
 
     private final String keyField;
     private final Map<String, String> inlineData;
+
+    public KvEnricher() {
+        this("_id", Map.of());
+    }
 
     public KvEnricher(String keyField, Map<String, String> inlineData) {
         this.keyField = keyField;
@@ -91,7 +99,7 @@ public final class KvEnricher implements Plugin {
         try {
             enrichment = mapper.readTree(enrichmentJson);
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("Invalid enrichment JSON for key '" + key + "'", e);
+            throw new IllegalArgumentException("Invalid enrichment JSON for matching key", e);
         }
 
         return PipelinePlugin.shallowMerge(input, enrichment).toString();

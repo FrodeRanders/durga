@@ -53,6 +53,16 @@ public class KvEnricherTest {
         assertEquals(data, enricher.inlineData());
     }
 
+    @Test
+    public void shouldExecuteViaPluginInterface() throws Exception {
+        System.out.println("TC: execute parses keyField and inline enrichment config");
+        Plugin plugin = new KvEnricher();
+        byte[] result = plugin.execute(
+                Plugin.toBytes("{\"id\":\"001\",\"amount\":100}"),
+                "keyField=id;inline={001:{\"name\":\"Alice\"}}");
+        assertEquals("{\"id\":\"001\",\"amount\":100,\"name\":\"Alice\"}", Plugin.toString(result));
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidInputJson() {
         System.out.println("TC: throws IllegalArgumentException when input payload is invalid JSON");

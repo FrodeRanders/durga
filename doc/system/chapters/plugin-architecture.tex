@@ -58,6 +58,10 @@ directly. Only one of the two needs to be overridden.
 Generated executor classes instantiate the plugin at field level and call
 \texttt{plugin.execute(payload, config)} for each message. The config string
 comes from the BPMN \texttt{camunda:pluginConfig} property.
+The returned bytes are decoded as UTF-8. JSON object results replace the
+\texttt{ProcessEvent.payload}. JSON scalar, JSON array, and non-JSON text results
+are wrapped as \texttt{\{ "\_value": ... \}}. A \texttt{null} result means the
+incoming payload is forwarded unchanged.
 
 \subsection{Plugin catalog}
 
@@ -71,7 +75,7 @@ fully supported; experimental plugins generate with a warning.
 \item[Field Filter] Whitelist/blacklist field filtering with optional flatten.
 \item[Type Coercion] Coerces field values between string, int, long, double, decimal, and boolean.
 \item[String Template] Renders a template string with \texttt{\$\{field\}} substitution. Dot-notation access for nested fields.
-\item[PII Mask] Masks sensitive text fields with configurable mask character and boundary character preservation.
+\item[Mask] Masks explicitly configured text fields with configurable mask character and boundary character preservation.
 \item[Regex Extract] Extracts named capture groups from a source field into the payload. Supports multiple matches.
 \item[JSON Flatten] Flattens nested JSON to dot-notation keys, or unflattens dot-notation back to nested objects. Configurable separator and max depth.
 \item[UUID Inject] Injects UUIDs (v4 or time-based v1) into specified payload fields.

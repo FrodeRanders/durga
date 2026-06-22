@@ -83,7 +83,7 @@ plugins/
 │   ├── field-filter.yml
 │   ├── type-coercer.yml
 │   ├── string-template.yml
-│   ├── pii-mask.yml
+│   ├── mask.yml
 │   ├── regex-extract.yml
 │   ├── json-flatten.yml
 │   ├── uuid-inject.yml
@@ -229,13 +229,17 @@ public class TransformDataPluginExecutor {
     public CompletionStage<Void> handle(Message<String> msg) {
         // Extract business payload from ProcessEvent, pass as bytes
         byte[] output = plugin.execute(payload.getBytes(StandardCharsets.UTF_8), "%config%");
-        // emit ACTIVITY_COMPLETED, route output, handle DLQ
+        // parse output into ProcessEvent payload, emit ACTIVITY_COMPLETED, handle DLQ
     }
 }
 ```
 
 The implementation class and config string are resolved from the plugin
 descriptor at scaffold time. No per-plugin code paths are needed in the template.
+Plugin output is interpreted as UTF-8. If it is a JSON object, its fields become
+the next `ProcessEvent.payload`. If it is a JSON scalar, array, or non-JSON text,
+the generated worker wraps it as `{ "_value": ... }`. A `null` plugin result keeps
+the incoming payload unchanged.
 
 ---
 
@@ -252,7 +256,7 @@ except where noted.
 | `field-filter` | `keep=name,email;drop=ssn` | Whitelist or blacklist field filtering. If both specified, `keep` wins. Supports optional `flatten=prefix` for hoisting nested fields. |
 | `type-coercer` | `amount:double, age:int, flag:boolean` | Coerces field values to string, int, long, double, decimal, or boolean. Boolean coercion accepts `true`/`false`/`1`/`0`/`yes`/`no`. |
 | `string-template` | `template=Order ${id} for ${customer.name}` | Renders a template string with `${field}` substitution. Dot-notation access for nested fields. Missing fields become empty string. |
-| `pii-mask` | `fields=ssn,email;mask=*;preserve=3` | Masks sensitive text fields. Configurable mask character and boundary character count to preserve. Supports nested fields via dot-notation. |
+| `mask` | `fields=ssn,email;mask=*;preserve=3` | Masks explicitly configured text fields. Configurable mask character and boundary character count to preserve. Supports nested fields via dot-notation. |
 | `regex-extract` | `source=log;pattern=(?<ip>...);target=parsed` | Extracts named capture groups from a source field into the payload. Optional target path for storage. Supports `all=true` for multiple matches. |
 | `json-flatten` | `direction=flatten;separator=.;maxDepth=3` | Flattens nested JSON to dot-notation keys or unflattens dot-notation back to nested objects. Configurable separator and max depth. |
 | `uuid-inject` | `fields=id,correlation_id;strategy=uuid4` | Injects UUIDs into fields. `uuid4` for random, `uuid1` for time-based. Creates intermediate objects for nested paths. |

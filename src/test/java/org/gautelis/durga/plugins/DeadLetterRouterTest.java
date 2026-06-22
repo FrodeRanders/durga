@@ -56,4 +56,14 @@ public class DeadLetterRouterTest {
         DeadLetterRouter router = new DeadLetterRouter("event.type", Map.of("click", "clicks_topic"), "other");
         assertEquals("clicks_topic", router.route("{\"event\":{\"type\":\"click\"}}"));
     }
+
+    @Test
+    public void shouldExecuteViaPluginInterface() throws Exception {
+        System.out.println("TC: execute parses field, routes and default route config");
+        Plugin plugin = new DeadLetterRouter();
+        byte[] result = plugin.execute(
+                Plugin.toBytes("{\"status\":\"error\"}"),
+                "field=status routes={ok:success,error:failure} default=other");
+        assertEquals("failure", Plugin.toString(result));
+    }
 }

@@ -1893,7 +1893,25 @@ package org.gautelis.durga.plugins;
 
 public abstract class PipelinePlugin implements Plugin {
     public static String errorRecord(String payload, String plugin, String error) {
-        return "plugin=" + plugin + ";error=" + error + ";payload=" + payload;
+        int bytes = payload != null ? payload.getBytes(java.nio.charset.StandardCharsets.UTF_8).length : 0;
+        String digest = "";
+        if (payload != null) {
+            try {
+                java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+                digest = java.util.HexFormat.of().formatHex(
+                        md.digest(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            } catch (java.security.NoSuchAlgorithmException e) {
+                digest = "sha256-unavailable";
+            }
+        }
+        return "plugin=" + plugin + ";error=" + sanitizeErrorMessage(error) + ";payloadBytes=" + bytes + ";payloadSha256=" + digest;
+    }
+
+    public static String sanitizeErrorMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "Plugin execution failed";
+        }
+        return message.length() <= 512 ? message : message.substring(0, 512);
     }
 }
 >>

@@ -53,7 +53,7 @@ public final class RegexExtract implements Plugin {
         return extract(payload, source, pattern, target, all);
     }
 
-    private RegexExtract() {
+    public RegexExtract() {
     }
 
     public static String extract(String json, String sourceField, String regex, String targetPath, boolean findAll) {
@@ -76,8 +76,8 @@ public final class RegexExtract implements Plugin {
             return json;
         }
 
-        String text = sourceNode.asText();
-        Pattern compiled = Pattern.compile(regex, findAll ? 0 : 0);
+        String text = PipelinePlugin.requireBoundedRegexInput(sourceNode.asText());
+        Pattern compiled = PipelinePlugin.compileSafeRegex(regex);
 
         ObjectNode output = input.deepCopy();
         Matcher matcher = compiled.matcher(text);

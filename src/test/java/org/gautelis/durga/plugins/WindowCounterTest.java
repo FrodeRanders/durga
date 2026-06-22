@@ -99,4 +99,11 @@ public class WindowCounterTest {
         assertTrue(flushed.contains("\"totalCount\":1"));
         assertTrue(flushed.contains("\"click\":1"));
     }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldRejectNonPositiveWindowConfig() throws Exception {
+        System.out.println("TC: rejects zero-length aggregation windows");
+        WindowCounter counter = new WindowCounter();
+        counter.execute(Plugin.toBytes("{}"), "window=0");
+    }
 }

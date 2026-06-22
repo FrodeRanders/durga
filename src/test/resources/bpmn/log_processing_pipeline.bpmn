@@ -79,7 +79,7 @@
     <bpmn:serviceTask id="mask_ip" name="Mask IP Address">
       <bpmn:extensionElements>
         <camunda:properties>
-          <camunda:property name="plugin" value="pii-mask" />
+          <camunda:property name="plugin" value="mask" />
           <camunda:property name="pluginConfig" value="fields=parsed.ip;mask=#;preserve=0" />
         </camunda:properties>
       </bpmn:extensionElements>

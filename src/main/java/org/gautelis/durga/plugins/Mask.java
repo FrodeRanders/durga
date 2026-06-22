@@ -12,7 +12,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Masks sensitive fields in a JSON payload.
+ * Masks explicitly configured fields in a JSON payload.
  *
  * <p>Config syntax:
  * <pre>
@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
  *   <li>{@code preserve} — number of characters to preserve at start and end (default 0)</li>
  * </ul>
  */
-public final class PiiMask implements Plugin {
+public final class Mask implements Plugin {
 
     @Override
     public String execute(String payload, String config) throws Exception {
@@ -56,7 +56,7 @@ public final class PiiMask implements Plugin {
         return mask(payload, fieldsList, maskChar, preserve);
     }
 
-    private PiiMask() {
+    public Mask() {
     }
 
     public static String mask(String json, String fieldsList, char maskChar, int preserve) {

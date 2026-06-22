@@ -43,14 +43,41 @@ public final class JsonSchemaValidator implements Plugin {
         Timer timer = Metrics.registry().timer("plugin.duration", "plugin", pluginName);
         counter.increment();
         return timer.recordCallable(() -> {
-            JsonNode schemaNode = mapper.readTree(config);
             JsonNode input = mapper.readTree(payload);
+            if (config != null && !config.isBlank() && !config.trim().startsWith("{")) {
+                String error = validateCompactConfig(input, config);
+                if (error != null) {
+                    throw new ValidationException(error);
+                }
+                return payload;
+            }
+            JsonNode schemaNode = mapper.readTree(config);
             String error = validate(input, schemaNode, "$");
             if (error != null) {
                 throw new ValidationException(error);
             }
             return payload;
         });
+    }
+
+    private String validateCompactConfig(JsonNode input, String config) {
+        for (String part : config.split(";")) {
+            int eq = part.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            String key = part.substring(0, eq).trim();
+            String value = part.substring(eq + 1).trim();
+            if ("required".equals(key)) {
+                for (String field : value.split(",")) {
+                    String path = field.trim();
+                    if (!path.isEmpty() && PipelinePlugin.fieldAt(input, path) == null) {
+                        return "$: missing required field '" + path + "'";
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private String validate(JsonNode node, JsonNode schema, String path) {
@@ -94,12 +121,12 @@ public final class JsonSchemaValidator implements Plugin {
         if (node.isNumber()) {
             if (schema.has("minimum")) {
                 if (node.asDouble() < schema.get("minimum").asDouble()) {
-                    return path + ": value " + node + " below minimum " + schema.get("minimum");
+                    return path + ": numeric value below minimum " + schema.get("minimum");
                 }
             }
             if (schema.has("maximum")) {
                 if (node.asDouble() > schema.get("maximum").asDouble()) {
-                    return path + ": value " + node + " above maximum " + schema.get("maximum");
+                    return path + ": numeric value above maximum " + schema.get("maximum");
                 }
             }
         }
@@ -119,11 +146,12 @@ public final class JsonSchemaValidator implements Plugin {
             if (schema.has("pattern")) {
                 String regex = schema.get("pattern").asText();
                 try {
-                    if (!Pattern.compile(regex).matcher(text).matches()) {
-                        return path + ": string '" + text + "' does not match pattern '" + regex + "'";
+                    String boundedText = PipelinePlugin.requireBoundedRegexInput(text);
+                    if (!PipelinePlugin.compileSafeRegex(regex).matcher(boundedText).matches()) {
+                        return path + ": string does not match configured pattern";
                     }
-                } catch (PatternSyntaxException e) {
-                    return path + ": invalid regex pattern '" + regex + "'";
+                } catch (IllegalArgumentException e) {
+                    return path + ": invalid or unsafe regex pattern";
                 }
             }
         }
@@ -170,7 +198,7 @@ public final class JsonSchemaValidator implements Plugin {
                 return null;
             }
         }
-        return path + ": value '" + node.asText() + "' not in allowed values " + allowed;
+        return path + ": value not in allowed enum";
     }
 
     private static String textOrNull(JsonNode node, String field) {

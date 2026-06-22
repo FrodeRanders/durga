@@ -26,16 +26,10 @@ public final class StringTemplate implements Plugin {
     public String execute(String payload, String config) throws Exception {
         String template = null;
         if (config != null && !config.isBlank()) {
-            String[] parts = config.split("\\s+", 2);
-            for (String part : parts) {
-                int eq = part.indexOf('=');
-                if (eq > 0) {
-                    String key = part.substring(0, eq).trim();
-                    String val = part.substring(eq + 1).trim();
-                    if ("template".equals(key)) {
-                        template = val;
-                    }
-                }
+            String trimmed = config.trim();
+            int eq = trimmed.indexOf('=');
+            if (eq > 0 && "template".equals(trimmed.substring(0, eq).trim())) {
+                template = trimmed.substring(eq + 1).trim();
             }
         }
         if (template == null) {
@@ -44,7 +38,7 @@ public final class StringTemplate implements Plugin {
         return render(payload, template);
     }
 
-    private StringTemplate() {
+    public StringTemplate() {
     }
 
     public static String render(String json, String template) {

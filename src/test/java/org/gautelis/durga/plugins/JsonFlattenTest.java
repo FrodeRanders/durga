@@ -64,6 +64,16 @@ public class JsonFlattenTest {
         assertTrue(result.contains("\"a__b\":1"));
     }
 
+    @Test
+    public void shouldExecuteViaPluginInterface() throws Exception {
+        System.out.println("TC: execute parses direction, separator and maxDepth config");
+        Plugin plugin = new JsonFlatten();
+        byte[] result = plugin.execute(
+                Plugin.toBytes("{\"a\":{\"b\":{\"c\":1}}}"),
+                "direction=flatten;separator=.;maxDepth=1");
+        assertEquals("{\"a.b\":{\"c\":1}}", Plugin.toString(result));
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidJson() {
         System.out.println("TC: throws on malformed input JSON");

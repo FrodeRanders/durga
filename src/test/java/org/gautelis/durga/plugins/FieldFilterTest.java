@@ -61,6 +61,14 @@ public class FieldFilterTest {
         assertFalse(result.contains("\"data\""));
     }
 
+    @Test
+    public void shouldExecuteViaPluginInterface() throws Exception {
+        System.out.println("TC: execute parses keep/drop config and filters payload");
+        Plugin plugin = new FieldFilter();
+        byte[] result = plugin.execute(Plugin.toBytes("{\"a\":1,\"b\":2,\"c\":3}"), "keep=a,c drop=b");
+        assertEquals("{\"a\":1,\"c\":3}", Plugin.toString(result));
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidJson() {
         System.out.println("TC: throws IllegalArgumentException on invalid JSON input");

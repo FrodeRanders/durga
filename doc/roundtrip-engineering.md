@@ -195,11 +195,16 @@ public class TransformDataWorker {
     @Incoming("pipeline_transform_data_input")
     public CompletionStage<Void> handle(Message<String> msg) {
         // ... boilerplate, cancellation check, DLQ ...
-        String output = implementation.execute(payload, config);
+        byte[] output = implementation.execute(payload, config);
         // ... emit output, process-events ...
     }
 }
 ```
+
+The generated worker parses custom activity output the same way as registered
+plugin output. Returned JSON objects become the next event payload. JSON scalars,
+arrays, and non-JSON text are wrapped under `{ "_value": ... }`. Returning `null`
+leaves the incoming payload unchanged.
 
 The developer writes:
 

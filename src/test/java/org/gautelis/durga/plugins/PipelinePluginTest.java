@@ -48,11 +48,23 @@ public class PipelinePluginTest {
 
     @Test
     public void shouldCreateErrorRecord() {
-        System.out.println("TC: errorRecord creates JSON error record with plugin name and original payload");
-        String record = PipelinePlugin.errorRecord("{\"a\":1}", "test", "something broke");
+        System.out.println("TC: errorRecord creates JSON error record without embedding original payload");
+        String record = PipelinePlugin.errorRecord("{\"secret\":\"value\"}", "test", "something broke");
         assertTrue(record.contains("\"plugin\":\"test\""));
         assertTrue(record.contains("\"error\":\"something broke\""));
-        assertTrue(record.contains("\"original\""));
+        assertTrue(record.contains("\"originalBytes\""));
+        assertTrue(record.contains("\"originalSha256\""));
+        assertFalse(record.contains("secret"));
+        assertFalse(record.contains("value"));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldRejectTooDeepPath() {
+        System.out.println("TC: setFieldAt rejects paths with too many segments");
+        var node = mapper.createObjectNode();
+        PipelinePlugin.setFieldAt(node,
+                "a.b.c.d.e.f.g.h.i.j.k.l.m.n.o.p.q.r.s.t.u.v.w.x.y.z.aa.ab.ac.ad.ae.af.ag",
+                mapper.getNodeFactory().numberNode(1));
     }
 
     @Test

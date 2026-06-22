@@ -84,6 +84,9 @@ code. If you _do_ need custom logic, you implement the `Plugin` interface
 (override `String execute(String payload, String config)` for text data,
 or `byte[] execute(byte[] payload, String config)` for binary) and
 register it. You never touch the generated worker code.
+Worker output handling is consistent for built-in and custom plugins: returned
+JSON objects replace the event payload, while scalar, array, or plain-text output
+is wrapped as `{ "_value": ... }`.
 
 ### 3. "Kafka is complex. Who's going to operate this?"
 

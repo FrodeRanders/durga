@@ -16,6 +16,9 @@ import java.util.Map;
  */
 public final class WindowCounter implements Plugin {
 
+    private static final int MAX_GROUPS = 10_000;
+    private static final int MAX_GROUP_VALUE_LENGTH = 256;
+
     private long windowMs;
     private String groupBy;
     private ObjectMapper mapper;
@@ -42,6 +45,9 @@ public final class WindowCounter implements Plugin {
                         }
                     }
                 }
+            }
+            if (windowSecs <= 0) {
+                throw new IllegalArgumentException("Window must be greater than zero seconds");
             }
             this.windowMs = windowSecs * 1000L;
             this.groupBy = group;
@@ -83,13 +89,23 @@ public final class WindowCounter implements Plugin {
                 String group = groupNode != null && !groupNode.isNull()
                         ? groupNode.asText()
                         : "_null_";
-                groupCounts.merge(group, 1L, Long::sum);
+                mergeGroup(group);
             } catch (JsonProcessingException e) {
-                groupCounts.merge("_parse_error_", 1L, Long::sum);
+                mergeGroup("_parse_error_");
             }
         }
 
         return summary;
+    }
+
+    private void mergeGroup(String group) {
+        if (group.length() > MAX_GROUP_VALUE_LENGTH) {
+            group = group.substring(0, MAX_GROUP_VALUE_LENGTH);
+        }
+        if (!groupCounts.containsKey(group) && groupCounts.size() >= MAX_GROUPS) {
+            group = "_overflow_";
+        }
+        groupCounts.merge(group, 1L, Long::sum);
     }
 
     public synchronized String flush() {

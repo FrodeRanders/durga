@@ -55,6 +55,10 @@ public final class DeadLetterRouter implements Plugin {
     private final Map<String, String> routes;
     private final String defaultRoute;
 
+    public DeadLetterRouter() {
+        this("status", Map.of(), "default");
+    }
+
     public DeadLetterRouter(String field, Map<String, String> routes, String defaultRoute) {
         this.field = field;
         this.routes = new LinkedHashMap<>(routes);

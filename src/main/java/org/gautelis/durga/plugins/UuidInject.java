@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.Arrays;
+import java.security.SecureRandom;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -26,6 +27,8 @@ import java.util.stream.Collectors;
  * </ul>
  */
 public final class UuidInject implements Plugin {
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Override
     public String execute(String payload, String config) throws Exception {
@@ -49,7 +52,7 @@ public final class UuidInject implements Plugin {
         return inject(payload, fieldsList, strategy);
     }
 
-    private UuidInject() {
+    public UuidInject() {
     }
 
     public static String inject(String json, String fieldsList, String strategy) {
@@ -88,8 +91,8 @@ public final class UuidInject implements Plugin {
         return switch (strategy.toLowerCase()) {
             case "uuid1" -> {
                 long time = System.currentTimeMillis() * 10000L + 0x01b21dd213814000L;
-                long clockSeq = (long) (Math.random() * 0x3FFF) | 0x8000;
-                long node = (long) (Math.random() * 0xFFFFFFFFFFFFL);
+                long clockSeq = SECURE_RANDOM.nextLong(0x4000) | 0x8000;
+                long node = SECURE_RANDOM.nextLong(0x1_0000_0000_0000L);
                 yield String.format("%08x-%04x-%04x-%04x-%012x",
                         (int) (time >> 32),
                         (int) (time >> 16) & 0xFFFF,

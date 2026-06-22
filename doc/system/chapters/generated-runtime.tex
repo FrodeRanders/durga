@@ -63,6 +63,11 @@ transformation logic is obtained:
 
 Both patterns include scope cancellation checks, DLQ routing on failure, and
 canonical \texttt{process-events} emission.
+For both patterns, returned bytes are interpreted as UTF-8. If the result parses
+as a JSON object, that object becomes the next \texttt{ProcessEvent.payload}. If
+the result is a JSON scalar, a JSON array, or non-JSON text, the generated worker
+wraps it as \texttt{\{ "\_value": ... \}}. A \texttt{null} result keeps the incoming
+payload unchanged.
 
 \subsection{Routing and event classes}
 

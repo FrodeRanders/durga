@@ -15,7 +15,7 @@
 ### 7 new data pipeline plugins
 - **type-coercer** — coerces fields between string/int/long/double/decimal/boolean
 - **string-template** — `${field}` token substitution with dot-notation field access
-- **pii-mask** — masks sensitive fields with configurable char and boundary preservation
+- **mask** — masks explicitly configured fields with configurable char and boundary preservation
 - **regex-extract** — extracts named capture groups from a source field into the payload
 - **json-flatten** — flattens nested JSON to dot-notation keys, or unflattens the reverse
 - **uuid-inject** — injects UUIDs (v4 or time-based v1) into specified payload fields

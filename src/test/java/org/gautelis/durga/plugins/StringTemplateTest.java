@@ -57,6 +57,16 @@ public class StringTemplateTest {
         assertEquals("Amount: 150.75", result);
     }
 
+    @Test
+    public void shouldExecuteViaPluginInterface() throws Exception {
+        System.out.println("TC: execute preserves spaces in template config value");
+        Plugin plugin = new StringTemplate();
+        byte[] result = plugin.execute(
+                Plugin.toBytes("{\"name\":\"Ada\",\"amount\":42}"),
+                "template=Hello ${name}, amount ${amount}");
+        assertEquals("Hello Ada, amount 42", Plugin.toString(result));
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidJson() {
         System.out.println("TC: throws on malformed input JSON");

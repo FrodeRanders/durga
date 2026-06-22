@@ -43,7 +43,7 @@ public final class FieldFilter implements Plugin {
         return filter(payload, keep, drop, flatten);
     }
 
-    private FieldFilter() {
+    public FieldFilter() {
     }
 
     /**

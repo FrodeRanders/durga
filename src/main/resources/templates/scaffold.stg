@@ -1523,18 +1523,34 @@ public class %className% {
         }
         try {
             String payload = inputEvent.payload() != null
-                    ? new tools.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
+                    ? new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
                     : "{}";
             byte[] output = implementation.execute(
                     payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                     "%pluginConfig%");
+            java.util.Map<String, Object> outputPayload = inputEvent.payload();
+            if (output != null) {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                String outputText = new String(output, java.nio.charset.StandardCharsets.UTF_8);
+                try {
+                    com.fasterxml.jackson.databind.JsonNode outputNode = mapper.readTree(outputText);
+                    if (outputNode.isObject()) {
+                        outputPayload = mapper.convertValue(outputNode,
+                                new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>\>() {});
+                    } else {
+                        outputPayload = java.util.Map.of("_value", mapper.convertValue(outputNode, Object.class));
+                    }
+                } catch (com.fasterxml.jackson.core.JsonProcessingException parseFailure) {
+                    outputPayload = java.util.Map.of("_value", outputText);
+                }
+            }
             ProcessEvent outputEvent = new ProcessEvent(
                     inputEvent.processInstanceId(),
                     inputEvent.processId(),
                     "%taskId%",
                     inputEvent.tokenId(),
                     inputEvent.correlationId(),
-                    inputEvent.payload(),
+                    outputPayload,
                     ProcessEvent.Status.COMPLETED,
                     null,
                     ProcessEvent.EventType.ACTIVITY_COMPLETED,
@@ -1554,9 +1570,11 @@ public class %className% {
                     "%taskId%",
                     inputEvent.tokenId(),
                     inputEvent.correlationId(),
-                    inputEvent.payload(),
+                    java.util.Map.of("_payloadRedacted", true),
                     ProcessEvent.Status.FAILED,
-                    new ProcessEvent.ErrorInfo(e.getMessage(), "CUSTOM_FAILED"),
+                    new ProcessEvent.ErrorInfo(
+                            org.gautelis.durga.plugins.PipelinePlugin.sanitizeErrorMessage(e.getMessage()),
+                            "CUSTOM_FAILED"),
                     ProcessEvent.EventType.PROCESS_FAILED,
                     inputEvent.processVersion(),
                     inputEvent.businessKey(),
@@ -1615,13 +1633,29 @@ public class %className% {
             byte[] output = plugin.execute(
                     payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                     "%pluginConfig%");
+            java.util.Map<String, Object> outputPayload = inputEvent.payload();
+            if (output != null) {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                String outputText = new String(output, java.nio.charset.StandardCharsets.UTF_8);
+                try {
+                    com.fasterxml.jackson.databind.JsonNode outputNode = mapper.readTree(outputText);
+                    if (outputNode.isObject()) {
+                        outputPayload = mapper.convertValue(outputNode,
+                                new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>\>() {});
+                    } else {
+                        outputPayload = java.util.Map.of("_value", mapper.convertValue(outputNode, Object.class));
+                    }
+                } catch (com.fasterxml.jackson.core.JsonProcessingException parseFailure) {
+                    outputPayload = java.util.Map.of("_value", outputText);
+                }
+            }
             ProcessEvent outputEvent = new ProcessEvent(
                     inputEvent.processInstanceId(),
                     inputEvent.processId(),
                     "%taskId%",
                     inputEvent.tokenId(),
                     inputEvent.correlationId(),
-                    inputEvent.payload(),
+                    outputPayload,
                     ProcessEvent.Status.COMPLETED,
                     null,
                     ProcessEvent.EventType.ACTIVITY_COMPLETED,
@@ -1641,9 +1675,11 @@ public class %className% {
                     "%taskId%",
                     inputEvent.tokenId(),
                     inputEvent.correlationId(),
-                    inputEvent.payload(),
+                    java.util.Map.of("_payloadRedacted", true),
                     ProcessEvent.Status.FAILED,
-                    new ProcessEvent.ErrorInfo(e.getMessage(), "PLUGIN_FAILED"),
+                    new ProcessEvent.ErrorInfo(
+                            org.gautelis.durga.plugins.PipelinePlugin.sanitizeErrorMessage(e.getMessage()),
+                            "PLUGIN_FAILED"),
                     ProcessEvent.EventType.PROCESS_FAILED,
                     inputEvent.processVersion(),
                     inputEvent.businessKey(),

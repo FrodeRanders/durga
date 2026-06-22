@@ -85,4 +85,16 @@ public class JsonTransformTest {
         assertTrue(result.contains("\"topLevel\":1"));
         assertFalse(result.contains("\"data\""));
     }
+
+    @Test
+    public void shouldExecuteViaPluginInterface() throws Exception {
+        System.out.println("TC: execute applies generated-worker mapping expression");
+        Plugin plugin = new JsonTransform();
+        byte[] result = plugin.execute(
+                Plugin.toBytes("{\"id\":7,\"customer\":{\"name\":\"Ada\"},\"total\":\"12.50\"}"),
+                "id:order_id, customer.name:customer_name, total:amount");
+        assertEquals(
+                "{\"order_id\":7,\"customer_name\":\"Ada\",\"amount\":\"12.50\"}",
+                Plugin.toString(result));
+    }
 }

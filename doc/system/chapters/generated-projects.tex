@@ -36,6 +36,11 @@ scaffolder generates:
   Includes a null guard and dead-letter routing.
 \end{itemize}
 
+Custom workers use the same output contract as registered plugin executors:
+returned JSON objects become the next event payload; scalar, array, and non-JSON
+results are wrapped as \texttt{\{ "\_value": ... \}}; and a \texttt{null} result
+keeps the incoming payload unchanged.
+
 The developer writes a separate implementation class (\texttt{\textit{Name}Impl.java})
 that implements the contract interface and is annotated with \texttt{@ApplicationScoped}
 for CDI discovery. The implementation class is never touched by the scaffolder.

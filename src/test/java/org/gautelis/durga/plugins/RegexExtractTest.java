@@ -73,6 +73,31 @@ public class RegexExtractTest {
         assertEquals(input, result);
     }
 
+    @Test
+    public void shouldExecuteViaPluginInterface() throws Exception {
+        System.out.println("TC: execute parses source, pattern and target config");
+        Plugin plugin = new RegexExtract();
+        byte[] result = plugin.execute(
+                Plugin.toBytes("{\"raw\":\"10.0.0.1 GET /health 200\"}"),
+                "source=raw;pattern=(?<ip>\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+(?<method>\\w+);target=parsed");
+        assertEquals(
+                "{\"raw\":\"10.0.0.1 GET /health 200\",\"parsed\":{\"ip\":\"10.0.0.1\",\"method\":\"GET\"}}",
+                Plugin.toString(result));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldRejectUnsafeNestedQuantifierRegex() {
+        System.out.println("TC: rejects regex patterns with nested quantifiers");
+        RegexExtract.extract("{\"msg\":\"aaaaaaaaaaaaaaaa!\"}", "msg", "(a+)+$", null, false);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldRejectOversizedRegexInput() {
+        System.out.println("TC: rejects source strings that are too long for regex matching");
+        String input = "{\"msg\":\"" + "a".repeat(9000) + "\"}";
+        RegexExtract.extract(input, "msg", "a+", null, false);
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidJson() {
         System.out.println("TC: throws on malformed input JSON");

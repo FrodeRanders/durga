@@ -520,6 +520,9 @@ public class BpmnScaffolderTest {
         String content = Files.readString(transformFile);
         assertTrue(content.contains("import org.gautelis.durga.plugins.Plugin"));
         assertTrue(content.contains("plugin.execute("));
+        assertTrue(content.contains("outputPayload"));
+        assertTrue(content.contains("mapper.readTree(outputText)"));
+        assertTrue(content.contains("outputPayload,"));
     }
 
     @Test
@@ -555,7 +558,7 @@ public class BpmnScaffolderTest {
         assertTrue("sink missing process-events", sinkContent.contains("process-events"));
         assertTrue("sink missing terminal output topic",
                 sinkContent.contains("order_events_pipeline_normalize_timestamp_output")
-                || sinkContent.contains("order_events_pipeline_mask_pii_low_value_output"));
+                || sinkContent.contains("order_events_pipeline_mask_customer_email_low_value_output"));
         assertTrue("sink missing connector.class", sinkContent.contains("connector.class"));
     }
 

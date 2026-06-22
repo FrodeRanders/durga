@@ -1,16 +1,16 @@
-id: pii-mask
-name: PII Mask
+id: mask
+name: Mask
 version: 1.0.0
 category: transform
 status: stable
 description: >
-  Masks sensitive fields in a JSON payload. Configurable mask character and
-  character preservation at boundaries. Supports nested fields via dot-notation.
+  Masks explicitly configured fields in a JSON payload. Configurable mask
+  character and character preservation at boundaries. Supports nested fields via dot-notation.
 
 input:
   schema:
     type: object
-    description: JSON payload with sensitive fields
+    description: JSON payload with fields to mask
 
 output:
   schema:
@@ -34,4 +34,4 @@ config:
     default: "0"
 
 implementation:
-  class: org.gautelis.durga.plugins.PiiMask
+  class: org.gautelis.durga.plugins.Mask

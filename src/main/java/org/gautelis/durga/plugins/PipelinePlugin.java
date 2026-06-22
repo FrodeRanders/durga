@@ -10,8 +10,14 @@ import org.gautelis.durga.monitoring.Metrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Contracts and utilities shared by data pipeline plugin executors.
@@ -21,6 +27,11 @@ public final class PipelinePlugin {
     private static final Logger LOG = LoggerFactory.getLogger(PipelinePlugin.class);
 
     static final ObjectMapper MAPPER = new ObjectMapper();
+    static final int MAX_PATH_LENGTH = 1024;
+    static final int MAX_PATH_SEGMENTS = 32;
+    static final int MAX_PATH_SEGMENT_LENGTH = 128;
+    static final int MAX_REGEX_LENGTH = 512;
+    static final int MAX_REGEX_INPUT_LENGTH = 8192;
 
     private PipelinePlugin() {
     }
@@ -30,7 +41,7 @@ public final class PipelinePlugin {
      * ({@code "address.city"}) for nested access.
      */
     public static JsonNode fieldAt(JsonNode node, String path) {
-        String[] segments = path.split("\\.");
+        String[] segments = pathSegments(path);
         JsonNode current = node;
         for (String segment : segments) {
             if (current == null || !current.isObject()) {
@@ -45,7 +56,7 @@ public final class PipelinePlugin {
      * Sets a value at a dot-notation path, creating intermediate objects as needed.
      */
     public static void setFieldAt(ObjectNode root, String path, JsonNode value) {
-        String[] segments = path.split("\\.");
+        String[] segments = pathSegments(path);
         ObjectNode current = root;
         for (int i = 0; i < segments.length - 1; i++) {
             JsonNode child = current.get(segments[i]);
@@ -66,14 +77,81 @@ public final class PipelinePlugin {
     public static String errorRecord(String originalJson, String pluginId, String message) {
         ObjectNode record = MAPPER.createObjectNode();
         record.put("plugin", pluginId);
-        record.put("error", message);
+        record.put("error", sanitizeErrorMessage(message));
         record.put("timestamp", System.currentTimeMillis());
-        try {
-            record.set("original", MAPPER.readTree(originalJson));
-        } catch (JsonProcessingException e) {
-            record.put("original", originalJson);
-        }
+        record.put("originalBytes", originalJson != null ? originalJson.getBytes(StandardCharsets.UTF_8).length : 0);
+        record.put("originalSha256", sha256(originalJson));
         return record.toString();
+    }
+
+    static String[] pathSegments(String path) {
+        if (path == null || path.isBlank()) {
+            throw new IllegalArgumentException("Path must not be blank");
+        }
+        if (path.length() > MAX_PATH_LENGTH) {
+            throw new IllegalArgumentException("Path is too long");
+        }
+        String[] segments = path.split("\\.", -1);
+        if (segments.length > MAX_PATH_SEGMENTS) {
+            throw new IllegalArgumentException("Path has too many segments");
+        }
+        for (String segment : segments) {
+            if (segment.isBlank()) {
+                throw new IllegalArgumentException("Path contains an empty segment");
+            }
+            if (segment.length() > MAX_PATH_SEGMENT_LENGTH) {
+                throw new IllegalArgumentException("Path segment is too long");
+            }
+        }
+        return segments;
+    }
+
+    public static Pattern compileSafeRegex(String regex) {
+        if (regex == null || regex.isBlank()) {
+            throw new IllegalArgumentException("Regex must not be blank");
+        }
+        if (regex.length() > MAX_REGEX_LENGTH) {
+            throw new IllegalArgumentException("Regex is too long");
+        }
+        if (hasNestedQuantifier(regex)) {
+            throw new IllegalArgumentException("Regex contains nested quantifiers");
+        }
+        try {
+            return Pattern.compile(regex);
+        } catch (PatternSyntaxException e) {
+            throw new IllegalArgumentException("Invalid regex pattern", e);
+        }
+    }
+
+    public static String requireBoundedRegexInput(String text) {
+        if (text != null && text.length() > MAX_REGEX_INPUT_LENGTH) {
+            throw new IllegalArgumentException("Regex input is too long");
+        }
+        return text;
+    }
+
+    private static boolean hasNestedQuantifier(String regex) {
+        return regex.matches(".*\\([^)]*[+*][^)]*\\)[+*?].*")
+                || regex.matches(".*\\([^)]*\\{\\d+(,\\d*)?}[^)]*\\)[+*?].*");
+    }
+
+    public static String sanitizeErrorMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "Plugin execution failed";
+        }
+        return message.length() <= 512 ? message : message.substring(0, 512);
+    }
+
+    private static String sha256(String value) {
+        if (value == null) {
+            return "";
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
     }
 
     /**

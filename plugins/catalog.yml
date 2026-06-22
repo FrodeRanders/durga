@@ -15,10 +15,10 @@ plugins:
     version: 1.0.0
     category: transform
     path: transform/string-template.yml
-  - id: pii-mask
+  - id: mask
     version: 1.0.0
     category: transform
-    path: transform/pii-mask.yml
+    path: transform/mask.yml
   - id: regex-extract
     version: 1.0.0
     category: transform

@@ -8,9 +8,9 @@
  *
  * <h3>Categories</h3>
  * <ul>
- * <li><b>transform</b> — JsonTransform, FieldFilter, JsonFlatten, TypeCoercion, StringTemplate, RegexExtract</li>
+ * <li><b>transform</b> — JsonTransform, FieldFilter, JsonFlatten, TypeCoercion, StringTemplate, RegexExtract, Mask</li>
  * <li><b>validate</b> — JsonSchemaValidator</li>
- * <li><b>enrich</b> — KvEnricher, UuidInject, PiiMask, TimestampNormalize</li>
+ * <li><b>enrich</b> — KvEnricher, UuidInject, TimestampNormalize</li>
  * <li><b>route</b> — DeadLetterRouter</li>
  * <li><b>aggregate</b> — WindowCounter</li>
  * </ul>

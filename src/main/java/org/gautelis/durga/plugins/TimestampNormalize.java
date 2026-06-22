@@ -76,7 +76,7 @@ public final class TimestampNormalize implements Plugin {
         });
     }
 
-    private TimestampNormalize() {
+    public TimestampNormalize() {
     }
 
     public static String normalize(String json, String fieldsList, String fromFormat,

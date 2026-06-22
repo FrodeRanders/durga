@@ -78,6 +78,18 @@ public class TypeCoercionTest {
         assertEquals(99, node.get("data").get("count").asInt());
     }
 
+    @Test
+    public void shouldExecuteViaPluginInterface() throws Exception {
+        System.out.println("TC: execute applies type coercion expression");
+        Plugin plugin = new TypeCoercion();
+        byte[] result = plugin.execute(
+                Plugin.toBytes("{\"amount\":\"12.5\",\"order_id\":\"7\"}"),
+                "amount:double, order_id:int");
+        JsonNode node = mapper.readTree(Plugin.toString(result));
+        assertTrue(node.get("amount").isDouble());
+        assertEquals(7, node.get("order_id").asInt());
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidJson() {
         System.out.println("TC: throws IllegalArgumentException on malformed input");

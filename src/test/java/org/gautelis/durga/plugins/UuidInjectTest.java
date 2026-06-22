@@ -62,6 +62,15 @@ public class UuidInjectTest {
         assertNotEquals("fixed", node.get("id").asText());
     }
 
+    @Test
+    public void shouldExecuteViaPluginInterface() throws Exception {
+        System.out.println("TC: execute parses fields and strategy config");
+        Plugin plugin = new UuidInject();
+        byte[] result = plugin.execute(Plugin.toBytes("{}"), "fields=trace_id;strategy=uuid4");
+        JsonNode node = mapper.readTree(Plugin.toString(result));
+        assertEquals(36, node.get("trace_id").asText().length());
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidJson() {
         System.out.println("TC: throws on malformed input JSON");

@@ -33,7 +33,7 @@ public final class JsonTransform implements Plugin {
         return transform(payload, config);
     }
 
-    private JsonTransform() {
+    public JsonTransform() {
     }
 
     /**

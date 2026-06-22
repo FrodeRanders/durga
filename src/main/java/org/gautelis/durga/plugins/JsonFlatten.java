@@ -50,7 +50,7 @@ public final class JsonFlatten implements Plugin {
         return flatten(payload, separator, maxDepth);
     }
 
-    private JsonFlatten() {
+    public JsonFlatten() {
     }
 
     public static String flatten(String json, String separator, int maxDepth) {
