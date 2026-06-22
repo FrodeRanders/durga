@@ -1,5 +1,7 @@
 # Durga
 
+![The pipeline demo, viewed in Camunda Modeler](./doc/images/data_pipeline_demo.png)
+
 BPMN-driven Kafka scaffolding tool. Reads a BPMN model and generates Kafka-oriented
 worker, gateway, orchestration, and topic setup skeletons for process implementations.
 
