@@ -1,33 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
-             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
-             targetNamespace="http://example.com/bpmn">
-  <message id="message_review_request" name="invoice_review_request"/>
-  <message id="message_review_response" name="invoice_review_response"/>
-
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" targetNamespace="http://example.com/bpmn">
+  <message id="message_review_request" name="invoice_review_request" />
+  <message id="message_review_response" name="invoice_review_response" />
   <process id="invoice_message_exchange" name="Invoice Message Exchange" isExecutable="true">
-    <startEvent id="start" name="Invoice Received"/>
-    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice"/>
-
-    <serviceTask id="register_invoice" name="Register Invoice"/>
-    <sequenceFlow id="flow_register_to_throw" sourceRef="register_invoice" targetRef="send_review_request"/>
-
+    <startEvent id="start" name="Invoice Received" />
+    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice" />
+    <serviceTask id="register_invoice" name="Register Invoice" />
+    <sequenceFlow id="flow_register_to_throw" sourceRef="register_invoice" targetRef="send_review_request" />
     <intermediateThrowEvent id="send_review_request" name="Send Review Request">
-      <messageEventDefinition messageRef="message_review_request"/>
+      <messageEventDefinition messageRef="message_review_request" />
     </intermediateThrowEvent>
-    <sequenceFlow id="flow_throw_to_catch" sourceRef="send_review_request" targetRef="await_review_response"/>
-
+    <sequenceFlow id="flow_throw_to_catch" sourceRef="send_review_request" targetRef="await_review_response" />
     <intermediateCatchEvent id="await_review_response" name="Await Review Response">
-      <messageEventDefinition messageRef="message_review_response"/>
+      <messageEventDefinition messageRef="message_review_response" />
     </intermediateCatchEvent>
-    <sequenceFlow id="flow_catch_to_notify" sourceRef="await_review_response" targetRef="notify_requester"/>
-
-    <serviceTask id="notify_requester" name="Notify Requester"/>
-    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_notified"/>
-
-    <endEvent id="end_notified" name="Requester Notified"/>
+    <sequenceFlow id="flow_catch_to_notify" sourceRef="await_review_response" targetRef="notify_requester" />
+    <serviceTask id="notify_requester" name="Notify Requester" />
+    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_notified" />
+    <endEvent id="end_notified" name="Requester Notified" />
   </process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_invoice_message_exchange">
+    <bpmndi:BPMNPlane id="BPMNPlane_invoice_message_exchange" bpmnElement="invoice_message_exchange">
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <omgdc:Bounds x="57" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="register_invoice_di" bpmnElement="register_invoice">
+        <omgdc:Bounds x="25" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="send_review_request_di" bpmnElement="send_review_request">
+        <omgdc:Bounds x="57" y="332" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="await_review_response_di" bpmnElement="await_review_response">
+        <omgdc:Bounds x="57" y="472" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="notify_requester_di" bpmnElement="notify_requester">
+        <omgdc:Bounds x="25" y="590" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_notified_di" bpmnElement="end_notified">
+        <omgdc:Bounds x="57" y="752" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </definitions>

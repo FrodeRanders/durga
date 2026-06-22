@@ -1,46 +1,71 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
-             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
-             targetNamespace="http://example.com/bpmn">
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" targetNamespace="http://example.com/bpmn">
   <process id="invoice_subprocess_deadline" name="Invoice Subprocess Deadline" isExecutable="true">
-    <startEvent id="start" name="Invoice Received"/>
-    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice"/>
-
-    <serviceTask id="register_invoice" name="Register Invoice"/>
-    <sequenceFlow id="flow_register_to_review_scope" sourceRef="register_invoice" targetRef="review_scope"/>
-
+    <startEvent id="start" name="Invoice Received" />
+    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice" />
+    <serviceTask id="register_invoice" name="Register Invoice" />
+    <sequenceFlow id="flow_register_to_review_scope" sourceRef="register_invoice" targetRef="review_scope" />
     <subProcess id="review_scope" name="Review Scope">
-      <startEvent id="review_scope_start" name="Enter Review"/>
-      <sequenceFlow id="flow_scope_start_to_review" sourceRef="review_scope_start" targetRef="review_invoice"/>
-
-      <userTask id="review_invoice" name="Review Invoice"/>
-      <sequenceFlow id="flow_review_to_approve" sourceRef="review_invoice" targetRef="approve_invoice"/>
-
-      <serviceTask id="approve_invoice" name="Approve Invoice"/>
-      <sequenceFlow id="flow_approve_to_scope_end" sourceRef="approve_invoice" targetRef="review_scope_end"/>
-
-      <endEvent id="review_scope_end" name="Review Done"/>
+      <startEvent id="review_scope_start" name="Enter Review" />
+      <sequenceFlow id="flow_scope_start_to_review" sourceRef="review_scope_start" targetRef="review_invoice" />
+      <userTask id="review_invoice" name="Review Invoice" />
+      <sequenceFlow id="flow_review_to_approve" sourceRef="review_invoice" targetRef="approve_invoice" />
+      <serviceTask id="approve_invoice" name="Approve Invoice" />
+      <sequenceFlow id="flow_approve_to_scope_end" sourceRef="approve_invoice" targetRef="review_scope_end" />
+      <endEvent id="review_scope_end" name="Review Done" />
     </subProcess>
-
-    <boundaryEvent id="review_scope_timeout" name="Review Scope Timeout" attachedToRef="review_scope" cancelActivity="true">
+    <boundaryEvent id="review_scope_timeout" name="Review Scope Timeout" attachedToRef="review_scope">
       <timerEventDefinition>
         <timeDuration>PT15S</timeDuration>
       </timerEventDefinition>
     </boundaryEvent>
-    <sequenceFlow id="flow_timeout_to_reject" sourceRef="review_scope_timeout" targetRef="reject_invoice"/>
-
-    <sequenceFlow id="flow_scope_to_notify" sourceRef="review_scope" targetRef="notify_requester"/>
-
-    <serviceTask id="notify_requester" name="Notify Requester"/>
-    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_completed"/>
-
-    <serviceTask id="reject_invoice" name="Reject Invoice"/>
-    <sequenceFlow id="flow_reject_to_end" sourceRef="reject_invoice" targetRef="end_timeout"/>
-
-    <endEvent id="end_completed" name="Invoice Reviewed"/>
-    <endEvent id="end_timeout" name="Invoice Timed Out"/>
+    <sequenceFlow id="flow_timeout_to_reject" sourceRef="review_scope_timeout" targetRef="reject_invoice" />
+    <sequenceFlow id="flow_scope_to_notify" sourceRef="review_scope" targetRef="notify_requester" />
+    <serviceTask id="notify_requester" name="Notify Requester" />
+    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_completed" />
+    <serviceTask id="reject_invoice" name="Reject Invoice" />
+    <sequenceFlow id="flow_reject_to_end" sourceRef="reject_invoice" targetRef="end_timeout" />
+    <endEvent id="end_completed" name="Invoice Reviewed" />
+    <endEvent id="end_timeout" name="Invoice Timed Out" />
   </process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_invoice_subprocess_deadline">
+    <bpmndi:BPMNPlane id="BPMNPlane_invoice_subprocess_deadline" bpmnElement="invoice_subprocess_deadline">
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <omgdc:Bounds x="57" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="register_invoice_di" bpmnElement="register_invoice">
+        <omgdc:Bounds x="25" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="review_scope_di" bpmnElement="review_scope">
+        <omgdc:Bounds x="25" y="310" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="review_scope_timeout_di" bpmnElement="review_scope_timeout">
+        <omgdc:Bounds x="57" y="372" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="notify_requester_di" bpmnElement="notify_requester">
+        <omgdc:Bounds x="25" y="450" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="reject_invoice_di" bpmnElement="reject_invoice">
+        <omgdc:Bounds x="25" y="590" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_completed_di" bpmnElement="end_completed">
+        <omgdc:Bounds x="57" y="752" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_timeout_di" bpmnElement="end_timeout">
+        <omgdc:Bounds x="57" y="892" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="review_scope_start_di" bpmnElement="review_scope_start">
+        <omgdc:Bounds x="57" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="review_invoice_di" bpmnElement="review_invoice">
+        <omgdc:Bounds x="25" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="approve_invoice_di" bpmnElement="approve_invoice">
+        <omgdc:Bounds x="25" y="310" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="review_scope_end_di" bpmnElement="review_scope_end">
+        <omgdc:Bounds x="57" y="472" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </definitions>

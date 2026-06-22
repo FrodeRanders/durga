@@ -1,23 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
-             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
-             targetNamespace="http://example.com/bpmn">
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" targetNamespace="http://example.com/bpmn">
   <process id="invoice_call_activity" name="Invoice Call Activity" isExecutable="true">
-    <startEvent id="start" name="Invoice Received"/>
-    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice"/>
-
-    <serviceTask id="register_invoice" name="Register Invoice"/>
-    <sequenceFlow id="flow_register_to_validate" sourceRef="register_invoice" targetRef="validate_invoice_process"/>
-
-    <callActivity id="validate_invoice_process" name="Validate Invoice Process" calledElement="invoice_validation"/>
-    <sequenceFlow id="flow_validate_to_notify" sourceRef="validate_invoice_process" targetRef="notify_requester"/>
-
-    <serviceTask id="notify_requester" name="Notify Requester"/>
-    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_completed"/>
-
-    <endEvent id="end_completed" name="Invoice Validated"/>
+    <startEvent id="start" name="Invoice Received" />
+    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice" />
+    <serviceTask id="register_invoice" name="Register Invoice" />
+    <sequenceFlow id="flow_register_to_validate" sourceRef="register_invoice" targetRef="validate_invoice_process" />
+    <callActivity id="validate_invoice_process" name="Validate Invoice Process" calledElement="invoice_validation" />
+    <sequenceFlow id="flow_validate_to_notify" sourceRef="validate_invoice_process" targetRef="notify_requester" />
+    <serviceTask id="notify_requester" name="Notify Requester" />
+    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_completed" />
+    <endEvent id="end_completed" name="Invoice Validated" />
   </process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_invoice_call_activity">
+    <bpmndi:BPMNPlane id="BPMNPlane_invoice_call_activity" bpmnElement="invoice_call_activity">
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <omgdc:Bounds x="57" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="register_invoice_di" bpmnElement="register_invoice">
+        <omgdc:Bounds x="25" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="validate_invoice_process_di" bpmnElement="validate_invoice_process">
+        <omgdc:Bounds x="25" y="310" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="notify_requester_di" bpmnElement="notify_requester">
+        <omgdc:Bounds x="25" y="450" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_completed_di" bpmnElement="end_completed">
+        <omgdc:Bounds x="57" y="612" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </definitions>

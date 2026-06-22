@@ -1,22 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
-                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
-                  id="Definitions_1"
-                  targetNamespace="http://bpmn.io/schema/bpmn">
-
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.48.0">
   <bpmn:itemDefinition id="RawCustomerDataItem" structureRef="RawCustomerData" />
   <bpmn:itemDefinition id="NormalizedCustomerDataItem" structureRef="NormalizedCustomerData" />
   <bpmn:itemDefinition id="FilteredCustomerDataItem" structureRef="FilteredCustomerData" />
   <bpmn:itemDefinition id="EnrichedCustomerDataItem" structureRef="EnrichedCustomerData" />
-  <bpmn:dataStore id="S3WarehouseStore" name="S3 Warehouse" isUnlimited="true" />
-  <bpmn:dataStore id="Neo4jCustomerGraphStore" name="Neo4j Customer Graph" isUnlimited="true" />
-  <bpmn:dataStore id="PostgresCustomerStore" name="PostgreSQL Customer Store" isUnlimited="true" />
-
+  <bpmn:dataStore id="S3WarehouseStore" name="S3 Warehouse" />
+  <bpmn:dataStore id="Neo4jCustomerGraphStore" name="Neo4j Customer Graph" />
+  <bpmn:dataStore id="PostgresCustomerStore" name="PostgreSQL Customer Store" />
   <bpmn:process id="data_pipeline_demo" name="Data Pipeline Demo" isExecutable="true">
-
     <bpmn:dataObjectReference id="raw_customer_data" name="Raw Customer Data" dataObjectRef="raw_customer_data_object">
       <bpmn:extensionElements>
         <camunda:properties>
@@ -26,7 +17,6 @@
       </bpmn:extensionElements>
     </bpmn:dataObjectReference>
     <bpmn:dataObject id="raw_customer_data_object" name="Raw Customer Data" itemSubjectRef="RawCustomerDataItem" />
-
     <bpmn:dataObjectReference id="normalized_customer_data" name="Normalized Customer Data" dataObjectRef="normalized_customer_data_object">
       <bpmn:extensionElements>
         <camunda:properties>
@@ -36,7 +26,6 @@
       </bpmn:extensionElements>
     </bpmn:dataObjectReference>
     <bpmn:dataObject id="normalized_customer_data_object" name="Normalized Customer Data" itemSubjectRef="NormalizedCustomerDataItem" />
-
     <bpmn:dataObjectReference id="filtered_customer_data" name="Filtered Customer Data" dataObjectRef="filtered_customer_data_object">
       <bpmn:extensionElements>
         <camunda:properties>
@@ -46,7 +35,6 @@
       </bpmn:extensionElements>
     </bpmn:dataObjectReference>
     <bpmn:dataObject id="filtered_customer_data_object" name="Filtered Customer Data" itemSubjectRef="FilteredCustomerDataItem" />
-
     <bpmn:dataObjectReference id="enriched_customer_data" name="Enriched Customer Data" dataObjectRef="enriched_customer_data_object">
       <bpmn:extensionElements>
         <camunda:properties>
@@ -56,7 +44,6 @@
       </bpmn:extensionElements>
     </bpmn:dataObjectReference>
     <bpmn:dataObject id="enriched_customer_data_object" name="Enriched Customer Data" itemSubjectRef="EnrichedCustomerDataItem" />
-
     <bpmn:dataStoreReference id="s3_warehouse" name="S3 Warehouse" dataStoreRef="S3WarehouseStore">
       <bpmn:extensionElements>
         <camunda:properties>
@@ -81,11 +68,9 @@
         </camunda:properties>
       </bpmn:extensionElements>
     </bpmn:dataStoreReference>
-
     <bpmn:startEvent id="StartEvent_1" name="Pipeline Start">
       <bpmn:outgoing>Flow_to_transform</bpmn:outgoing>
     </bpmn:startEvent>
-
     <bpmn:serviceTask id="transform_data" name="Transform Data">
       <bpmn:extensionElements>
         <camunda:properties>
@@ -96,8 +81,8 @@
       <bpmn:incoming>Flow_to_transform</bpmn:incoming>
       <bpmn:outgoing>Flow_transform_to_filter</bpmn:outgoing>
       <bpmn:ioSpecification>
-        <bpmn:dataInput id="transform_data_input" name="Raw Customer Data" itemSubjectRef="RawCustomerDataItem" />
-        <bpmn:dataOutput id="transform_data_output" name="Normalized Customer Data" itemSubjectRef="NormalizedCustomerDataItem" />
+        <bpmn:dataInput id="transform_data_input" itemSubjectRef="RawCustomerDataItem" name="Raw Customer Data" />
+        <bpmn:dataOutput id="transform_data_output" itemSubjectRef="NormalizedCustomerDataItem" name="Normalized Customer Data" />
         <bpmn:inputSet id="transform_data_input_set">
           <bpmn:dataInputRefs>transform_data_input</bpmn:dataInputRefs>
         </bpmn:inputSet>
@@ -114,7 +99,6 @@
         <bpmn:targetRef>normalized_customer_data</bpmn:targetRef>
       </bpmn:dataOutputAssociation>
     </bpmn:serviceTask>
-
     <bpmn:serviceTask id="filter_fields" name="Filter Fields">
       <bpmn:extensionElements>
         <camunda:properties>
@@ -125,8 +109,8 @@
       <bpmn:incoming>Flow_transform_to_filter</bpmn:incoming>
       <bpmn:outgoing>Flow_filter_to_enrich</bpmn:outgoing>
       <bpmn:ioSpecification>
-        <bpmn:dataInput id="filter_fields_input" name="Normalized Customer Data" itemSubjectRef="NormalizedCustomerDataItem" />
-        <bpmn:dataOutput id="filter_fields_output" name="Filtered Customer Data" itemSubjectRef="FilteredCustomerDataItem" />
+        <bpmn:dataInput id="filter_fields_input" itemSubjectRef="NormalizedCustomerDataItem" name="Normalized Customer Data" />
+        <bpmn:dataOutput id="filter_fields_output" itemSubjectRef="FilteredCustomerDataItem" name="Filtered Customer Data" />
         <bpmn:inputSet id="filter_fields_input_set">
           <bpmn:dataInputRefs>filter_fields_input</bpmn:dataInputRefs>
         </bpmn:inputSet>
@@ -143,7 +127,6 @@
         <bpmn:targetRef>filtered_customer_data</bpmn:targetRef>
       </bpmn:dataOutputAssociation>
     </bpmn:serviceTask>
-
     <bpmn:serviceTask id="enrich_data" name="Enrich Data">
       <bpmn:extensionElements>
         <camunda:properties>
@@ -154,8 +137,8 @@
       <bpmn:incoming>Flow_filter_to_enrich</bpmn:incoming>
       <bpmn:outgoing>Flow_to_end</bpmn:outgoing>
       <bpmn:ioSpecification>
-        <bpmn:dataInput id="enrich_data_input" name="Filtered Customer Data" itemSubjectRef="FilteredCustomerDataItem" />
-        <bpmn:dataOutput id="enrich_data_output" name="Enriched Customer Data" itemSubjectRef="EnrichedCustomerDataItem" />
+        <bpmn:dataInput id="enrich_data_input" itemSubjectRef="FilteredCustomerDataItem" name="Filtered Customer Data" />
+        <bpmn:dataOutput id="enrich_data_output" itemSubjectRef="EnrichedCustomerDataItem" name="Enriched Customer Data" />
         <bpmn:inputSet id="enrich_data_input_set">
           <bpmn:dataInputRefs>enrich_data_input</bpmn:dataInputRefs>
         </bpmn:inputSet>
@@ -184,16 +167,131 @@
         <bpmn:targetRef>postgres_customer_store</bpmn:targetRef>
       </bpmn:dataOutputAssociation>
     </bpmn:serviceTask>
-
     <bpmn:endEvent id="EndEvent_1" name="Pipeline End">
       <bpmn:incoming>Flow_to_end</bpmn:incoming>
     </bpmn:endEvent>
-
     <bpmn:sequenceFlow id="Flow_to_transform" sourceRef="StartEvent_1" targetRef="transform_data" />
     <bpmn:sequenceFlow id="Flow_transform_to_filter" sourceRef="transform_data" targetRef="filter_fields" />
     <bpmn:sequenceFlow id="Flow_filter_to_enrich" sourceRef="filter_fields" targetRef="enrich_data" />
     <bpmn:sequenceFlow id="Flow_to_end" sourceRef="enrich_data" targetRef="EndEvent_1" />
-
   </bpmn:process>
-
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="data_pipeline_demo">
+      <bpmndi:BPMNShape id="raw_customer_data_di" bpmnElement="raw_customer_data">
+        <dc:Bounds x="202" y="80" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="180" y="137" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="normalized_customer_data_di" bpmnElement="normalized_customer_data">
+        <dc:Bounds x="362" y="80" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="335" y="137" width="91" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="filtered_customer_data_di" bpmnElement="filtered_customer_data">
+        <dc:Bounds x="522" y="80" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="498" y="137" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="enriched_customer_data_di" bpmnElement="enriched_customer_data">
+        <dc:Bounds x="702" y="80" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="678" y="137" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s3_warehouse_di" bpmnElement="s3_warehouse">
+        <dc:Bounds x="535" y="360" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="525" y="417" width="71" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="neo4j_customer_graph_di" bpmnElement="neo4j_customer_graph">
+        <dc:Bounds x="615" y="360" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="595" y="417" width="90" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="postgres_customer_store_di" bpmnElement="postgres_customer_store">
+        <dc:Bounds x="695" y="360" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="672" y="417" width="96" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="180" y="222" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="162" y="265" width="73" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="transform_data_di" bpmnElement="transform_data">
+        <dc:Bounds x="270" y="200" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="filter_fields_di" bpmnElement="filter_fields">
+        <dc:Bounds x="430" y="200" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="enrich_data_di" bpmnElement="enrich_data">
+        <dc:Bounds x="590" y="200" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+        <dc:Bounds x="752" y="222" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="740" y="265" width="61" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="transform_reads_raw_di" bpmnElement="transform_reads_raw">
+        <di:waypoint x="226" y="130" />
+        <di:waypoint x="300" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="transform_writes_normalized_di" bpmnElement="transform_writes_normalized">
+        <di:waypoint x="340" y="200" />
+        <di:waypoint x="380" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="filter_reads_normalized_di" bpmnElement="filter_reads_normalized">
+        <di:waypoint x="386" y="130" />
+        <di:waypoint x="460" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="filter_writes_filtered_di" bpmnElement="filter_writes_filtered">
+        <di:waypoint x="500" y="200" />
+        <di:waypoint x="540" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="enrich_reads_filtered_di" bpmnElement="enrich_reads_filtered">
+        <di:waypoint x="546" y="130" />
+        <di:waypoint x="620" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="enrich_writes_enriched_di" bpmnElement="enrich_writes_enriched">
+        <di:waypoint x="660" y="200" />
+        <di:waypoint x="720" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="enrich_writes_s3_di" bpmnElement="enrich_writes_s3">
+        <di:waypoint x="620" y="280" />
+        <di:waypoint x="565" y="360" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="enrich_writes_neo4j_di" bpmnElement="enrich_writes_neo4j">
+        <di:waypoint x="640" y="280" />
+        <di:waypoint x="640" y="360" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="enrich_writes_postgres_di" bpmnElement="enrich_writes_postgres">
+        <di:waypoint x="660" y="280" />
+        <di:waypoint x="720" y="360" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_to_transform_di" bpmnElement="Flow_to_transform">
+        <di:waypoint x="216" y="240" />
+        <di:waypoint x="270" y="240" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_transform_to_filter_di" bpmnElement="Flow_transform_to_filter">
+        <di:waypoint x="370" y="240" />
+        <di:waypoint x="430" y="240" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_filter_to_enrich_di" bpmnElement="Flow_filter_to_enrich">
+        <di:waypoint x="530" y="240" />
+        <di:waypoint x="590" y="240" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_to_end_di" bpmnElement="Flow_to_end">
+        <di:waypoint x="690" y="240" />
+        <di:waypoint x="752" y="240" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </bpmn:definitions>

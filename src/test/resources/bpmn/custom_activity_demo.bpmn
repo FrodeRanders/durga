@@ -1,18 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
-                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
-                  id="Definitions_1"
-                  targetNamespace="http://bpmn.io/schema/bpmn">
-
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="custom_activity_demo" name="Custom Activity Demo" isExecutable="true">
-
     <bpmn:startEvent id="StartEvent_1" name="Start">
       <bpmn:outgoing>Flow_start_to_custom</bpmn:outgoing>
     </bpmn:startEvent>
-
     <bpmn:serviceTask id="custom_transform" name="Custom Transform">
       <bpmn:extensionElements>
         <camunda:properties>
@@ -23,14 +14,31 @@
       <bpmn:incoming>Flow_start_to_custom</bpmn:incoming>
       <bpmn:outgoing>Flow_custom_to_end</bpmn:outgoing>
     </bpmn:serviceTask>
-
     <bpmn:endEvent id="EndEvent_1" name="End">
       <bpmn:incoming>Flow_custom_to_end</bpmn:incoming>
     </bpmn:endEvent>
-
     <bpmn:sequenceFlow id="Flow_start_to_custom" sourceRef="StartEvent_1" targetRef="custom_transform" />
     <bpmn:sequenceFlow id="Flow_custom_to_end" sourceRef="custom_transform" targetRef="EndEvent_1" />
-
   </bpmn:process>
-
+  <bpmndi:BPMNDiagram id="BPMNDiagram_custom_activity_demo">
+    <bpmndi:BPMNPlane id="BPMNPlane_custom_activity_demo" bpmnElement="custom_activity_demo">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="57" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="custom_transform_di" bpmnElement="custom_transform">
+        <dc:Bounds x="175" y="30" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+        <dc:Bounds x="357" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_start_to_custom_di" bpmnElement="Flow_start_to_custom">
+        <di:waypoint x="93" y="70" />
+        <di:waypoint x="175" y="70" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_custom_to_end_di" bpmnElement="Flow_custom_to_end">
+        <di:waypoint x="275" y="70" />
+        <di:waypoint x="357" y="70" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </bpmn:definitions>

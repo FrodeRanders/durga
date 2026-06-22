@@ -1,34 +1,51 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
-             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
-             targetNamespace="http://example.com/bpmn">
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" targetNamespace="http://example.com/bpmn">
   <process id="invoice_review_reminder_non_interrupting" name="Invoice Review Reminder Non Interrupting" isExecutable="true">
-    <startEvent id="start" name="Invoice Received"/>
-    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice"/>
-
-    <serviceTask id="register_invoice" name="Register Invoice"/>
-    <sequenceFlow id="flow_register_to_review" sourceRef="register_invoice" targetRef="review_invoice"/>
-
-    <userTask id="review_invoice" name="Review Invoice"/>
-    <sequenceFlow id="flow_review_to_notify" sourceRef="review_invoice" targetRef="notify_requester"/>
-
-    <boundaryEvent id="review_reminder" name="Review Reminder" attachedToRef="review_invoice" cancelActivity="false">
+    <startEvent id="start" name="Invoice Received" />
+    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice" />
+    <serviceTask id="register_invoice" name="Register Invoice" />
+    <sequenceFlow id="flow_register_to_review" sourceRef="register_invoice" targetRef="review_invoice" />
+    <userTask id="review_invoice" name="Review Invoice" />
+    <sequenceFlow id="flow_review_to_notify" sourceRef="review_invoice" targetRef="notify_requester" />
+    <boundaryEvent id="review_reminder" name="Review Reminder" cancelActivity="false" attachedToRef="review_invoice">
       <timerEventDefinition>
         <timeDuration>PT15S</timeDuration>
       </timerEventDefinition>
     </boundaryEvent>
-    <sequenceFlow id="flow_reminder_to_send_reminder" sourceRef="review_reminder" targetRef="send_review_reminder"/>
-
-    <serviceTask id="send_review_reminder" name="Send Review Reminder"/>
-    <sequenceFlow id="flow_send_reminder_to_end" sourceRef="send_review_reminder" targetRef="end_reminder_sent"/>
-
-    <serviceTask id="notify_requester" name="Notify Requester"/>
-    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_completed"/>
-
-    <endEvent id="end_completed" name="Review Completed"/>
-    <endEvent id="end_reminder_sent" name="Reminder Sent"/>
+    <sequenceFlow id="flow_reminder_to_send_reminder" sourceRef="review_reminder" targetRef="send_review_reminder" />
+    <serviceTask id="send_review_reminder" name="Send Review Reminder" />
+    <sequenceFlow id="flow_send_reminder_to_end" sourceRef="send_review_reminder" targetRef="end_reminder_sent" />
+    <serviceTask id="notify_requester" name="Notify Requester" />
+    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_completed" />
+    <endEvent id="end_completed" name="Review Completed" />
+    <endEvent id="end_reminder_sent" name="Reminder Sent" />
   </process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_invoice_review_reminder_non_interrupting">
+    <bpmndi:BPMNPlane id="BPMNPlane_invoice_review_reminder_non_interrupting" bpmnElement="invoice_review_reminder_non_interrupting">
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <omgdc:Bounds x="57" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="register_invoice_di" bpmnElement="register_invoice">
+        <omgdc:Bounds x="25" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="review_invoice_di" bpmnElement="review_invoice">
+        <omgdc:Bounds x="25" y="310" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="review_reminder_di" bpmnElement="review_reminder">
+        <omgdc:Bounds x="57" y="372" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="send_review_reminder_di" bpmnElement="send_review_reminder">
+        <omgdc:Bounds x="25" y="450" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="notify_requester_di" bpmnElement="notify_requester">
+        <omgdc:Bounds x="25" y="590" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_completed_di" bpmnElement="end_completed">
+        <omgdc:Bounds x="57" y="752" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_reminder_sent_di" bpmnElement="end_reminder_sent">
+        <omgdc:Bounds x="57" y="892" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </definitions>

@@ -1,30 +1,42 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
-             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
-             targetNamespace="http://example.com/bpmn">
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" targetNamespace="http://example.com/bpmn">
   <process id="invoice_receipt_reminder" name="Invoice Receipt Reminder" isExecutable="true">
-    <startEvent id="start" name="Invoice Received"/>
-    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice"/>
-
-    <serviceTask id="register_invoice" name="Register Invoice"/>
-    <sequenceFlow id="flow_register_to_review" sourceRef="register_invoice" targetRef="review_invoice"/>
-
-    <userTask id="review_invoice" name="Review Invoice"/>
-    <sequenceFlow id="flow_review_to_wait" sourceRef="review_invoice" targetRef="wait_before_notify"/>
-
+    <startEvent id="start" name="Invoice Received" />
+    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice" />
+    <serviceTask id="register_invoice" name="Register Invoice" />
+    <sequenceFlow id="flow_register_to_review" sourceRef="register_invoice" targetRef="review_invoice" />
+    <userTask id="review_invoice" name="Review Invoice" />
+    <sequenceFlow id="flow_review_to_wait" sourceRef="review_invoice" targetRef="wait_before_notify" />
     <intermediateCatchEvent id="wait_before_notify" name="Wait Before Notify">
       <timerEventDefinition>
         <timeDuration>PT10S</timeDuration>
       </timerEventDefinition>
     </intermediateCatchEvent>
-    <sequenceFlow id="flow_wait_to_notify" sourceRef="wait_before_notify" targetRef="notify_requester"/>
-
-    <serviceTask id="notify_requester" name="Notify Requester"/>
-    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_notified"/>
-
-    <endEvent id="end_notified" name="Requester Notified"/>
+    <sequenceFlow id="flow_wait_to_notify" sourceRef="wait_before_notify" targetRef="notify_requester" />
+    <serviceTask id="notify_requester" name="Notify Requester" />
+    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_notified" />
+    <endEvent id="end_notified" name="Requester Notified" />
   </process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_invoice_receipt_reminder">
+    <bpmndi:BPMNPlane id="BPMNPlane_invoice_receipt_reminder" bpmnElement="invoice_receipt_reminder">
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <omgdc:Bounds x="57" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="register_invoice_di" bpmnElement="register_invoice">
+        <omgdc:Bounds x="25" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="review_invoice_di" bpmnElement="review_invoice">
+        <omgdc:Bounds x="25" y="310" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="wait_before_notify_di" bpmnElement="wait_before_notify">
+        <omgdc:Bounds x="57" y="472" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="notify_requester_di" bpmnElement="notify_requester">
+        <omgdc:Bounds x="25" y="590" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_notified_di" bpmnElement="end_notified">
+        <omgdc:Bounds x="57" y="752" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </definitions>

@@ -1,37 +1,55 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
-             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
-             targetNamespace="http://example.com/bpmn">
-  <message id="message_manager_note" name="manager_note"/>
-
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" targetNamespace="http://example.com/bpmn">
+  <message id="message_manager_note" name="manager_note" />
   <process id="invoice_event_subprocess_message" name="Invoice Event Subprocess Message" isExecutable="true">
-    <startEvent id="start" name="Invoice Received"/>
-    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice"/>
-
-    <serviceTask id="register_invoice" name="Register Invoice"/>
-    <sequenceFlow id="flow_register_to_review" sourceRef="register_invoice" targetRef="review_invoice"/>
-
-    <userTask id="review_invoice" name="Review Invoice"/>
-    <sequenceFlow id="flow_review_to_notify" sourceRef="review_invoice" targetRef="notify_requester"/>
-
-    <serviceTask id="notify_requester" name="Notify Requester"/>
-    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_completed"/>
-
+    <startEvent id="start" name="Invoice Received" />
+    <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice" />
+    <serviceTask id="register_invoice" name="Register Invoice" />
+    <sequenceFlow id="flow_register_to_review" sourceRef="register_invoice" targetRef="review_invoice" />
+    <userTask id="review_invoice" name="Review Invoice" />
+    <sequenceFlow id="flow_review_to_notify" sourceRef="review_invoice" targetRef="notify_requester" />
+    <serviceTask id="notify_requester" name="Notify Requester" />
+    <sequenceFlow id="flow_notify_to_end" sourceRef="notify_requester" targetRef="end_completed" />
     <subProcess id="manager_notification_scope" name="Manager Notification Scope" triggeredByEvent="true">
       <startEvent id="manager_note_start" name="Manager Note" isInterrupting="false">
-        <messageEventDefinition messageRef="message_manager_note"/>
+        <messageEventDefinition messageRef="message_manager_note" />
       </startEvent>
-      <sequenceFlow id="flow_event_start_to_notify_manager" sourceRef="manager_note_start" targetRef="notify_manager"/>
-
-      <serviceTask id="notify_manager" name="Notify Manager"/>
-      <sequenceFlow id="flow_notify_manager_to_event_end" sourceRef="notify_manager" targetRef="manager_note_end"/>
-
-      <endEvent id="manager_note_end" name="Manager Note Handled"/>
+      <sequenceFlow id="flow_event_start_to_notify_manager" sourceRef="manager_note_start" targetRef="notify_manager" />
+      <serviceTask id="notify_manager" name="Notify Manager" />
+      <sequenceFlow id="flow_notify_manager_to_event_end" sourceRef="notify_manager" targetRef="manager_note_end" />
+      <endEvent id="manager_note_end" name="Manager Note Handled" />
     </subProcess>
-
-    <endEvent id="end_completed" name="Invoice Completed"/>
+    <endEvent id="end_completed" name="Invoice Completed" />
   </process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_invoice_event_subprocess_message">
+    <bpmndi:BPMNPlane id="BPMNPlane_invoice_event_subprocess_message" bpmnElement="invoice_event_subprocess_message">
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <omgdc:Bounds x="57" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="register_invoice_di" bpmnElement="register_invoice">
+        <omgdc:Bounds x="25" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="review_invoice_di" bpmnElement="review_invoice">
+        <omgdc:Bounds x="25" y="310" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="notify_requester_di" bpmnElement="notify_requester">
+        <omgdc:Bounds x="25" y="450" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="manager_notification_scope_di" bpmnElement="manager_notification_scope">
+        <omgdc:Bounds x="25" y="590" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_completed_di" bpmnElement="end_completed">
+        <omgdc:Bounds x="57" y="752" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="manager_note_start_di" bpmnElement="manager_note_start">
+        <omgdc:Bounds x="57" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="notify_manager_di" bpmnElement="notify_manager">
+        <omgdc:Bounds x="25" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="manager_note_end_di" bpmnElement="manager_note_end">
+        <omgdc:Bounds x="57" y="332" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </definitions>
