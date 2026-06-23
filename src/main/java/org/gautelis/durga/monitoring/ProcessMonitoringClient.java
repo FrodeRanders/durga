@@ -72,14 +72,15 @@ public final class ProcessMonitoringClient {
                     """);
         };
 
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder(URI.create(normalizeBaseUrl(baseUrl) + path))
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(normalizeBaseUrl(baseUrl) + path))
                 .GET()
                 .build();
 
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        System.out.println("HTTP " + response.statusCode());
-        System.out.println(response.body());
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println("HTTP " + response.statusCode());
+            System.out.println(response.body());
+        }
     }
 
     private static String normalizeBaseUrl(String baseUrl) {

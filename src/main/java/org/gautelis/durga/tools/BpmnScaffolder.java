@@ -54,6 +54,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Stream;
 
 /**
  * Scaffolds a BPMN model into an explicit Durga/Kafka runtime project.
@@ -640,24 +641,11 @@ public class BpmnScaffolder {
     }
 
     private static String normalize(String value) {
-        if (value == null || value.isBlank()) {
-            return "unnamed";
-        }
-        String normalized = value.toLowerCase(Locale.ROOT)
-                .replaceAll("[^a-z0-9]+", "_")
-                .replaceAll("^_+", "")
-                .replaceAll("_+$", "");
-        return normalized.isBlank() ? "unnamed" : normalized;
+        return BpmnModelCollector.normalize(value);
     }
 
     private static String nameOrId(String name, String id) {
-        if (name != null && !name.isBlank()) {
-            return name;
-        }
-        if (id != null && !id.isBlank()) {
-            return id;
-        }
-        return "unnamed";
+        return BpmnModelCollector.nameOrId(name, id);
     }
 
     static Optional<String> resolveInputChannel(
@@ -757,23 +745,11 @@ public class BpmnScaffolder {
     }
 
     private static List<String> combineNames(List<String> primary, List<String> secondary) {
-        List<String> combined = new ArrayList<>(primary);
-        for (String value : secondary) {
-            if (!combined.contains(value)) {
-                combined.add(value);
-            }
-        }
-        return combined;
+        return BpmnModelCollector.combineNames(primary, secondary);
     }
 
     private static List<String> distinct(List<String> values) {
-        List<String> distinct = new ArrayList<>();
-        for (String value : values) {
-            if (!distinct.contains(value)) {
-                distinct.add(value);
-            }
-        }
-        return distinct;
+        return BpmnModelCollector.distinct(values);
     }
 
     static String templateForTask(TaskKind kind, boolean transactions) {
@@ -1664,7 +1640,7 @@ public class BpmnScaffolder {
             builder.append(part.substring(0, 1).toUpperCase(Locale.ROOT))
                     .append(part.substring(1));
         }
-        return builder.length() == 0 ? "Unnamed" : builder.toString();
+        return builder.isEmpty() ? "Unnamed" : builder.toString();
     }
 
     private static String loadTemplates() {
@@ -1684,7 +1660,7 @@ public class BpmnScaffolder {
                 if (input == null) {
                     throw new IllegalStateException("Template not found: " + resource);
                 }
-                if (templates.length() > 0) {
+                if (!templates.isEmpty()) {
                     templates.append('\n');
                 }
                 templates.append(new String(input.readAllBytes(), StandardCharsets.UTF_8));
@@ -1728,10 +1704,9 @@ public class BpmnScaffolder {
         if (!Files.exists(root)) {
             return files;
         }
-        try {
-            Files.walk(root)
-                    .filter(path -> path.getFileName().toString().endsWith(".java"))
-                    .forEach(path -> files.add(path.getFileName().toString()));
+        try (Stream<Path> stream = Files.walk(root)) {
+            stream.filter(path -> path.getFileName().toString().endsWith(".java"))
+                  .forEach(path -> files.add(path.getFileName().toString()));
         } catch (IOException e) {
             throw new IllegalStateException("Failed to index source files", e);
         }

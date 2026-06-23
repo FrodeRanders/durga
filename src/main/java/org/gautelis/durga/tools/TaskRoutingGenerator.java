@@ -381,9 +381,6 @@ final class TaskRoutingGenerator {
             }
             endTargets.add(target.name);
         }
-        if (endTargets.isEmpty()) {
-            return null;
-        }
         return endTargets.getFirst();
     }
 }

@@ -270,9 +270,7 @@ class BpmnModelCollector {
             Map<String, NodeInfo> nodes
     ) {
         for (T task : tasks) {
-            String name = normalize(nameOrId(task.getName(), task.getId()));
-            taskSpecs.put(task.getId(), new TaskSpec(task.getId(), name, kind));
-            nodes.put(task.getId(), new NodeInfo(task.getId(), name, NodeType.TASK, kind));
+            registerTaskSpec(task, kind, taskSpecs, nodes);
         }
     }
 

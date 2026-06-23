@@ -14,9 +14,10 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
- * Small embedded HTTP surface for the monitoring topology.
+ * Small embedded HTTP API for the monitoring topology.
  * <p>
  * The server exposes health, instance lookup, aggregate queries, metrics,
  * and the embedded dashboard without introducing a second application framework.
@@ -158,7 +159,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         }
 
         try {
-            // Keep the HTTP surface intentionally small: both routes are just read-model views
+            // Keep the HTTP API intentionally small: both routes are just read-model views
             // over the same materialized stores, not separate service layers.
             if ("counts".equals(parts.get(2))) {
                 sendJson(exchange, 200, queryService.countsForProcess(parts.get(1)));
@@ -237,7 +238,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
     }
 
     private static List<String> pathParts(String path) {
-        return List.of(path.split("/")).stream()
+        return Stream.of(path.split("/"))
                 .filter(part -> !part.isBlank())
                 .toList();
     }

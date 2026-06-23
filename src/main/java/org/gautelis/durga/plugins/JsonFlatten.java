@@ -72,9 +72,7 @@ public final class JsonFlatten implements Plugin {
 
     private static void flattenNode(ObjectMapper mapper, ObjectNode output, String prefix,
                                      ObjectNode node, String separator, int depth, int maxDepth) {
-        Iterator<Map.Entry<String, JsonNode>> fields = node.properties().iterator();
-        while (fields.hasNext()) {
-            Map.Entry<String, JsonNode> entry = fields.next();
+        for (Map.Entry<String, JsonNode> entry : node.properties()) {
             String key = prefix.isEmpty() ? entry.getKey() : prefix + separator + entry.getKey();
             JsonNode value = entry.getValue();
             if (value.isObject() && !value.isEmpty() && depth < maxDepth) {
@@ -100,9 +98,7 @@ public final class JsonFlatten implements Plugin {
         }
 
         ObjectNode output = mapper.createObjectNode();
-        Iterator<Map.Entry<String, JsonNode>> fields = input.properties().iterator();
-        while (fields.hasNext()) {
-            Map.Entry<String, JsonNode> entry = fields.next();
+        for (Map.Entry<String, JsonNode> entry : input.properties()) {
             String key = entry.getKey();
             JsonNode value = entry.getValue();
             PipelinePlugin.setFieldAt(output, key, value);

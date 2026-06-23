@@ -179,12 +179,10 @@ public final class PipelinePlugin {
      */
     public static ObjectNode shallowMerge(JsonNode base, JsonNode override) {
         ObjectNode result = MAPPER.createObjectNode();
-        for (Iterator<Map.Entry<String, JsonNode>> it = base.properties().iterator(); it.hasNext(); ) {
-            Map.Entry<String, JsonNode> entry = it.next();
+        for (Map.Entry<String, JsonNode> entry : base.properties()) {
             result.set(entry.getKey(), entry.getValue());
         }
-        for (Iterator<Map.Entry<String, JsonNode>> it = override.properties().iterator(); it.hasNext(); ) {
-            Map.Entry<String, JsonNode> entry = it.next();
+        for (Map.Entry<String, JsonNode> entry : override.properties()) {
             result.set(entry.getKey(), entry.getValue());
         }
         return result;

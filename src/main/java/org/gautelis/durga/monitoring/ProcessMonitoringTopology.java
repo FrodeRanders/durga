@@ -260,7 +260,7 @@ public final class ProcessMonitoringTopology {
         @Override
         public void init(ProcessorContext<String, ActivityLatencyDelta> context) {
             this.context = context;
-            this.entryStore = (KeyValueStore<String, String>) context.getStateStore(LOCAL_ACTIVITY_ENTRY_STORE);
+            this.entryStore = context.getStateStore(LOCAL_ACTIVITY_ENTRY_STORE);
         }
 
         @Override
@@ -290,10 +290,6 @@ public final class ProcessMonitoringTopology {
             ActivityLatencyDelta sample = ActivityLatencyDelta.of(
                     event.processId(), event.activityId(), durationMs, SLA_THRESHOLD_MS);
             context.forward(record.withKey(sample.key()).withValue(sample));
-        }
-
-        @Override
-        public void close() {
         }
 
         private boolean supportsLatency(ProcessEvent.EventType eventType) {

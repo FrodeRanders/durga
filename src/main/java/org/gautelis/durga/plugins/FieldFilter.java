@@ -75,18 +75,14 @@ public final class FieldFilter implements Plugin {
                 : null;
 
         ObjectNode output = mapper.createObjectNode();
-        Iterator<Map.Entry<String, JsonNode>> fields = input.properties().iterator();
-        while (fields.hasNext()) {
-            Map.Entry<String, JsonNode> entry = fields.next();
+        for (Map.Entry<String, JsonNode> entry : input.properties()) {
             String field = entry.getKey();
 
             boolean shouldKeep;
             if (keepSet != null && !keepSet.isEmpty()) {
                 shouldKeep = keepSet.contains(field);
-            } else if (dropSet != null && dropSet.contains(field)) {
-                shouldKeep = false;
             } else {
-                shouldKeep = true;
+                shouldKeep = dropSet == null || !dropSet.contains(field);
             }
             if (shouldKeep) {
                 output.set(field, entry.getValue());
@@ -96,9 +92,7 @@ public final class FieldFilter implements Plugin {
         if (flattenPrefix != null && !flattenPrefix.isBlank()) {
             JsonNode nested = input.get(flattenPrefix);
             if (nested != null && nested.isObject()) {
-                Iterator<Map.Entry<String, JsonNode>> nestedFields = nested.properties().iterator();
-                while (nestedFields.hasNext()) {
-                    Map.Entry<String, JsonNode> entry = nestedFields.next();
+                for (Map.Entry<String, JsonNode> entry : nested.properties()) {
                     output.set(entry.getKey(), entry.getValue());
                 }
             }

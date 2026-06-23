@@ -40,9 +40,7 @@ public final class TypeCoercion implements Plugin {
         }
 
         ObjectNode output = mapper.createObjectNode();
-        Iterator<Map.Entry<String, JsonNode>> fields = input.properties().iterator();
-        while (fields.hasNext()) {
-            Map.Entry<String, JsonNode> entry = fields.next();
+        for (Map.Entry<String, JsonNode> entry : input.properties()) {
             output.set(entry.getKey(), entry.getValue());
         }
 

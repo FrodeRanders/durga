@@ -101,7 +101,6 @@ public final class UuidInject implements Plugin {
                         node);
             }
             case "uuid4" -> Generators.randomBasedGenerator().generate().toString();
-            //case "uuid7" -> Generators.timeBasedEpochGenerator().generate().toString();
             default -> Generators.timeBasedEpochGenerator().generate().toString(); // UUIDv7
         };
     }

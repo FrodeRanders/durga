@@ -620,7 +620,7 @@ final class GeneratedProjectSupport {
             builder.append(part.substring(0, 1).toUpperCase(Locale.ROOT))
                     .append(part.substring(1));
         }
-        return builder.length() == 0 ? "Unnamed" : builder.toString();
+        return builder.isEmpty() ? "Unnamed" : builder.toString();
     }
 
     private static String normalize(String value) {
