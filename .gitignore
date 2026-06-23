@@ -24,3 +24,5 @@ buildNumber.properties
 .DS_Store
 monitoring-ui/node_modules/
 monitoring-ui/dist/
+generated/
+tmp/
