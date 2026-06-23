@@ -67,8 +67,6 @@ public class BpmnScaffolder {
     static String generatedProbesPackage;
     static String eventsTopic;
 
-    public static final String DURGA_VERSION = "0.1.0-beta.1"; // TODO
-
     /**
      * Generates a project from a BPMN file.
      *
@@ -286,7 +284,7 @@ public class BpmnScaffolder {
         String yamlPreview = renderYamlPreview(group, processId, tasks, allTimers, externalTopics, callActivities, subProcesses);
         String topicsPreview = renderTopicsPreview(group, processId, tasks, allTimers, externalTopics, callActivities, subProcesses, retentionMs);
         String bpmnFileName = bpmnFile.toPath().getFileName().toString();
-        String pomPreview = renderPomPreview(group, processId, bpmnFileName, DURGA_VERSION);
+        String pomPreview = renderPomPreview(group, processId, bpmnFileName);
         String runLocalPreview = renderRunLocalPreview(group, processId);
         String demoPreview = renderDemoPreview(group, processId, tasks);
         String taskInputPreview = renderTaskInputPreview(group, processId);
@@ -1283,12 +1281,11 @@ public class BpmnScaffolder {
         return topicsScript.render();
     }
 
-    private static String renderPomPreview(STGroupString group, String processId, String bpmnFileName, String durgaVersion) {
+    private static String renderPomPreview(STGroupString group, String processId, String bpmnFileName) {
         ST pom = group.getInstanceOf("pomXml");
         pom.add("processId", processId);
         pom.add("starterClass", toClassName(processId));
         pom.add("bpmnFileName", bpmnFileName);
-        pom.add("durgaVersion", durgaVersion);
         return pom.render();
     }
 

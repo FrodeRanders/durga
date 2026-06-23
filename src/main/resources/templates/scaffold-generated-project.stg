@@ -1340,7 +1340,6 @@ pomXml(processId, starterClass, bpmnFileName, durgaVersion) ::= <<
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
-        <durga.version>%durgaVersion%</durga.version>
         <quarkus.platform.version>3.37.0</quarkus.platform.version>
         <kafka.version>4.3.0</kafka.version>
         <slf4j.version>2.0.18</slf4j.version>
@@ -1352,12 +1351,6 @@ pomXml(processId, starterClass, bpmnFileName, durgaVersion) ::= <<
     </properties>
 
     <dependencies>
-        <dependency>
-            <groupId>org.gautelis</groupId>
-            <artifactId>durga</artifactId>
-            <version>${durga.version}</version>
-        </dependency>
-
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-messaging-kafka</artifactId>
