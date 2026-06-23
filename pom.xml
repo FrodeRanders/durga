@@ -15,16 +15,20 @@
         <slf4j.version>2.0.18</slf4j.version>
         <kafka.version>4.3.0</kafka.version>
         <guid-gen.version>5.2.0</guid-gen.version>
-        <quarkus.platform.version>3.36.1</quarkus.platform.version>
-        <jackson.version>3.1.4</jackson.version>
-
+        <quarkus.platform.version>3.37.0</quarkus.platform.version>
+        <jackson.version>3.2.0</jackson.version>
+        <ST4.version>4.3.4</ST4.version>
+        <micrometer.version>1.17.0</micrometer.version>
         <camunda.version>7.24.0</camunda.version>
+        <junit.version>4.13.2</junit.version>
+        <testcontainers.version>2.0.5</testcontainers.version>
+        <jna.version>5.19.1</jna.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>io.quarkus.platform</groupId>
+                <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-bom</artifactId>
                 <version>${quarkus.platform.version}</version>
                 <type>pom</type>
@@ -139,17 +143,16 @@
             <version>${jackson.version}</version>
         </dependency>
 
-
         <dependency>
             <groupId>org.antlr</groupId>
             <artifactId>ST4</artifactId>
-            <version>4.3.4</version>
+            <version>${ST4.version}</version>
         </dependency>
 
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
-            <version>1.15.0</version>
+            <version>${micrometer.version}</version>
         </dependency>
 
         <dependency>
@@ -173,24 +176,23 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>4.13.2</version>
+            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers</artifactId>
-            <version>2.0.2</version>
+            <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>net.java.dev.jna</groupId>
             <artifactId>jna</artifactId>
-            <version>5.14.0</version>
+            <version>${jna.version}</version>
             <scope>test</scope>
         </dependency>
-
     </dependencies>
 
     <build>

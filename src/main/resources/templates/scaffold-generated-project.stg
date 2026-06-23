@@ -1341,12 +1341,12 @@ pomXml(processId, starterClass, bpmnFileName, durgaVersion) ::= <<
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <durga.version>%durgaVersion%</durga.version>
-        <quarkus.platform.version>3.29.2</quarkus.platform.version>
-        <kafka.version>4.1.1</kafka.version>
-        <slf4j.version>2.0.17</slf4j.version>
-        <log4j.version>2.25.3</log4j.version>
-        <jackson.version>3.0.3</jackson.version>
-        <logmgr.version>3.1.2.Final</logmgr.version>
+        <quarkus.platform.version>3.37.0</quarkus.platform.version>
+        <kafka.version>4.3.0</kafka.version>
+        <slf4j.version>2.0.18</slf4j.version>
+        <log4j.version>2.26.0</log4j.version>
+        <jackson.version>3.2.0</jackson.version>
+        <logmgr.version>3.2.2.Final</logmgr.version>
         <camunda.version>7.24.0</camunda.version>
         <durga.bpmn.model>src/main/resources/%bpmnFileName%</durga.bpmn.model>
     </properties>
