@@ -8,7 +8,7 @@
       <bpmn:extensionElements>
         <camunda:properties>
           <camunda:property name="plugin" value="custom" />
-          <camunda:property name="pluginConfig" value="interface=org.example.CustomTransformContract" />
+          <camunda:property name="pluginConfig" value="interface=org.example.generated.CustomTransformContract" />
         </camunda:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_start_to_custom</bpmn:incoming>

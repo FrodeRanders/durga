@@ -1658,6 +1658,7 @@ public final class ModelEnricher {
 
             Path implClassPath = findImplementation(classesDir, contractFqName, classLoader);
             if (implClassPath == null) {
+                System.out.println("No implementation of " + contractFqName);
                 continue;
             }
 
@@ -1671,6 +1672,7 @@ public final class ModelEnricher {
             String knownHash = getProperty(task, "customHash");
 
             if (hash.equals(knownHash) && implClassName.equals(getProperty(task, "customImpl"))) {
+                System.out.println(contractFqName + " is not modified");
                 continue;
             }
 

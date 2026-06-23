@@ -63,7 +63,7 @@ import java.util.TreeSet;
  */
 public class BpmnScaffolder {
     private static final Logger LOG = LoggerFactory.getLogger(BpmnScaffolder.class);
-    static String generatedPackage = "org.gautelis.durga.generated";
+    static String generatedPackage = "org.example.generated";
     static String generatedProbesPackage;
     static String eventsTopic;
 
