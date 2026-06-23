@@ -60,7 +60,7 @@ Before production use:
 
 ## Upgrade Compatibility
 
-Durga has two compatibility surfaces: generated source code and Kafka event
+Durga has two compatibility boundaries: generated source code and Kafka event
 contracts. Both need explicit handling.
 
 For generated code:

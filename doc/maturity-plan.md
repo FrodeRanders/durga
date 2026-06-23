@@ -86,4 +86,4 @@ Durga can be considered beta-ready when the following are true:
 3. Keep operations hardening guidance aligned with retention, state recovery,
    security, and upgrade compatibility changes.
 4. Expand frontend tests as monitoring UI behavior grows beyond the current
-   dashboard API-helper surface.
+   dashboard API-helper scope.

@@ -98,7 +98,7 @@ If your organisation runs Airflow, you already operate:
 - The DAG codebase
 
 Kafka replaces the broker with something more capable, and removes the
-scheduler entirely. The operational surface area is comparable.
+scheduler entirely. The operational footprint is comparable.
 
 The generated services are standard Quarkus microservices. They use
 `@Incoming` and `@Outgoing` annotations for Kafka channels. Any team
