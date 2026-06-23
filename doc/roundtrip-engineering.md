@@ -129,12 +129,15 @@ future regenerations preserve the connection.
 │      - Regenerates plugin workers from scratch                       │
 │      - Regenerates contract interfaces for custom activities         │
 │      - Skips generating contracts that already exist and match       │
-│      - Preserves customImpl and customSource properties in the       │
-│        output BPMN copy (they were already in the input model)       │
+│      - Preserves customImpl/customSource/customHash properties       │
+│      - Restores embedded custom sources (durga:source) to            │
+│        src/main/java when they are not already present locally        │
 │      - Emits a warning if a referenced implementation class no       │
 │        longer exists (the developer deleted it)                      │
 │                                                                      │
-│ The hand-written implementation classes survive untouched.           │
+│ The hand-written implementation classes survive untouched, and a     │
+│ BPMN carried on its own can regenerate the whole project including    │
+│ its locally written implementations.                                 │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -234,21 +237,41 @@ mvn process-classes
         ├── Matches implementations to BPMN activities by contract name
         ├── For each match, writes/updates:
         │     <camunda:property name="customImpl" value="FQN" />
-        │     <camunda:property name="customSource" value="filename" />
+        │     <camunda:property name="customSource" value="path" />
         │     <camunda:property name="customHash" value="sha256" />
-        └── Writes enriched model back to src/main/resources/pipeline.bpmn
+        ├── Embeds the implementation source plus its in-project
+        │   support code (resolved by import-graph reachability) as
+        │   CDATA payloads, each carrying its own content hash:
+        │     <durga:source path="org/.../Impl.java" hash="sha256">
+        │       <![CDATA[ ... ]]></durga:source>
+        └── Writes the enriched model back to src/main/resources/pipeline.bpmn
+            (whitespace-normalized; the only non-generated reference removed)
 ```
 
-The enrichment is **additive and non-destructive** — it only adds or
-updates the three custom properties. It never removes existing BPMN
-elements or changes the model structure. The enrichment runs on every
-build, so the model stays in sync with the code.
+The enrichment is **additive and non-destructive** to model structure.
+It runs on every build, so the model stays in sync with the code. The
+local source is authoritative: when it diverges from the embedded copy,
+the embedded copy and hash are refreshed and a warning is emitted
+(local wins).
 
-The `customHash` property enables a useful safety check: on
-regeneration, Durga can verify that the implementation class still
-has the expected hash. If it changed, the scaffolder emits a note:
-"Custom implementation for 'transform_data' has been modified since
-last generation — review the contract interface for compatibility."
+Each `durga:source` carries its own `hash`, and `customHash` is the
+Merkle root over those per-file hashes (sorted by path). So a change to
+*any* embedded file — including a transitive support file, not just the
+implementation class — moves `customHash` and triggers re-embedding,
+while the per-file hashes allow precise diagnostics and integrity
+verification of each block independently. Because the source itself
+travels inside the model, a BPMN file alone is enough to regenerate the
+project: on regeneration the scaffolder restores any `durga:source`
+files that are missing locally (and warns if a block fails its hash).
+
+### Single source of truth for the enricher
+
+`ModelEnricher` exists only as a StringTemplate (`modelEnricherClass`
+in `scaffold-generated-project.stg`). The same template both (a) emits
+the enricher into generated projects and (b) is rendered into
+`target/generated-sources` during Durga's own build (via the
+`gmavenplus` + `build-helper` plugins) so it can be compiled and tested
+— there is no duplicated hand-written copy.
 
 ## Version control discipline
 

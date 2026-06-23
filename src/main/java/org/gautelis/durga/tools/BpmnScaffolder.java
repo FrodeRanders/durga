@@ -558,6 +558,18 @@ public class BpmnScaffolder {
                     generatedFiles, payloadPreview
             );
             GeneratedProjectSupport.copyBpmnModel(outputRoot, parsed.bpmnPath, generatedFiles);
+
+            Path copiedBpmn = outputRoot.resolve("src/main/resources")
+                    .resolve(SafeXml.safePath(parsed.bpmnPath).getFileName());
+            try {
+                int restored = ModelEnricher.restore(copiedBpmn, outputRoot.resolve("src/main/java"));
+                if (restored > 0) {
+                    System.out.println("Restored " + restored
+                            + " embedded custom source file(s) from BPMN");
+                }
+            } catch (IOException e) {
+                System.err.println("Warning: failed to restore embedded sources: " + e.getMessage());
+            }
         }
 
         System.out.println("Generated in " + outputRoot.toAbsolutePath());

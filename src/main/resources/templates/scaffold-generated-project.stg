@@ -1588,21 +1588,85 @@ import org.camunda.bpm.model.bpmn.BpmnModelInstance;
 import org.camunda.bpm.model.bpmn.instance.ServiceTask;
 import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperties;
 import org.camunda.bpm.model.bpmn.instance.camunda.CamundaProperty;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathFactory;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringWriter;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+/**
+ * Enriches a local BPMN model with implementation metadata discovered from
+ * compiled Java classes that implement generated contract interfaces, and
+ * embeds the hand-written source (plus its in-project support code) directly
+ * into the model so a BPMN file alone can regenerate the whole project.
+ *
+ * <p>Storage:
+ * <ul>
+ *   <li>{@code camunda:property} {@code customImpl}/{@code customSource}/{@code customHash}
+ *       carry the implementation FQN, the primary source path, and a bundle hash
+ *       used for change detection.</li>
+ *   <li>{@code durga:source} elements (one per embedded file, CDATA payload) under the
+ *       same {@code bpmn:extensionElements} carry the actual source code.</li>
+ * </ul>
+ *
+ * <p>Hash is computed over the embedded source bundle, so the hash validates the
+ * embedded content and detects local changes. The local source is authoritative:
+ * when it diverges from what is embedded, the embedded copy is refreshed and a
+ * warning is emitted (local wins).
+ */
 public final class ModelEnricher {
+
+    static final String DURGA_NS = "http://gautelis.org/durga/schema/1.0";
+
     private ModelEnricher() {
+    }
+
+    /** One embedded source file: package-relative path and UTF-8 content. */
+    private record SourceFile(String path, String content, String hash) {
+    }
+
+    /** Embedded bundle for a single custom task. */
+    private static final class Bundle {
+        final String primaryPath;
+        final List<SourceFile> files;
+
+        Bundle(String primaryPath, List<SourceFile> files) {
+            this.primaryPath = primaryPath;
+            this.files = files;
+        }
     }
 
     public static void main(String[] args) throws Exception {
@@ -1626,6 +1690,10 @@ public final class ModelEnricher {
         enrich(classesDir, bpmnFile, sourcesDir);
     }
 
+    public static void enrich(Path classesDir, Path bpmnFile) throws IOException {
+        enrich(classesDir, bpmnFile, null);
+    }
+
     public static void enrich(Path classesDir, Path bpmnFile, Path sourcesDir) throws IOException {
         if (sourcesDir == null) {
             sourcesDir = deriveSourcesDir(classesDir);
@@ -1633,10 +1701,11 @@ public final class ModelEnricher {
 
         String bpmnContent = Files.readString(bpmnFile, StandardCharsets.UTF_8);
         BpmnModelInstance model = Bpmn.readModelFromStream(
-                new java.io.ByteArrayInputStream(bpmnContent.getBytes(StandardCharsets.UTF_8)));
+                new ByteArrayInputStream(bpmnContent.getBytes(StandardCharsets.UTF_8)));
 
         URLClassLoader classLoader = null;
         boolean modified = false;
+        Map<String, Bundle> bundles = new LinkedHashMap<>();
         Collection<ServiceTask> serviceTasks = model.getModelElementsByType(ServiceTask.class);
 
         for (ServiceTask task : serviceTasks) {
@@ -1664,13 +1733,25 @@ public final class ModelEnricher {
 
             String implClassName = classNameFromPath(classesDir, implClassPath);
             Path implSourcePath = classToSource(sourcesDir, implClassPath, classesDir);
-            String hash = implSourcePath != null && Files.exists(implSourcePath)
-                    ? sha256(implSourcePath) : sha256(implClassPath);
-            String sourceName = implSourcePath != null
-                    ? sourcesDir.relativize(implSourcePath).toString()
-                    : implClassPath.getFileName().toString();
-            String knownHash = getProperty(task, "customHash");
+            boolean haveSource = implSourcePath != null && Files.exists(implSourcePath);
 
+            Bundle bundle = haveSource
+                    ? collectBundle(sourcesDir, implClassName, contractFqName)
+                    : null;
+
+            String hash;
+            String sourceName;
+            if (bundle != null) {
+                hash = bundleHash(bundle);
+                sourceName = bundle.primaryPath;
+            } else {
+                hash = sha256(implClassPath);
+                sourceName = implSourcePath != null
+                        ? sourcesDir.relativize(implSourcePath).toString()
+                        : implClassPath.getFileName().toString();
+            }
+
+            String knownHash = getProperty(task, "customHash");
             if (hash.equals(knownHash) && implClassName.equals(getProperty(task, "customImpl"))) {
                 System.out.println(contractFqName + " is not modified");
                 continue;
@@ -1679,8 +1760,12 @@ public final class ModelEnricher {
             setOrUpdateProperty(task, "customImpl", implClassName);
             setOrUpdateProperty(task, "customSource", sourceName);
             setOrUpdateProperty(task, "customHash", hash);
+            if (bundle != null) {
+                bundles.put(task.getId(), bundle);
+            }
             System.out.println("Enriched custom activity '" + task.getId()
                     + "': impl=" + implClassName + ", source=" + sourceName
+                    + (bundle != null ? ", embedded=" + bundle.files.size() + " file(s)" : "")
                     + (knownHash != null && !hash.equals(knownHash) ? " (hash changed)" : ""));
             modified = true;
         }
@@ -1693,12 +1778,300 @@ public final class ModelEnricher {
         }
 
         if (modified) {
-            Files.writeString(bpmnFile, Bpmn.convertToString(model), StandardCharsets.UTF_8);
+            String serialized = Bpmn.convertToString(model);
+            String finalXml = writeBundlesAndNormalize(serialized, bundles);
+            Files.writeString(bpmnFile, finalXml, StandardCharsets.UTF_8);
             System.out.println("BPMN model enriched: " + bpmnFile);
         } else {
             System.out.println("No changes needed for: " + bpmnFile);
         }
     }
+
+    /**
+     * Materializes embedded {@code durga:source} files into {@code sourcesDir}.
+     * Local files are authoritative: an existing file that differs from the embedded
+     * copy is left untouched (a warning is emitted); missing files are restored.
+     *
+     * @return number of files written
+     */
+    public static int restore(Path bpmnFile, Path sourcesDir) throws IOException {
+        String xml = Files.readString(bpmnFile, StandardCharsets.UTF_8);
+        Document doc = parse(xml);
+        NodeList sources = sourceElements(doc);
+        int written = 0;
+        for (int i = 0; i < sources.getLength(); i++) {
+            Element src = (Element) sources.item(i);
+            String relPath = src.getAttribute("path");
+            if (relPath == null || relPath.isBlank()) {
+                continue;
+            }
+            String content = src.getTextContent();
+            String embeddedHash = src.getAttribute("hash");
+            if (embeddedHash != null && !embeddedHash.isBlank()
+                    && !embeddedHash.equals(sha256(content.getBytes(StandardCharsets.UTF_8)))) {
+                System.out.println("Warning: embedded source hash mismatch (possible corruption): "
+                        + relPath);
+            }
+            Path target = sourcesDir.resolve(relPath).normalize();
+            if (Files.exists(target)) {
+                String local = Files.readString(target, StandardCharsets.UTF_8);
+                if (!local.equals(content)) {
+                    System.out.println("Embedded source differs from local file, keeping local: "
+                            + relPath);
+                }
+                continue;
+            }
+            Files.createDirectories(target.getParent());
+            Files.writeString(target, content, StandardCharsets.UTF_8);
+            System.out.println("Restored embedded source: " + relPath);
+            written++;
+        }
+        return written;
+    }
+
+    // ---- import-graph reachability -------------------------------------------------
+
+    private static Bundle collectBundle(Path sourcesDir, String implFqName, String contractFqName) {
+        Map<String, SourceFile> files = new TreeMap<>();
+        Set<String> visited = new LinkedHashSet<>();
+        Deque<String> queue = new ArrayDeque<>();
+        queue.add(implFqName);
+        String primaryPath = relPathFor(implFqName);
+
+        while (!queue.isEmpty()) {
+            String fqName = queue.poll();
+            if (!visited.add(fqName) || fqName.equals(contractFqName)) {
+                continue;
+            }
+            String relPath = relPathFor(fqName);
+            Path sourcePath = sourcesDir.resolve(relPath).normalize();
+            if (!Files.exists(sourcePath)) {
+                continue;
+            }
+            String content;
+            try {
+                content = Files.readString(sourcePath, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                continue;
+            }
+            files.put(relPath, new SourceFile(relPath, content,
+                    sha256(content.getBytes(StandardCharsets.UTF_8))));
+            for (String dep : dependencies(sourcesDir, fqName, content)) {
+                if (!visited.contains(dep)) {
+                    queue.add(dep);
+                }
+            }
+        }
+        if (files.isEmpty()) {
+            return null;
+        }
+        return new Bundle(primaryPath, new ArrayList<>(files.values()));
+    }
+
+    private static final Pattern PACKAGE_PATTERN =
+            Pattern.compile("(?m)^\\\\s*package\\\\s+([\\\\w.]+)\\\\s*;");
+    private static final Pattern IMPORT_PATTERN =
+            Pattern.compile("(?m)^\\\\s*import\\\\s+(?:static\\\\s+)?([\\\\w.]+)\\\\s*;");
+
+    /** Returns FQNs of in-project sources referenced by the given source file. */
+    private static Set<String> dependencies(Path sourcesDir, String fqName, String content) {
+        Set<String> deps = new LinkedHashSet<>();
+        String pkg = packageOf(fqName);
+
+        Matcher im = IMPORT_PATTERN.matcher(content);
+        while (im.find()) {
+            String imp = im.group(1);
+            if (imp.endsWith(".*")) {
+                continue;
+            }
+            if (sourceExists(sourcesDir, imp)) {
+                deps.add(imp);
+            }
+        }
+
+        Path packageDir = pkg.isEmpty()
+                ? sourcesDir
+                : sourcesDir.resolve(pkg.replace('.', '/'));
+        if (Files.isDirectory(packageDir)) {
+            try (var stream = Files.list(packageDir)) {
+                List<Path> siblings = stream
+                        .filter(p -> p.getFileName().toString().endsWith(".java"))
+                        .toList();
+                for (Path sibling : siblings) {
+                    String simple = stripJava(sibling.getFileName().toString());
+                    String siblingFq = pkg.isEmpty() ? simple : pkg + "." + simple;
+                    if (siblingFq.equals(fqName)) {
+                        continue;
+                    }
+                    if (referencesSimpleName(content, simple)) {
+                        deps.add(siblingFq);
+                    }
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        return deps;
+    }
+
+    private static boolean referencesSimpleName(String content, String simpleName) {
+        Matcher m = Pattern.compile("\\\\b" + Pattern.quote(simpleName) + "\\\\b").matcher(content);
+        return m.find();
+    }
+
+    private static boolean sourceExists(Path sourcesDir, String fqName) {
+        return Files.exists(sourcesDir.resolve(relPathFor(fqName)).normalize());
+    }
+
+    private static String relPathFor(String fqName) {
+        return fqName.replace('.', '/') + ".java";
+    }
+
+    private static String packageOf(String fqName) {
+        int idx = fqName.lastIndexOf('.');
+        return idx < 0 ? "" : fqName.substring(0, idx);
+    }
+
+    private static String stripJava(String fileName) {
+        return fileName.endsWith(".java")
+                ? fileName.substring(0, fileName.length() - 5)
+                : fileName;
+    }
+
+    private static String bundleHash(Bundle bundle) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            for (SourceFile file : bundle.files) {
+                digest.update(file.path().getBytes(StandardCharsets.UTF_8));
+                digest.update((byte) 0);
+                digest.update(file.hash().getBytes(StandardCharsets.UTF_8));
+                digest.update((byte) 0);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (Exception e) {
+            return "error:" + e.getMessage();
+        }
+    }
+
+    // ---- DOM writing: durga:source bundles + whitespace normalization --------------
+
+    private static String writeBundlesAndNormalize(String serialized, Map<String, Bundle> bundles)
+            throws IOException {
+        try {
+            Document doc = parse(serialized);
+            Element root = doc.getDocumentElement();
+            root.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:durga", DURGA_NS);
+
+            XPath xpath = XPathFactory.newInstance().newXPath();
+            for (Map.Entry<String, Bundle> entry : bundles.entrySet()) {
+                String taskId = entry.getKey();
+                Element task = (Element) xpath.evaluate(
+                        "//*[local-name()='serviceTask' and @id='" + taskId + "']",
+                        doc, XPathConstants.NODE);
+                if (task == null) {
+                    continue;
+                }
+                Element ext = childByLocalName(task, "extensionElements");
+                if (ext == null) {
+                    ext = doc.createElementNS(task.getNamespaceURI(),
+                            task.getPrefix() != null
+                                    ? task.getPrefix() + ":extensionElements"
+                                    : "extensionElements");
+                    task.appendChild(ext);
+                }
+                removeChildrenByNs(ext, DURGA_NS, "source");
+                for (SourceFile file : entry.getValue().files) {
+                    Element src = doc.createElementNS(DURGA_NS, "durga:source");
+                    src.setAttribute("path", file.path());
+                    src.setAttribute("hash", file.hash());
+                    src.appendChild(doc.createCDATASection(file.content()));
+                    ext.appendChild(src);
+                }
+            }
+
+            stripWhitespace(doc);
+            return prettyPrint(doc);
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Failed to embed source bundles: " + e.getMessage(), e);
+        }
+    }
+
+    private static NodeList sourceElements(Document doc) {
+        try {
+            XPath xpath = XPathFactory.newInstance().newXPath();
+            return (NodeList) xpath.evaluate(
+                    "//*[local-name()='source' and namespace-uri()='" + DURGA_NS + "']",
+                    doc, XPathConstants.NODESET);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to read embedded sources", e);
+        }
+    }
+
+    private static Element childByLocalName(Element parent, String localName) {
+        NodeList children = parent.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node node = children.item(i);
+            if (node.getNodeType() == Node.ELEMENT_NODE
+                    && localName.equals(node.getLocalName())) {
+                return (Element) node;
+            }
+        }
+        return null;
+    }
+
+    private static void removeChildrenByNs(Element parent, String ns, String localName) {
+        NodeList children = parent.getChildNodes();
+        List<Node> toRemove = new ArrayList<>();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node node = children.item(i);
+            if (node.getNodeType() == Node.ELEMENT_NODE
+                    && ns.equals(node.getNamespaceURI())
+                    && localName.equals(node.getLocalName())) {
+                toRemove.add(node);
+            }
+        }
+        for (Node node : toRemove) {
+            parent.removeChild(node);
+        }
+    }
+
+    private static void stripWhitespace(Document doc) throws Exception {
+        XPath xpath = XPathFactory.newInstance().newXPath();
+        NodeList empty = (NodeList) xpath.evaluate(
+                "//text()[normalize-space()='']", doc, XPathConstants.NODESET);
+        for (int i = 0; i < empty.getLength(); i++) {
+            Node node = empty.item(i);
+            node.getParentNode().removeChild(node);
+        }
+    }
+
+    private static String prettyPrint(Document doc) throws Exception {
+        TransformerFactory factory = TransformerFactory.newInstance();
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+        Transformer transformer = factory.newTransformer();
+        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+        transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
+        StringWriter writer = new StringWriter();
+        transformer.transform(new DOMSource(doc), new StreamResult(writer));
+        return writer.toString();
+    }
+
+    private static Document parse(String xml) throws IOException {
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setNamespaceAware(true);
+            return factory.newDocumentBuilder()
+                    .parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IOException("Failed to parse BPMN XML: " + e.getMessage(), e);
+        }
+    }
+
+    // ---- existing helpers ----------------------------------------------------------
 
     static Path deriveSourcesDir(Path classesDir) {
         Path normalized = classesDir.toAbsolutePath().normalize();
@@ -1851,6 +2224,15 @@ public final class ModelEnricher {
             }
         }
         return out.toString();
+    }
+
+    static String sha256(byte[] bytes) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(bytes));
+        } catch (Exception e) {
+            return "error:" + e.getMessage();
+        }
     }
 
     static String sha256(Path file) {

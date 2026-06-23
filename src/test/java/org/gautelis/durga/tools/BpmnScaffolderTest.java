@@ -181,9 +181,9 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/test/resources/bpmn/invoice_message_exchange.bpmn", outputDir);
 
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/AwaitReviewResponseMessageCatchService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/SendReviewRequestMessageThrowService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/probes/InvoiceMessageExchangeMessageEventPublisher.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/example/generated/AwaitReviewResponseMessageCatchService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/example/generated/SendReviewRequestMessageThrowService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/example/generated/probes/InvoiceMessageExchangeMessageEventPublisher.java")));
         assertTrue(Files.exists(outputDir.resolve("send-message-event.sh")));
 
         String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
@@ -198,10 +198,10 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/test/resources/bpmn/invoice_nested_subprocess.bpmn", outputDir);
 
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewScopeSubProcessEntryService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewScopeSubProcessCompletionService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ApprovalScopeSubProcessEntryService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ApprovalScopeSubProcessCompletionService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/example/generated/ReviewScopeSubProcessEntryService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/example/generated/ReviewScopeSubProcessCompletionService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/example/generated/ApprovalScopeSubProcessEntryService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/example/generated/ApprovalScopeSubProcessCompletionService.java")));
 
         String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
         assertTrue(applicationYaml.contains("invoice_nested_subprocess_review_scope_input"));
@@ -215,7 +215,7 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/test/resources/bpmn/invoice_review_reminder_non_interrupting.bpmn", outputDir);
 
-        Path boundaryHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewReminderBoundaryTimerService.java");
+        Path boundaryHandler = outputDir.resolve("src/main/java/org/example/generated/ReviewReminderBoundaryTimerService.java");
         assertTrue(Files.exists(boundaryHandler));
 
         String boundarySource = Files.readString(boundaryHandler);
@@ -230,7 +230,7 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/test/resources/bpmn/invoice_subprocess_reminder_non_interrupting.bpmn", outputDir);
 
-        Path boundaryHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewScopeReminderBoundaryTimerService.java");
+        Path boundaryHandler = outputDir.resolve("src/main/java/org/example/generated/ReviewScopeReminderBoundaryTimerService.java");
         assertTrue(Files.exists(boundaryHandler));
 
         String boundarySource = Files.readString(boundaryHandler);
@@ -245,8 +245,8 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/test/resources/bpmn/invoice_event_subprocess_message.bpmn", outputDir);
 
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ManagerNotificationScopeEventSubProcessStartService.java")));
-        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/gautelis/durga/generated/ManagerNotificationScopeEventSubProcessCompletionService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/example/generated/ManagerNotificationScopeEventSubProcessStartService.java")));
+        assertTrue(Files.exists(outputDir.resolve("src/main/java/org/example/generated/ManagerNotificationScopeEventSubProcessCompletionService.java")));
 
         String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
         assertTrue(applicationYaml.contains("invoice_event_subprocess_message_manager_note_message"));
@@ -259,7 +259,7 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/test/resources/bpmn/invoice_event_subprocess_interrupting_message.bpmn", outputDir);
 
-        Path startHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/InvoiceCancellationScopeEventSubProcessStartService.java");
+        Path startHandler = outputDir.resolve("src/main/java/org/example/generated/InvoiceCancellationScopeEventSubProcessStartService.java");
         assertTrue(Files.exists(startHandler));
 
         String source = Files.readString(startHandler);
@@ -276,7 +276,7 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/test/resources/bpmn/invoice_event_subprocess_timer.bpmn", outputDir);
 
-        Path startHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewReminderScopeEventSubProcessStartService.java");
+        Path startHandler = outputDir.resolve("src/main/java/org/example/generated/ReviewReminderScopeEventSubProcessStartService.java");
         assertTrue(Files.exists(startHandler));
 
         String source = Files.readString(startHandler);
@@ -291,7 +291,7 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/test/resources/bpmn/invoice_event_subprocess_error.bpmn", outputDir);
 
-        Path startHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewErrorScopeEventSubProcessStartService.java");
+        Path startHandler = outputDir.resolve("src/main/java/org/example/generated/ReviewErrorScopeEventSubProcessStartService.java");
         assertTrue(Files.exists(startHandler));
 
         String source = Files.readString(startHandler);
@@ -306,7 +306,7 @@ public class BpmnScaffolderTest {
 
         runGeneration("src/test/resources/bpmn/invoice_event_subprocess_escalation.bpmn", outputDir);
 
-        Path startHandler = outputDir.resolve("src/main/java/org/gautelis/durga/generated/ReviewEscalationScopeEventSubProcessStartService.java");
+        Path startHandler = outputDir.resolve("src/main/java/org/example/generated/ReviewEscalationScopeEventSubProcessStartService.java");
         assertTrue(Files.exists(startHandler));
 
         String source = Files.readString(startHandler);
@@ -545,7 +545,7 @@ public class BpmnScaffolderTest {
         Path outputDir = Files.createTempDirectory("durga-pipeline-test-");
         runGeneration("src/test/resources/bpmn/data_pipeline_demo.bpmn", outputDir);
         Path transformFile = outputDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/TransformDataPluginExecutor.java");
+                "src/main/java/org/example/generated/TransformDataPluginExecutor.java");
         assertTrue(Files.exists(transformFile));
         String content = Files.readString(transformFile);
         assertTrue(content.contains("import org.gautelis.durga.plugins.Plugin"));
@@ -654,16 +654,16 @@ public class BpmnScaffolderTest {
         runGeneration("src/test/resources/bpmn/order_events_pipeline.bpmn", outputDir);
 
         assertTrue(Files.exists(outputDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/NormalizeOrderPluginExecutor.java")));
+                "src/main/java/org/example/generated/NormalizeOrderPluginExecutor.java")));
         assertTrue(Files.exists(outputDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/CoerceTypesPluginExecutor.java")));
+                "src/main/java/org/example/generated/CoerceTypesPluginExecutor.java")));
         assertTrue(Files.exists(outputDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/EnrichHighValuePluginExecutor.java")));
+                "src/main/java/org/example/generated/EnrichHighValuePluginExecutor.java")));
         assertTrue(Files.exists(outputDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/XorRouteByAmountService.java")));
+                "src/main/java/org/example/generated/XorRouteByAmountService.java")));
 
         Path xorFile = outputDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/XorRouteByAmountService.java");
+                "src/main/java/org/example/generated/XorRouteByAmountService.java");
         String xorContent = Files.readString(xorFile);
         assertTrue("XOR missing amount > 1000 condition",
                 xorContent.contains("amount > 1000") || xorContent.contains("> 1000"));
@@ -676,15 +676,15 @@ public class BpmnScaffolderTest {
         runGeneration("src/test/resources/bpmn/log_processing_pipeline.bpmn", outputDir);
 
         assertTrue(Files.exists(outputDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/ExtractLogFieldsPluginExecutor.java")));
+                "src/main/java/org/example/generated/ExtractLogFieldsPluginExecutor.java")));
         assertTrue(Files.exists(outputDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/CoerceLogTypesPluginExecutor.java")));
+                "src/main/java/org/example/generated/CoerceLogTypesPluginExecutor.java")));
         assertTrue(Files.exists(outputDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/FormatMessagePluginExecutor.java")));
+                "src/main/java/org/example/generated/FormatMessagePluginExecutor.java")));
         assertTrue(Files.exists(outputDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/FlattenForIndexPluginExecutor.java")));
+                "src/main/java/org/example/generated/FlattenForIndexPluginExecutor.java")));
         assertTrue(Files.exists(outputDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/MaskIpAddressPluginExecutor.java")));
+                "src/main/java/org/example/generated/MaskIpAddressPluginExecutor.java")));
     }
 
     @Test
@@ -701,7 +701,7 @@ public class BpmnScaffolderTest {
                       <bpmn:extensionElements>
                         <camunda:properties>
                           <camunda:property name="plugin" value="custom" />
-                          <camunda:property name="pluginConfig" value="interface=org.gautelis.durga.generated.MaskIpAddressContract" />
+                          <camunda:property name="pluginConfig" value="interface=org.example.generated.MaskIpAddressContract" />
                         </camunda:properties>
                       </bpmn:extensionElements>
                 """
@@ -712,9 +712,9 @@ public class BpmnScaffolderTest {
         runGeneration(sourceBpmn.toString(), outputDir);
 
         Path implFile = outputDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/MaskIpAddressLocalImplementation.java");
+                "src/main/java/org/example/generated/MaskIpAddressLocalImplementation.java");
         Files.writeString(implFile, """
-                package org.gautelis.durga.generated;
+                package org.example.generated;
 
                 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -731,7 +731,7 @@ public class BpmnScaffolderTest {
         Path embeddedModel = outputDir.resolve("src/main/resources/log_processing_pipeline.bpmn");
         String enriched = Files.readString(embeddedModel, StandardCharsets.UTF_8);
         assertTrue("customImpl not written to embedded BPMN",
-                enriched.contains("org.gautelis.durga.generated.MaskIpAddressLocalImplementation"));
+                enriched.contains("org.example.generated.MaskIpAddressLocalImplementation"));
         assertTrue("customSource not written to embedded BPMN",
                 enriched.contains("MaskIpAddressLocalImplementation.java"));
         assertTrue("customHash not written to embedded BPMN",
@@ -739,7 +739,7 @@ public class BpmnScaffolderTest {
         String firstHash = extractCustomHash(enriched);
 
         Files.writeString(implFile, """
-                package org.gautelis.durga.generated;
+                package org.example.generated;
 
                 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -763,14 +763,14 @@ public class BpmnScaffolderTest {
         Path regeneratedModel = regeneratedDir.resolve("src/main/resources/log_processing_pipeline.bpmn");
         String regeneratedBpmn = Files.readString(regeneratedModel, StandardCharsets.UTF_8);
         assertTrue("regenerated BPMN lost customImpl",
-                regeneratedBpmn.contains("org.gautelis.durga.generated.MaskIpAddressLocalImplementation"));
+                regeneratedBpmn.contains("org.example.generated.MaskIpAddressLocalImplementation"));
         assertTrue("regenerated BPMN lost customSource",
                 regeneratedBpmn.contains("MaskIpAddressLocalImplementation.java"));
         assertTrue("regenerated BPMN lost latest customHash",
                 regeneratedBpmn.contains(secondHash));
 
         Path regeneratedWorker = regeneratedDir.resolve(
-                "src/main/java/org/gautelis/durga/generated/MaskIpAddressWorkerService.java");
+                "src/main/java/org/example/generated/MaskIpAddressWorkerService.java");
         String regeneratedWorkerSource = Files.readString(regeneratedWorker, StandardCharsets.UTF_8);
         assertTrue("regenerated worker lost expected implementation metadata",
                 regeneratedWorkerSource.contains("MaskIpAddressLocalImplementation"));

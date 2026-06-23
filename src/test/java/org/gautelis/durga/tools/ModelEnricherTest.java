@@ -198,6 +198,150 @@ public class ModelEnricherTest {
         }
     }
 
+    @Test
+    public void shouldEmbedSourceBundleAndRestoreElsewhere() throws Exception {
+        System.out.println("TC: Should embed impl + support code and restore from BPMN alone");
+        assumeCompilerAvailable();
+
+        Path workDir = Files.createTempDirectory("test-embed-");
+        try {
+            Path classesDir = workDir.resolve("classes");
+            Files.createDirectories(classesDir);
+            Path srcDir = workDir.resolve("src");
+            Path pkgDir = srcDir.resolve("org/example/generated");
+            Files.createDirectories(pkgDir);
+
+            Files.writeString(pkgDir.resolve("CustomTransformContract.java"), """
+                    package org.example.generated;
+                    public interface CustomTransformContract extends org.gautelis.durga.plugins.Plugin {
+                    }
+                    """, StandardCharsets.UTF_8);
+            Files.writeString(pkgDir.resolve("Helper.java"), """
+                    package org.example.generated;
+                    final class Helper {
+                        static String tag() { return "helper"; }
+                    }
+                    """, StandardCharsets.UTF_8);
+            Files.writeString(pkgDir.resolve("ACustomTransform.java"), """
+                    package org.example.generated;
+                    public class ACustomTransform implements CustomTransformContract {
+                        public String execute(String payload, String config) {
+                            return Helper.tag();
+                        }
+                    }
+                    """, StandardCharsets.UTF_8);
+
+            JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+            int result = compiler.run(null, null, null,
+                    "-d", classesDir.toString(),
+                    "-cp", System.getProperty("java.class.path"),
+                    pkgDir.resolve("CustomTransformContract.java").toString(),
+                    pkgDir.resolve("Helper.java").toString(),
+                    pkgDir.resolve("ACustomTransform.java").toString());
+            assertEquals("compilation failed", 0, result);
+
+            Path bpmnFile = workDir.resolve("pipeline.bpmn");
+            Files.writeString(bpmnFile, """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                      xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                                      targetNamespace="http://bpmn.io/schema/bpmn">
+                      <bpmn:process id="test_process" isExecutable="true">
+                        <bpmn:serviceTask id="custom_transform" name="Custom Transform">
+                          <bpmn:extensionElements>
+                            <camunda:properties>
+                              <camunda:property name="plugin" value="custom" />
+                              <camunda:property name="pluginConfig" value="interface=org.example.generated.CustomTransformContract" />
+                            </camunda:properties>
+                          </bpmn:extensionElements>
+                        </bpmn:serviceTask>
+                      </bpmn:process>
+                    </bpmn:definitions>
+                    """, StandardCharsets.UTF_8);
+
+            ModelEnricher.enrich(classesDir, bpmnFile, srcDir);
+
+            String enriched = Files.readString(bpmnFile, StandardCharsets.UTF_8);
+            assertTrue("durga:source not written", enriched.contains("durga:source"));
+            assertTrue("CDATA not emitted", enriched.contains("<![CDATA["));
+            assertTrue("impl path missing",
+                    enriched.contains("org/example/generated/ACustomTransform.java"));
+            assertTrue("support file (Helper) not embedded",
+                    enriched.contains("org/example/generated/Helper.java"));
+            assertFalse("contract should not be embedded",
+                    enriched.contains("path=\"org/example/generated/CustomTransformContract.java\""));
+            assertTrue("customHash missing", enriched.contains("customHash"));
+            assertEquals("expected two embedded durga:source blocks",
+                    2, countOccurrences(enriched, "<durga:source "));
+            assertEquals("expected a per-file hash attribute on each durga:source",
+                    2, countOccurrences(enriched, " hash=\""));
+
+            ModelEnricher.enrich(classesDir, bpmnFile, srcDir);
+            assertEquals("re-enrich should be a no-op when unchanged",
+                    enriched, Files.readString(bpmnFile, StandardCharsets.UTF_8));
+
+            String hashBefore = customHashOf(enriched);
+            Files.writeString(pkgDir.resolve("Helper.java"), """
+                    package org.example.generated;
+                    final class Helper {
+                        static String tag() { return "helper-CHANGED"; }
+                    }
+                    """, StandardCharsets.UTF_8);
+            int recompiled = compiler.run(null, null, null,
+                    "-d", classesDir.toString(),
+                    "-cp", System.getProperty("java.class.path"),
+                    pkgDir.resolve("CustomTransformContract.java").toString(),
+                    pkgDir.resolve("Helper.java").toString(),
+                    pkgDir.resolve("ACustomTransform.java").toString());
+            assertEquals("recompilation failed", 0, recompiled);
+
+            ModelEnricher.enrich(classesDir, bpmnFile, srcDir);
+            String afterTransitive = Files.readString(bpmnFile, StandardCharsets.UTF_8);
+            assertNotEquals("transitive-only change must change customHash",
+                    hashBefore, customHashOf(afterTransitive));
+            assertTrue("updated transitive source must be re-embedded",
+                    afterTransitive.contains("helper-CHANGED"));
+
+            Path restoreDir = workDir.resolve("restored");
+            Files.createDirectories(restoreDir);
+            int written = ModelEnricher.restore(bpmnFile, restoreDir);
+            assertEquals("expected impl + helper restored", 2, written);
+
+            Path restoredImpl = restoreDir.resolve("org/example/generated/ACustomTransform.java");
+            Path restoredHelper = restoreDir.resolve("org/example/generated/Helper.java");
+            assertTrue("impl not restored", Files.exists(restoredImpl));
+            assertTrue("helper not restored", Files.exists(restoredHelper));
+            assertEquals("restored impl content mismatch",
+                    Files.readString(pkgDir.resolve("ACustomTransform.java"), StandardCharsets.UTF_8),
+                    Files.readString(restoredImpl, StandardCharsets.UTF_8));
+
+            int second = ModelEnricher.restore(bpmnFile, restoreDir);
+            assertEquals("restore should not rewrite identical files", 0, second);
+
+        } finally {
+            deleteRecursively(workDir);
+        }
+    }
+
+    private static int countOccurrences(String haystack, String needle) {
+        int count = 0;
+        int idx = 0;
+        while ((idx = haystack.indexOf(needle, idx)) >= 0) {
+            count++;
+            idx += needle.length();
+        }
+        return count;
+    }
+
+    private static String customHashOf(String bpmn) {
+        String marker = "name=\"customHash\" value=\"";
+        int start = bpmn.indexOf(marker);
+        assertTrue("customHash property missing", start >= 0);
+        start += marker.length();
+        int end = bpmn.indexOf('"', start);
+        return bpmn.substring(start, end);
+    }
+
     private static void assumeCompilerAvailable() {
         if (!COMPILER_AVAILABLE) {
             System.out.println("Skipping test: no system Java compiler available (JRE only?)");

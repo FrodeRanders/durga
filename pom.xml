@@ -221,6 +221,84 @@
                 </configuration>
             </plugin>
 
+            <!--
+                Single source of truth for ModelEnricher: it is rendered from the
+                'modelEnricherClass' StringTemplate (the same template used to emit it
+                into generated projects) into target/generated-sources at build time.
+            -->
+            <plugin>
+                <groupId>org.codehaus.gmavenplus</groupId>
+                <artifactId>gmavenplus-plugin</artifactId>
+                <version>3.0.2</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.apache.groovy</groupId>
+                        <artifactId>groovy</artifactId>
+                        <version>4.0.22</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.antlr</groupId>
+                        <artifactId>ST4</artifactId>
+                        <version>4.3.4</version>
+                    </dependency>
+                </dependencies>
+                <executions>
+                    <execution>
+                        <id>render-model-enricher</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>execute</goal>
+                        </goals>
+                        <configuration>
+                            <scripts>
+                                <script><![CDATA[
+import org.stringtemplate.v4.STGroupString
+def base = new File(project.basedir, "src/main/resources/templates")
+def files = ["scaffold.stg", "scaffold-events.stg", "scaffold-subprocess.stg",
+             "scaffold-generated-project.stg", "scaffold-connect.stg"]
+def sb = new StringBuilder()
+files.each { f ->
+    if (sb.length() > 0) { sb.append('\n') }
+    sb.append(new File(base, f).getText("UTF-8"))
+}
+def group = new STGroupString(sb.toString())
+def template = group.getInstanceOf("modelEnricherClass")
+if (template == null) {
+    throw new RuntimeException("Template 'modelEnricherClass' not found")
+}
+def rendered = template.render()
+def target = new File(project.build.directory,
+        "generated-sources/durga/org/gautelis/durga/tools/ModelEnricher.java")
+target.parentFile.mkdirs()
+target.write(rendered, "UTF-8")
+log.info("Rendered ModelEnricher.java from template (" + rendered.length() + " chars)")
+                                ]]></script>
+                            </scripts>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>add-generated-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.build.directory}/generated-sources/durga</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
