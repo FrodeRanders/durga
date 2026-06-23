@@ -94,7 +94,7 @@ class BpmnModelCollector {
             builder.append(part.substring(0, 1).toUpperCase(Locale.ROOT))
                     .append(part.substring(1));
         }
-        return builder.length() == 0 ? "Unnamed" : builder.toString();
+        return builder.isEmpty() ? "Unnamed" : builder.toString();
     }
 
     // ---- task collection ----
@@ -229,7 +229,7 @@ class BpmnModelCollector {
                 }
             }
         }
-        if (pluginId == null || !"custom".equals(pluginId)) {
+        if (!"custom".equals(pluginId)) {
             return null;
         }
         String contractName = parseContractName(pluginConfig, task);
@@ -287,7 +287,7 @@ class BpmnModelCollector {
             }
             String name = normalize(nameOrId(reference.getName(), reference.getId()));
             DataObject referenced = reference.getDataObject();
-            boolean collection = referenced != null ? referenced.isCollection() : false;
+            boolean collection = referenced != null && referenced.isCollection();
             specs.put(reference.getId(), dataObjectSpec(reference.getId(), name, reference,
                     referenced, collection));
         }
@@ -1025,7 +1025,7 @@ class BpmnModelCollector {
             return false;
         }
         String value = subProcess.getAttributeValue("triggeredByEvent");
-        return value != null && Boolean.parseBoolean(value);
+        return Boolean.parseBoolean(value);
     }
 
     static boolean isInterruptingStart(StartEvent startEvent) {
