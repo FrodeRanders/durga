@@ -2,8 +2,9 @@
 set -euo pipefail
 
 # ── dev-up.sh ───────────────────────────────────────────────────────────────
-# One-command full-stack demo: Kafka, monitoring backend, Svelte SPA, and
-# process feed generator.  Configure via env vars or edit the defaults below.
+# One-command full-stack demo: Kafka, monitoring backends (API + SPA),
+# and process feed generators.  Each backend serves its own SPA directly —
+# no separate frontend dev server needed.
 #
 # Usage:
 #   ./setup/dev-up.sh
@@ -11,11 +12,11 @@ set -euo pipefail
 #   # Custom process:
 #   PROCESS_ID=order_fulfillment BPMN_PATH=src/test/resources/bpmn/order_fulfillment.bpmn ./setup/dev-up.sh
 #
-#   # Two processes side by side (API backends + HTML dashboards, single SPA):
+#   # Two processes side by side:
 #   PROCESSES="invoice_receipt:src/test/resources/bpmn/invoice_receipt.bpmn,order_fulfillment:src/test/resources/bpmn/order_fulfillment.bpmn" \
 #     ./setup/dev-up.sh
 #
-#   # Don't start Docker Kafka (assume already running):
+#   # Skip Docker Kafka (assume already running):
 #   START_KAFKA=false ./setup/dev-up.sh
 #
 # Env vars:
@@ -24,7 +25,6 @@ set -euo pipefail
 #   PROCESSES      comma-separated "pid:bpmnPath[:intervalMs]" for multi-backend
 #   BOOTSTRAP      Kafka bootstrap servers (default localhost:9094)
 #   BACKEND_PORT   backend API start port (default 8081)
-#   VITE_PORT      Vite dev-server port (default 5173)
 #   START_KAFKA    auto-start Kafka via docker compose (default true)
 #   SKIP_BUILD     skip Maven + npm build (default false)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -35,7 +35,6 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # ── Configuration defaults ──────────────────────────────────────────────────
 BOOTSTRAP="${BOOTSTRAP:-localhost:9094}"
 BACKEND_PORT="${BACKEND_PORT:-8081}"
-VITE_PORT="${VITE_PORT:-5173}"
 START_KAFKA="${START_KAFKA:-true}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
 # Single-process defaults (used when PROCESSES is not set)
@@ -104,7 +103,7 @@ if [[ "${SKIP_BUILD}" != "true" ]]; then
         touch monitoring-ui/dist/.gitkeep
     fi
     mvn -q package -DskipTests
-    (cd monitoring-ui && npm install --silent 2>/dev/null || true)
+    (cd monitoring-ui && npm install --silent 2>/dev/null && npm run build)
     info "Jar and SPA ready"
 fi
 
@@ -146,7 +145,6 @@ for ((j=0; j<NUM_PROCS; j++)); do
     # Wipe stale Kafka Streams state
     rm -rf "/tmp/kafka-streams-state-${pid}" 2>/dev/null || true
 done
-lsof -ti "tcp:${VITE_PORT}" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
 
 # ── 5. Start backends and feeds ────────────────────────────────────────────
 banner "Starting services"
@@ -161,7 +159,7 @@ for ((j=0; j<NUM_PROCS; j++)); do
     printf "\n  ${BOLD}%s${RESET}\n" "${pid}"
     info "API → http://localhost:${backend_port}"
 
-    # ── Monitoring backend ──────────────────────────────────────────────────
+    # ── Monitoring backend (API + SPA) ──────────────────────────────────────────
     java -Ddurga.streams.state.dir=/tmp/kafka-streams-state-${pid} \
         -cp "${JAR}" \
         org.gautelis.durga.monitoring.MonitoringContainer \
@@ -170,6 +168,7 @@ for ((j=0; j<NUM_PROCS; j++)); do
         "${backend_port}" \
         "${pid}" \
         "${bpmn}" \
+        "${ROOT_DIR}/monitoring-ui/dist" \
         > /tmp/durga-backend-${pid}.log 2>&1 &
     BG_PIDS+=($!)
 
@@ -183,18 +182,7 @@ for ((j=0; j<NUM_PROCS; j++)); do
     BG_PIDS+=($!)
 done
 
-# ── 6. Start single Vite SPA (proxies to first backend) ─────────────────────
-(
-    cd "${ROOT_DIR}/monitoring-ui"
-    export VITE_API_TARGET="http://localhost:${BACKEND_PORT}"
-    npm run dev -- --port "${VITE_PORT}" --strictPort \
-        > /tmp/durga-vite.log 2>&1
-) &
-BG_PIDS+=($!)
-
-info "SPA → http://localhost:${VITE_PORT}"
-
-# ── 7. Wait for backends ────────────────────────────────────────────────────
+# ── 6. Wait for backends ────────────────────────────────────────────────────
 echo ""
 banner "Waiting for backends"
 for i in $(seq 1 30); do
@@ -212,30 +200,26 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-# ── 8. Summary ──────────────────────────────────────────────────────────────
+# ── 7. Summary ──────────────────────────────────────────────────────────────
 echo ""
 banner "Ready — open in browser"
-echo ""
-link "    SPA  → http://localhost:${VITE_PORT}"
 echo ""
 for ((j=0; j<NUM_PROCS; j++)); do
     pid="${PROC_PID[$j]}"
     backend_port=$((BACKEND_PORT + j))
     printf "  ${BOLD}%s${RESET}\n" "${pid}"
-    info  "    API        → http://localhost:${backend_port}"
-    info  "    Dashboard  → http://localhost:${backend_port}/dashboard"
+    link "    SPA + API  → http://localhost:${backend_port}"
     echo ""
 done
 
 if [[ ${NUM_PROCS} -gt 1 ]]; then
-    echo "The SPA connects to the first backend (${PROC_PID[0]})."
-    echo "To view other processes, open their HTML dashboard links above."
+    echo "Each backend serves its own SPA. Open both URLs in separate tabs."
     echo ""
 fi
 echo "Press Ctrl+C to stop all services."
 echo ""
 
-# ── 9. Keep alive ───────────────────────────────────────────────────────────
+# ── 8. Keep alive ───────────────────────────────────────────────────────────
 while true; do
     sleep 5
 done

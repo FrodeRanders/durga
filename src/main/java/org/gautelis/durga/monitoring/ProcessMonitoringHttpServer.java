@@ -34,6 +34,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
     private final HttpServer server;
     private final String apiKey;
     private final Path bpmnFilePath;
+    private final Path spaDir;
     private final String processId;
 
     /**
@@ -49,16 +50,17 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             ProcessMonitoringTopology.MonitoringTopics topics,
             int port
     ) throws IOException {
-        this(streams, topics, port, null, null);
+        this(streams, topics, port, null, null, null);
     }
 
     /**
-     * Creates the HTTP server with an optional BPMN diagram file and process identifier.
+     * Creates the HTTP server with optional BPMN diagram, SPA directory, and process id.
      *
      * @param streams running Kafka Streams instance
      * @param topics monitoring topic and store names
      * @param port local HTTP port
      * @param bpmnFilePath path to a BPMN 2.0 XML file (may be null)
+     * @param spaDir path to a built SPA directory (may be null, disables SPA serving)
      * @param processId the process definition this monitor tracks (may be null)
      * @throws IOException if the embedded server cannot be created
      */
@@ -67,12 +69,14 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             ProcessMonitoringTopology.MonitoringTopics topics,
             int port,
             Path bpmnFilePath,
+            Path spaDir,
             String processId
     ) throws IOException {
         this.streams = streams;
         this.queryService = new ProcessMonitoringQueryService(streams, topics);
         this.apiKey = resolveApiKey();
         this.bpmnFilePath = bpmnFilePath;
+        this.spaDir = spaDir;
         this.processId = processId;
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.createContext("/", this::handleRoot);
@@ -134,13 +138,51 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             sendStatus(exchange, 405);
             return;
         }
-        if (!requireAuth(exchange)) return;
         String path = exchange.getRequestURI().getPath();
+
+        // Serve SPA static files when available
+        if (spaDir != null) {
+            String filePath = "/".equals(path) ? "/index.html" : path;
+            Path file = spaDir.resolve(filePath.substring(1)).normalize();
+            if (file.startsWith(spaDir) && Files.isRegularFile(file)) {
+                byte[] content = Files.readAllBytes(file);
+                String contentType = contentTypeFor(file.getFileName().toString());
+                exchange.getResponseHeaders().set("Content-Type", contentType);
+                exchange.sendResponseHeaders(200, content.length);
+                try (OutputStream output = exchange.getResponseBody()) {
+                    output.write(content);
+                }
+                return;
+            }
+            // SPA fallback: serve index.html for client-side routing
+            Path indexFile = spaDir.resolve("index.html");
+            if (Files.isRegularFile(indexFile)) {
+                byte[] content = Files.readAllBytes(indexFile);
+                exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
+                exchange.sendResponseHeaders(200, content.length);
+                try (OutputStream output = exchange.getResponseBody()) {
+                    output.write(content);
+                }
+                return;
+            }
+        }
+
+        if (!requireAuth(exchange)) return;
         if ("/".equals(path)) {
             redirect(exchange, "/dashboard");
             return;
         }
         sendStatus(exchange, 404);
+    }
+
+    private static String contentTypeFor(String fileName) {
+        if (fileName.endsWith(".html")) return "text/html; charset=utf-8";
+        if (fileName.endsWith(".css")) return "text/css; charset=utf-8";
+        if (fileName.endsWith(".js")) return "application/javascript; charset=utf-8";
+        if (fileName.endsWith(".svg")) return "image/svg+xml";
+        if (fileName.endsWith(".png")) return "image/png";
+        if (fileName.endsWith(".ico")) return "image/x-icon";
+        return "application/octet-stream";
     }
 
     private void handleDashboard(HttpExchange exchange) throws IOException {

@@ -27,7 +27,8 @@ public final class MonitoringContainer {
         String appId = args.length > 1 ? args[1] : "durga-monitoring";
         int port = args.length > 2 ? Integer.parseInt(args[2]) : 8081;
         String processId = args.length > 3 && !args[3].isBlank() ? args[3] : defaultProcessId();
-        Path bpmnPath = args.length > 4 && !args[4].isBlank() ? resolveBpmnPath(args[4]) : null;
+        Path bpmnPath = args.length > 4 && !args[4].isBlank() ? resolvePath(args[4], "BPMN") : null;
+        Path spaDir = args.length > 5 && !args[5].isBlank() ? resolvePath(args[5], "SPA") : null;
 
         var topics = ProcessMonitoringTopology.MonitoringTopics.forProcess(processId);
 
@@ -71,7 +72,7 @@ public final class MonitoringContainer {
         }
 
         try {
-            var httpServer = new ProcessMonitoringHttpServer(streams, topics, port, bpmnPath, processId);
+            var httpServer = new ProcessMonitoringHttpServer(streams, topics, port, bpmnPath, spaDir, processId);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 httpServer.close();
                 streams.close();
@@ -93,10 +94,10 @@ public final class MonitoringContainer {
         return System.getProperty("durga.monitoring.process.id", "default");
     }
 
-    private static Path resolveBpmnPath(String arg) {
+    private static Path resolvePath(String arg, String label) {
         Path path = Path.of(arg);
-        if (!Files.isRegularFile(path)) {
-            System.err.println("Warning: BPMN file not found: " + arg);
+        if (!Files.exists(path)) {
+            System.err.println("Warning: " + label + " path not found: " + arg);
             return null;
         }
         return path;
