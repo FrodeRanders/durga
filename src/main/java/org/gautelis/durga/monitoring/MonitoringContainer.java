@@ -95,11 +95,12 @@ public final class MonitoringContainer {
     }
 
     private static Path resolvePath(String arg, String label) {
-        Path path = Path.of(arg);
+        Path path = Path.of(arg).toAbsolutePath().normalize();
         if (!Files.exists(path)) {
-            System.err.println("Warning: " + label + " path not found: " + arg);
+            System.err.println("Warning: " + label + " path not found: " + path);
             return null;
         }
+        System.out.println(label + " path: " + path);
         return path;
     }
 }

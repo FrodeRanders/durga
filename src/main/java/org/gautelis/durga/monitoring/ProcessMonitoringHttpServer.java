@@ -141,6 +141,12 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         }
         String path = exchange.getRequestURI().getPath();
 
+        // Never serve SPA files for /api/* paths — those belong to API handlers
+        if (path.startsWith("/api/")) {
+            sendStatus(exchange, 404);
+            return;
+        }
+
         // Serve SPA static files when available
         if (spaDir != null) {
             String filePath = "/".equals(path) ? "/index.html" : path;
