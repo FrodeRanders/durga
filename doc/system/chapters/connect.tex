@@ -12,21 +12,22 @@ data-store-specific source and sink edges.
 \begin{figure}[!ht]
     \centering
     \begin{tikzpicture}[node distance=16mm,>=latex]
-        \tikzstyle{box}=[draw=iptoMuted, rounded corners=2pt, line width=0.8pt, align=center, minimum width=30mm, minimum height=10mm, fill=white]
+        \tikzstyle{box}=[draw=iptoMuted, rounded corners=2pt, line width=0.8pt, align=center, minimum width=18mm, minimum height=10mm, fill=white]
         \tikzstyle{accentbox}=[box, fill=iptoAccent!12]
-        \tikzstyle{ext}=[draw=iptoMuted!50, rounded corners=2pt, line width=0.6pt, align=center, minimum width=28mm, minimum height=9mm, fill=white, dashed]
-        \node[ext] (extsrc) {External system\\source};
-        \node[box, right=18mm of extsrc] (connsrc) {Connect\\source};
-        \node[box, right=14mm of connsrc] (intake) {intake\\topic};
-        \node[box, right=14mm of intake] (pipeline) {Durga\\pipeline};
-        \node[box, right=14mm of pipeline] (output) {output\\topic};
-        \node[box, right=14mm of output] (connsink) {Connect\\sink};
-        \node[ext, right=18mm of connsink] (extsink) {External system\\sink};
+        \tikzstyle{ext}=[draw=iptoMuted!50, rounded corners=2pt, line width=0.6pt, align=center, minimum width=22mm, minimum height=9mm, fill=white, dashed]
+
+        \node[ext] (extsrc) {External\\system source};
+        \node[box, right=5mm of extsrc] (connsrc) {Connect\\source};
+        \node[box, right=5mm of connsrc] (intake) {Intake\\topic};
+        \node[box, right=5mm of intake] (pipeline) {Durga\\pipeline};
+        \node[box, right=5mm of pipeline] (output) {Output\\topic};
+        \node[box, right=5mm of output] (connsink) {Connect\\sink};
+        \node[ext, right=5mm of connsink] (extsink) {External\\system sink};
 
         \node[box, below=12mm of connsrc] (msgsrc) {Connect\\source};
-        \node[ext, left=18mm of msgsrc] (extmsg) {External\\message};
-        \node[box, right=14mm of msgsrc] (msgtopic) {message\\topic};
-        \node[accentbox, right=14mm of msgtopic] (pipe) {Pipeline\\receive};
+        \node[ext, left=5mm of msgsrc] (extmsg) {External\\message};
+        \node[box, right=5mm of msgsrc] (msgtopic) {Message\\topic};
+        \node[accentbox, right=5mm of msgtopic] (pipe) {Pipeline\\receive};
 
         \draw[->, thick] (extsrc) -- (connsrc);
         \draw[->, thick] (connsrc) -- (intake);

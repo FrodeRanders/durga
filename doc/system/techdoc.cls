@@ -113,6 +113,10 @@
 \definecolor{iptoInk}{HTML}{0B1220}
 \definecolor{iptoMuted}{HTML}{334155}
 \definecolor{iptoAccent}{HTML}{0EA5A4}
+
+% Global table styling — light grey rule separators and comfortable row height
+\arrayrulecolor{iptoMuted!20}
+\renewcommand{\arraystretch}{1.25}
 %\definecolor{listingsBackground}{rgb}{0.95,0.95,0.95}
 
 \lstdefinestyle{xmlCode}{%

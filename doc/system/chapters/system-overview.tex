@@ -41,21 +41,24 @@ onto Kafka channels and lifecycle events.
     \centering
     \begin{tikzpicture}[node distance=16mm,>=latex]
         \tikzstyle{box}=[draw=iptoMuted, rounded corners=2pt, line width=0.8pt, align=center, minimum width=34mm, minimum height=11mm, fill=white]
-        \tikzstyle{accentbox}=[box, fill=iptoAccent!12]
-        \node[accentbox] (bpmn) {BPMN model\\input};
-        \node[box, right=22mm of bpmn] (scaffolder) {Durga scaffolder\\Camunda + ST4};
-        \node[box, right=22mm of scaffolder] (generated) {Generated process\\project (fat jar)};
+        \tikzstyle{modelbox}=[box, fill=iptoAccent!12]
+        \tikzstyle{transformbox}=[box, fill=red!12]
+                
+        \node[modelbox] (bpmn) {BPMN model\\input};
+        \node[transformbox, right=10mm of bpmn] (scaffolder) {Durga scaffolder\\Camunda + ST4};
+        \node[box, right=10mm of scaffolder] (generated) {Generated process\\project (fat jar)};
+        \node[box, right=10mm of generated] (topics) {Execution topics\\and handlers};
 
-        \node[box, below=16mm of scaffolder] (events) {Canonical\\process-events};
-        \node[box, right=22mm of events] (monitoring) {Kafka Streams\\monitoring};
-        \node[box, left=22mm of events] (topics) {Execution topics\\and handlers};
-        \node[accentbox, above=8mm of monitoring] (models) {process-models\\(BPMN registry)};
+        \node[box, below=10mm of scaffolder] (events) {Canonical\\process-events};
+        \node[modelbox, below=10mm of generated] (models) {Process-models\\(BPMN registry)};
+
+        \node[box, below=10mm of models] (monitoring) {Kafka Streams\\monitoring};
 
         \draw[->, thick] (bpmn) -- (scaffolder);
         \draw[->, thick] (scaffolder) -- (generated);
         \draw[->, thick] (generated) -- (topics);
         \draw[->, thick] (generated) -- (events);
-        \draw[->, thick] (generated) -- (models) node[midway, above, sloped, font=\footnotesize] {auto-registers on boot};
+        \draw[->, thick] (generated) -- (models) node[midway, right, font=\footnotesize] {auto-registers on boot};
         \draw[->, thick] (events) -- (monitoring);
         \draw[->, thick] (models) -- (monitoring);
     \end{tikzpicture}
