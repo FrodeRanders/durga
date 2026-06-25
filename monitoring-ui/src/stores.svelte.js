@@ -6,7 +6,7 @@ import {
   processRequestPath
 } from './api.js'
 
-let processId = $state('')
+let processId = $state('invoice_receipt')
 let threshold = $state(60)
 let refreshSecs = $state(3)
 let instanceId = $state('')
@@ -66,6 +66,19 @@ export async function discoverProcessId() {
       const data = await res.json()
       if (data.processId && data.processId.length > 0) {
         processId = data.processId
+        return
+      }
+    }
+  } catch {
+    // try fallback
+  }
+  // Fallback: use first processId from /api/counts
+  try {
+    const res = await fetch('/api/counts')
+    if (res.ok) {
+      const data = await res.json()
+      if (Array.isArray(data) && data.length > 0 && data[0].processId) {
+        processId = data[0].processId
       }
     }
   } catch {
