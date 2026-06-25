@@ -11,6 +11,12 @@
   $effect(() => {
     if (!mounted) {
       mounted = true
+      window.addEventListener('unhandledrejection', (e) => {
+        console.error('[durga] unhandled rejection', e.reason)
+      })
+      window.addEventListener('error', (e) => {
+        console.error('[durga] runtime error', e.message)
+      })
       s.discoverProcessId().then(() => {
         s.scheduleRefresh(() => s.refresh())
       })

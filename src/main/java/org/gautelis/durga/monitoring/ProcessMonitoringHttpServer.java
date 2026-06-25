@@ -134,6 +134,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
     }
 
     private void handleRoot(HttpExchange exchange) throws IOException {
+        logRequest(exchange);
         if (!"GET".equals(exchange.getRequestMethod())) {
             sendStatus(exchange, 405);
             return;
@@ -183,6 +184,11 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         if (fileName.endsWith(".png")) return "image/png";
         if (fileName.endsWith(".ico")) return "image/x-icon";
         return "application/octet-stream";
+    }
+
+    private static void logRequest(HttpExchange exchange) {
+        LOG.info("REQ {} {}", exchange.getRequestMethod(),
+                exchange.getRequestURI().getPath());
     }
 
     private void handleDashboard(HttpExchange exchange) throws IOException {
