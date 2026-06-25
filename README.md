@@ -101,32 +101,99 @@ java -jar target/durga-0.1.0-beta.1.jar src/test/resources/bpmn/<model>.bpmn
 
 ## Monitoring
 
-A Kafka Streams topology consumes the canonical `process-events` topic and materializes:
+A Kafka Streams topology consumes per-process lifecycle events and materializes:
 
-- latest state per instance into `process-state`
-- counts by state into `process-state-counts`
-- active-instance index into `process-active-state`
-- activity latency summaries into `process-latency`
-- coarse lifecycle trend buckets into `process-trends`
+- latest state per instance into `process-state-{processId}`
+- counts by state into `process-state-counts-{processId}`
+- active-instance index into `process-active-state-{processId}`
+- activity latency summaries into `process-latency-{processId}`
+- coarse lifecycle trend buckets into `process-trends-{processId}`
 
-### Start the monitoring app
+Each monitoring instance is scoped to a single `processId`. Topics and state
+stores are suffixed with `-{processId}` so multiple monitors can coexist.
+
+### Full-stack dev demo (one command)
 
 ```bash
-java -cp target/durga-0.1.0-beta.1.jar \
-  org.gautelis.durga.monitoring.ProcessMonitoringApp \
-  localhost:9094 durga-monitoring 8081
+./setup/dev-up.sh
 ```
 
-### HTTP endpoints
+Starts **everything** — Kafka in Docker, the monitoring backend, a continuous
+process-feed generator, and the Svelte SPA via Vite dev server (hot-reload).
+Opens the dashboard at `http://localhost:5173`. Press Ctrl+C to stop all
+services.
 
-- `GET /dashboard`
-- `GET /health`
-- `GET /instances/{processInstanceId}`
-- `GET /processes/{processId}/counts`
-- `GET /processes/{processId}/latency`
-- `GET /processes/{processId}/trends`
-- `GET /counts`
-- `GET /stuck?processId=<id>&olderThanSeconds=60`
+**Two processes side by side** (two browser tabs):
+
+```bash
+PROCESSES="invoice_receipt:src/test/resources/bpmn/invoice_receipt.bpmn,order_fulfillment:src/test/resources/bpmn/order_fulfillment.bpmn" \
+  ./setup/dev-up.sh
+```
+
+Backends land on adjacent ports: `:8081`/`:5173` for the first process,
+`:8082`/`:5174` for the second.
+
+**Fast restart** (skip the Maven + npm builds):
+
+```bash
+SKIP_BUILD=true ./setup/dev-up.sh
+```
+
+**Configurable environment variables:**
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PROCESSES` | `invoice_receipt:src/test/resources/bpmn/invoice_receipt.bpmn:1000` | Comma-separated `pid:bpmn[:intervalMs]` |
+| `BOOTSTRAP` | `localhost:9094` | Kafka bootstrap servers |
+| `BACKEND_PORT` | `8081` | Base backend API port |
+| `VITE_PORT` | `5173` | Base Vite dev-server port |
+| `START_KAFKA` | `true` | Auto-start Kafka via Docker Compose |
+| `SKIP_BUILD` | `false` | Skip `mvn package -DskipTests` and `npm install` |
+
+### Manual dev setup (step by step)
+
+The same as `dev-up.sh`, broken into separate terminals for debugging:
+
+```bash
+# Terminal 1 — Kafka
+cd setup && docker compose up -d
+
+# Build
+mvn -q package -DskipTests
+
+# Terminal 2 — Monitoring backend (API + BPMN diagram)
+java -cp target/durga-0.1.0-beta.1.jar \
+  org.gautelis.durga.monitoring.MonitoringContainer \
+  localhost:9094 durga-monitoring 8081 invoice_receipt \
+  src/test/resources/bpmn/invoice_receipt.bpmn
+
+# Terminal 3 — Svelte SPA (Vite dev server, proxies /api → :8081)
+cd monitoring-ui && npm run dev
+
+# Terminal 4 — Continuous process feed
+java -cp target/durga-0.1.0-beta.1.jar \
+  org.gautelis.durga.demo.ContinuousFeedPublisher \
+  localhost:9094 invoice_receipt 1000
+```
+
+Open `http://localhost:5173` for the dashboard. The SPA displays live counts,
+latency stats, stuck instances, lifecycle trends, and a BPMN diagram with
+color-coded activity overlays.
+
+### HTTP API endpoints
+
+All paths are available with or without the `/api/` prefix:
+
+- `GET /health` — Kafka Streams state (`RUNNING`, `REBALANCING`, etc.)
+- `GET /dashboard` — minimal HTML dashboard (for direct browser access)
+- `GET /instances/{processInstanceId}` — latest state view for one instance
+- `GET /processes/{processId}/counts` — state counts per process
+- `GET /processes/{processId}/latency` — per-activity latency summaries
+- `GET /processes/{processId}/trends` — lifecycle trend buckets
+- `GET /counts` — counts across all monitored processes
+- `GET /stuck?processId=<id>&olderThanSeconds=60` — stuck-instance detection
+- `GET /diagram` — BPMN 2.0 XML (if a diagram file was provided at startup)
+- `GET /metrics` — Micrometer metrics in Prometheus text format
 
 ### CLI client
 
@@ -138,6 +205,18 @@ java -cp target/durga-0.1.0-beta.1.jar \
 java -cp target/durga-0.1.0-beta.1.jar \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   http://localhost:8081 counts invoice_receipt
+
+java -cp target/durga-0.1.0-beta.1.jar \
+  org.gautelis.durga.monitoring.ProcessMonitoringClient \
+  http://localhost:8081 latency invoice_receipt
+
+java -cp target/durga-0.1.0-beta.1.jar \
+  org.gautelis.durga.monitoring.ProcessMonitoringClient \
+  http://localhost:8081 stuck invoice_receipt 60
+
+java -cp target/durga-0.1.0-beta.1.jar \
+  org.gautelis.durga.monitoring.ProcessMonitoringClient \
+  http://localhost:8081 instance <processInstanceId>
 ```
 
 ### Demo scenarios (without a generated process)
@@ -146,30 +225,30 @@ java -cp target/durga-0.1.0-beta.1.jar \
 java -cp target/durga-0.1.0-beta.1.jar \
   org.gautelis.durga.demo.ProcessEventScenarioRunner \
   localhost:9094 happy invoice_receipt register_invoice,review_invoice,notify_requester
+
+# Also available: stuck, failed
 ```
 
-### End-to-end demo script
+### CLI demo script (start Kafka, publish scenario, query)
 
 ```bash
 ./setup/demo-monitoring.sh
 START_KAFKA=true ./setup/demo-monitoring.sh
 SCENARIO=stuck ./setup/demo-monitoring.sh
 SCENARIO=failed ./setup/demo-monitoring.sh
+BPMN_PATH=src/test/resources/bpmn/invoice_receipt.bpmn ./setup/demo-monitoring.sh
 ```
 
-### Docker demo (continuous feed + monitoring UI)
+### Docker demo (continuous feed + monitoring backend)
 
 ```bash
 docker compose -f setup/docker-compose.demo.yml up --build
 ```
 
-Starts Kafka, the monitoring app with the Svelte dashboard, and a continuous
-feed publisher that exercises the monitoring topology. Open
-`http://localhost:8081` for the dashboard, `http://localhost:8080` for
-Kafka UI.
-
-The feed publishes a complete lifecycle every second with randomised
-processing times, producing live counts, latency, and stuck-instance data.
+Starts Kafka, the monitoring backend, and a continuous feed publisher.
+Open `http://localhost:8081` for the API, `http://localhost:8080` for
+Kafka UI. For the Svelte SPA, run `cd monitoring-ui && npm run dev` and
+open `http://localhost:5173` (Vite proxies `/api` to `:8081`).
 
 ```bash
 # Customise feed parameters
