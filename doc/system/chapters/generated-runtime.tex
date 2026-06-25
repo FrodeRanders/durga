@@ -35,6 +35,10 @@ events and coordinate subprocess-local routing.
 \item \textbf{Process orchestrator} observes terminal flows and emits process completion.
 \item \textbf{Probe helpers} provide generated publishers and watchers for command-line
 exploration.
+\item \textbf{Model registration} publishes the process's BPMN 2.0 model to the
+\texttt{process-models} Kafka topic on startup via a \texttt{@PostConstruct} CDI bean.
+This enables self-registration with the monitoring server and makes the process
+diagram available in the dashboard without pre-configuration.
 \end{itemize}
 
 \subsection{Task services}

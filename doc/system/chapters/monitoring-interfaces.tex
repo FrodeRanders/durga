@@ -1,29 +1,38 @@
 \section{Monitoring Interfaces}
 \label{sec:MonitoringInterfaces}
 
-The monitoring subsystem exposes three interfaces over the same Kafka Streams state:
+The monitoring subsystem exposes these interfaces over the same Kafka Streams state:
 \begin{itemize}
-\item an HTTP query service,
+\item an HTTP API and embedded SPA,
 \item a command-line client,
-\item a browser dashboard.
+\item a browser HTML dashboard.
 \end{itemize}
 
 \subsection{HTTP service}
 
-Entry point: \texttt{ProcessMonitoringApp}. Query layer:
+Entry point: \texttt{MonitoringContainer}. Query layer:
 \texttt{ProcessMonitoringQueryService} and \texttt{ProcessMonitoringHttpServer}.
 
 Endpoints:
 \begin{itemize}
 \item \texttt{/health} --- Kafka Streams readiness,
+\item \texttt{/processes/list} --- all known process IDs (from counts + model registry),
+\item \texttt{/process} --- the single process ID when running in single-process mode,
 \item \texttt{/instances/\{processInstanceId\}} --- latest instance view,
 \item \texttt{/processes/\{processId\}/counts} --- process-specific state counts,
 \item \texttt{/processes/\{processId\}/latency} --- activity latency summaries,
 \item \texttt{/processes/\{processId\}/trends} --- bucketed start/completion/failure history,
 \item \texttt{/counts} --- global state-count view,
 \item \texttt{/stuck} --- stuck-instance detection,
-\item \texttt{/dashboard} --- browser dashboard.
+\item \texttt{/diagram?processId=\textit{id}} --- BPMN 2.0 XML from the model cache,
+\item \texttt{/metrics} --- Prometheus-format metrics,
+\item \texttt{/dashboard} --- browser HTML dashboard.
 \end{itemize}
+
+All paths accept an \texttt{/api/} prefix. The diagram endpoint queries the
+\texttt{process-models-store} first, then falls back to a local BPMN directory
+(\texttt{\{bpmnDir\}/\{processId\}.bpmn}), and finally to a single BPMN file
+for development convenience.
 
 The HTTP API is designed for internal operational use. Put it behind the same
 network and identity controls used for other production admin interfaces before
@@ -52,26 +61,39 @@ java -cp target/durga-0.1.0-beta.1.jar \
 
 \subsection{Dashboard}
 
-Served from \texttt{/dashboard}. Polls the same HTTP endpoints and presents
-cluster-level process inventory, selected-process state mix, lifecycle trends,
-latency percentiles, stuck instances and instance details. Built as a standalone
-Svelte application (\filepath{monitoring-ui/}) that compiles to static assets
-served by the Quarkus backend.
+The Svelte SPA is built from \filepath{monitoring-ui/} and served directly
+from the monitoring backend. It shows:
+\begin{itemize}
+\item a process inventory with all known process IDs and aggregate KPIs,
+\item per-process drill-down: state mix, lifecycle trends, activity latency, stuck instances,
+\item instance detail lookup,
+\item a BPMN diagram viewer with color-coded activity overlays (latency and state).
+\end{itemize}
+
+The diagram viewer uses \texttt{bpmn-js} with built-in zoom (scroll wheel),
+pan (grab tool), and fit-to-viewport controls.
+
+The HTML dashboard (\texttt{/dashboard}) is a standalone server-rendered page
+that polls the same HTTP API. It serves as a lightweight alternative when the
+SPA is unavailable.
 
 \subsection{How the interfaces fit together}
 
-All three interfaces consume the same materialized state:
+All interfaces consume the same materialized state:
 \begin{enumerate}
-\item events are published to \texttt{process-events},
-\item Kafka Streams materializes state and counts,
+\item processes self-register by publishing BPMN models to \texttt{process-models},
+\item lifecycle events flow through \texttt{process-events-*},
+\item Kafka Streams materializes state, counts, latency, trends, and the model cache,
 \item the HTTP layer exposes that materialized state,
 \item the CLI and dashboard consume the same HTTP API.
 \end{enumerate}
 
 The operator workflow is:
 \begin{itemize}
+\item deploy a process --- it auto-registers its model on boot,
+\item the dashboard shows the new process in the inventory,
 \item publish a scenario or task outcome,
-\item watch \texttt{process-events},
+\item watch lifecycle events,
 \item query one instance or inspect counts and latency,
-\item use the dashboard for a broader view.
+\item view the BPMN diagram with live overlays.
 \end{itemize}

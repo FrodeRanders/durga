@@ -10,6 +10,9 @@ The generated output contains:
 \item probe and exerciser classes (starter, publishers, watchers, scenario runner)
 in \texttt{<package>.probes},
 \item a copy of the original BPMN model under \texttt{src/main/resources/},
+\item a \texttt{ModelRegistration} CDI bean that publishes the BPMN model to the
+      \texttt{process-models} Kafka topic on startup, enabling process
+      self-registration with the monitoring server,
 \item a generated \texttt{pom.xml},
 \item merged Kafka channel configuration in \texttt{application.yml},
 \item a topic-creation script,

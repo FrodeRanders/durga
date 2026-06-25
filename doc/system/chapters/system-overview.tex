@@ -44,21 +44,33 @@ onto Kafka channels and lifecycle events.
         \tikzstyle{accentbox}=[box, fill=iptoAccent!12]
         \node[accentbox] (bpmn) {BPMN model\\input};
         \node[box, right=22mm of bpmn] (scaffolder) {Durga scaffolder\\Camunda + ST4};
-        \node[box, right=22mm of scaffolder] (generated) {Generated process\\project};
+        \node[box, right=22mm of scaffolder] (generated) {Generated process\\project (fat jar)};
 
         \node[box, below=16mm of scaffolder] (events) {Canonical\\process-events};
         \node[box, right=22mm of events] (monitoring) {Kafka Streams\\monitoring};
         \node[box, left=22mm of events] (topics) {Execution topics\\and handlers};
+        \node[accentbox, above=8mm of monitoring] (models) {process-models\\(BPMN registry)};
 
         \draw[->, thick] (bpmn) -- (scaffolder);
         \draw[->, thick] (scaffolder) -- (generated);
         \draw[->, thick] (generated) -- (topics);
         \draw[->, thick] (generated) -- (events);
+        \draw[->, thick] (generated) -- (models) node[midway, above, sloped, font=\footnotesize] {auto-registers on boot};
         \draw[->, thick] (events) -- (monitoring);
+        \draw[->, thick] (models) -- (monitoring);
     \end{tikzpicture}
-    \caption{High-level flow from BPMN model to generated runtime and monitoring projections}
+    \caption{High-level flow: BPMN model $\to$ generated runtime $\to$ self-registration $\to$ monitoring}
     \label{fig:DurgaOverview}
 \end{figure}
+
+\subsection{Process self-registration}
+
+Each generated process publishes its BPMN 2.0 model to the \texttt{process-models}
+Kafka topic on startup via a \texttt{ModelRegistration} bean. The monitoring
+server discovers processes from this registry — no pre-configured process ID
+list is needed. The monitoring topology subscribes to all \texttt{process-events-*}
+topics via a regex pattern, making every process visible in a single monitoring
+instance.
 
 \subsection{Canonical event model}
 

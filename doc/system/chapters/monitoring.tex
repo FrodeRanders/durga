@@ -6,7 +6,8 @@
 Durga emits normalized lifecycle events on the shared topic \texttt{process-events}. Generated
 workers, gateways, subprocess handlers, boundary handlers and helper publishers all emit
 events describing process progress, waiting states, completion, failure, escalation and
-cancellation.
+cancellation. Each process uses a dedicated topic \texttt{process-events-\{processId\}}
+so that process definitions are isolated at the transport level.
 
 This separates execution transport from queryable state. Execution topics remain useful for
 routing, but the monitoring model depends on projections built from explicit lifecycle events.
@@ -14,29 +15,68 @@ For production use, treat the lifecycle topic as an operational contract: retent
 access control, schema compatibility and replay policy determine how far back monitoring can
 recover and how safely downstream tools can consume process state.
 
+\subsection{Process self-registration}
+
+Processes self-register with the monitoring server by publishing their BPMN 2.0 model
+to the \texttt{process-models} Kafka topic. Each generated project includes a
+\texttt{ModelRegistration} CDI bean that runs at startup:
+
+\begin{itemize}
+\item reads the BPMN file from the classpath (\texttt{src/main/resources/\{name\}.bpmn}),
+\item publishes it to \texttt{process-models} with the process ID as the Kafka message key,
+\item logs success or failure without blocking the process startup.
+\end{itemize}
+
+The monitoring server caches models in the \texttt{process-models-store} state store.
+The \texttt{/api/diagram?processId=\textit{id}} endpoint serves the cached model, with
+a fallback to a local BPMN directory for development convenience. Model updates
+overwrite previous versions (latest-wins semantics).
+
+This registry makes processes discoverable: \texttt{/api/processes/list} merges
+process IDs from both the count store (processes with live instances) and the model
+store (registered processes), so newly deployed processes appear in the dashboard
+before their first lifecycle event arrives.
+
 \subsection{Kafka Streams topology}
 
-A Kafka Streams monitoring topology consumes \texttt{process-events} and materializes:
+The monitoring topology can run in two modes:
+
+\begin{description}
+\item[Single-process] Subscribes to \texttt{process-events-\{processId\}}.
+  Suitable for dedicated monitoring per process definition.
+\item[Multi-process] Subscribes to \texttt{process-events-.*} via a regex pattern.
+  All processes share one monitoring instance. State stores use unsuffixed names.
+  The SPA shows an inventory of all known processes with drill-down to per-process detail.
+\end{description}
+
+The topology consumes lifecycle events and materializes:
 \begin{itemize}
 \item latest process state by instance,
 \item counts by current state,
 \item latency summaries,
-\item stuck-instance views.
+\item stuck-instance views,
+\item trend buckets,
+\item BPMN model cache.
 \end{itemize}
 
-The main entry point is \texttt{org.gautelis.durga.monitoring.ProcessMonitoringApp}. The
-projected instance model is \texttt{ProcessStateView}. The query side is exposed through an
-HTTP service and a CLI client.
+The main entry point is \texttt{org.gautelis.durga.monitoring.MonitoringContainer}.
+Pass \texttt{all} as the process ID argument for multi-process mode.
 
 \subsection{HTTP API}
 
-The monitoring service exposes endpoints for health, instance lookup, counts, latency,
-stuck instances and a dashboard. The local development loop is:
+The monitoring service exposes endpoints for health, process discovery, instance
+lookup, counts, latency, stuck instances, diagram serving, and a dashboard.
+Supported by both the embedded JDK HTTP server and the Quarkus REST container.
+All paths accept an \texttt{/api/} prefix for SPA proxy compatibility.
+
+The local development loop is:
 \begin{enumerate}
 \item generate a process,
+\item the process auto-registers its BPMN model on boot,
 \item publish scenarios or task inputs,
 \item observe lifecycle events,
 \item query current state and latency,
+\item view the BPMN diagram with activity overlays,
 \item iterate on the BPMN model or generated runtime.
 \end{enumerate}
 
