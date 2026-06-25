@@ -303,7 +303,7 @@
       {/if}
     </section>
 
-    <section class="panel latency-panel wide">
+    <section class="panel latency-panel">
       <div class="panel-title">
         <h2>Activity Latency</h2>
         <span>ordered by p95</span>
