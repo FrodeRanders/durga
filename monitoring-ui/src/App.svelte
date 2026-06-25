@@ -303,6 +303,7 @@
       {/if}
     </section>
 
+    <div class="row-split">
     <section class="panel latency-panel">
       <div class="panel-title">
         <h2>Activity Latency</h2>
@@ -375,6 +376,7 @@
         <p class="empty">No stuck instances at the current threshold.</p>
       {/if}
     </section>
+    </div>
 
     {#if s.diagramAvailable}
       <section class="panel wide">
@@ -592,6 +594,13 @@
   }
 
   .wide { grid-column: span 2; }
+
+  .row-split {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
 
   .panel-title {
     display: flex;
