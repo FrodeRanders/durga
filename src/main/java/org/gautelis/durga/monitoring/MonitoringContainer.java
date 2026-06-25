@@ -8,8 +8,10 @@ import org.apache.kafka.streams.StreamsConfig;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * Standalone entry point for container deployments.
@@ -41,17 +43,31 @@ public final class MonitoringContainer {
         KafkaStreams streams = new KafkaStreams(
                 ProcessMonitoringTopology.buildTopology(topics), props);
 
+        List<String> allTopics = List.of(
+                topics.eventsTopic(),
+                topics.stateTopic(),
+                topics.countsTopic(),
+                topics.activeTopic(),
+                topics.latencyTopic(),
+                topics.trendsTopic());
         Properties adminProps = new Properties();
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
         try (var admin = AdminClient.create(adminProps)) {
-            for (String topic : List.of(
-                    topics.stateTopic(),
-                    topics.countsTopic(),
-                    topics.activeTopic(),
-                    topics.latencyTopic(),
-                    topics.trendsTopic())) {
-                admin.createTopics(List.of(new NewTopic(topic, 2, (short) 1)));
+            Set<String> existing = admin.listTopics().names().get();
+            List<NewTopic> toCreate = new ArrayList<>();
+            for (String t : allTopics) {
+                if (!existing.contains(t)) {
+                    toCreate.add(new NewTopic(t, 2, (short) 1));
+                }
             }
+            if (!toCreate.isEmpty()) {
+                admin.createTopics(toCreate).all().get();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Topic creation interrupted", e);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to create topics", e);
         }
 
         try {
