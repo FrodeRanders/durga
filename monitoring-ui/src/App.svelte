@@ -391,11 +391,9 @@
     </section>
     </div>
 
-    {#if s.diagramAvailable}
       <section class="panel wide">
         <BpmnDiagram processId={s.processId} latency={s.latency} counts={s.counts} />
       </section>
-    {/if}
 
     <section class="panel instance-panel">
       <div class="panel-title">
