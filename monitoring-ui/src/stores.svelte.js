@@ -27,13 +27,13 @@ async function safeFetchJson(path) {
   try {
     const res = await fetch(path)
     if (!res.ok) {
-      console.debug('[durga] fetch %s → %d', path, res.status)
+      console.log('[durga] fetch %s → %d', path, res.status)
       return null
     }
     const body = await res.json()
     return { status: res.status, body }
   } catch (e) {
-    console.debug('[durga] fetch %s → err %s', path, e.message)
+    console.log('[durga] fetch %s → err %s', path, e.message)
     return null
   }
 }
@@ -41,7 +41,7 @@ async function safeFetchJson(path) {
 export async function refresh() {
   error = null
   const paths = dashboardRequestPaths(processId, threshold)
-  console.debug('[durga] refresh pid=%s paths=%o', processId, paths)
+  console.log('[durga] refresh pid=%s paths=%o', processId, paths)
   const responses = await Promise.all(paths.map(safeFetchJson))
   const normalized = normalizeDashboardResponses(responses)
   health = normalized.health
@@ -50,22 +50,22 @@ export async function refresh() {
   latency = normalized.latency
   stuck = normalized.stuck
   trends = normalized.trends
-  console.debug('[durga] refresh done health=%o counts=%d latency=%d stuck=%d trends=%d',
+  console.log('[durga] refresh done health=%o counts=%d latency=%d stuck=%d trends=%d',
     health?.streamsState, counts.length, latency.length, stuck.length, trends.length)
 }
 
 export async function refreshInstance() {
-  console.debug('[durga] refreshInstance called, id=%s', instanceId)
+  console.log('[durga] refreshInstance called, id=%s', instanceId)
   if (!instanceId) {
     instanceView = null
-    console.debug('[durga] refreshInstance: no id, cleared')
+    console.log('[durga] refreshInstance: no id, cleared')
     return
   }
   const path = instanceRequestPath(instanceId)
   const result = await safeFetchJson(path)
-  console.debug('[durga] refreshInstance: path=%s result=%o', path, result)
+  console.log('[durga] refreshInstance: path=%s result=%o', path, result)
   instanceView = result ? result.body : { error: 'not found' }
-  console.debug('[durga] refreshInstance: view=%o', instanceView)
+  console.log('[durga] refreshInstance: view=%o', instanceView)
 }
 
 export async function discoverProcessId() {
@@ -75,7 +75,7 @@ export async function discoverProcessId() {
       const data = await res.json()
       if (data.processId && data.processId.length > 0) {
         processId = data.processId
-        console.debug('[durga] discovered pid=%s from /api/process', processId)
+        console.log('[durga] discovered pid=%s from /api/process', processId)
         return
       }
     }
@@ -89,14 +89,14 @@ export async function discoverProcessId() {
       const data = await res.json()
       if (Array.isArray(data) && data.length > 0 && data[0].processId) {
         processId = data[0].processId
-        console.debug('[durga] discovered pid=%s from /api/counts', processId)
+        console.log('[durga] discovered pid=%s from /api/counts', processId)
         return
       }
     }
   } catch {
     // keep default
   }
-  console.debug('[durga] using default pid=%s', processId)
+  console.log('[durga] using default pid=%s', processId)
 }
 
 export async function checkDiagramAvailable() {
@@ -112,7 +112,7 @@ export function scheduleRefresh(getRefresh) {
   if (interval) clearInterval(interval)
   getRefresh()
   interval = setInterval(getRefresh, Math.max(1, refreshSecs) * 1000)
-  console.debug('[durga] polling started every %ds', refreshSecs)
+  console.log('[durga] polling started every %ds', refreshSecs)
 }
 
 export function getState() {
