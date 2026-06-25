@@ -55,17 +55,20 @@ export async function refresh() {
 }
 
 export async function refreshInstance() {
-  console.log('[durga] refreshInstance called, id=%s', instanceId)
   if (!instanceId) {
     instanceView = null
-    console.log('[durga] refreshInstance: no id, cleared')
     return
   }
-  const path = instanceRequestPath(instanceId)
-  const result = await safeFetchJson(path)
-  console.log('[durga] refreshInstance: path=%s result=%o', path, result)
-  instanceView = result ? result.body : { error: 'not found' }
-  console.log('[durga] refreshInstance: view=%o', instanceView)
+  try {
+    const res = await fetch(`/api/instances/${encodeURIComponent(instanceId)}`)
+    if (!res.ok) {
+      instanceView = { error: `HTTP ${res.status}` }
+      return
+    }
+    instanceView = await res.json()
+  } catch (e) {
+    instanceView = { error: e.message }
+  }
 }
 
 export async function discoverProcessId() {
