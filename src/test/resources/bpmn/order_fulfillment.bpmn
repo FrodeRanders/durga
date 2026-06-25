@@ -1,20 +1,22 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="http://example.com/bpmn">
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="http://example.com/bpmn" exporter="Camunda Modeler" exporterVersion="5.48.0">
   <process id="order_fulfillment" name="Order Fulfillment" isExecutable="true">
     <startEvent id="start" name="Order Received" />
     <sequenceFlow id="flow_start_to_validate" sourceRef="start" targetRef="validate_order" />
     <serviceTask id="validate_order" name="Validate Order" />
     <sequenceFlow id="flow_validate_to_gateway" sourceRef="validate_order" targetRef="order_valid" />
     <exclusiveGateway id="order_valid" name="Order Valid?" />
-    <sequenceFlow id="flow_valid_to_fulfill" sourceRef="order_valid" targetRef="fulfill_order">
+    <sequenceFlow id="flow_valid_to_fulfill" name="Yes" sourceRef="order_valid" targetRef="fulfill_order">
       <conditionExpression xsi:type="tFormalExpression">${valid == true}</conditionExpression>
     </sequenceFlow>
-    <sequenceFlow id="flow_invalid_to_reject" sourceRef="order_valid" targetRef="reject_order">
+    <sequenceFlow id="flow_invalid_to_reject" name="No" sourceRef="order_valid" targetRef="reject_order">
       <conditionExpression xsi:type="tFormalExpression">${valid == false}</conditionExpression>
     </sequenceFlow>
     <serviceTask id="fulfill_order" name="Fulfill Order" />
     <sequenceFlow id="flow_fulfill_to_ship" sourceRef="fulfill_order" targetRef="ship_order" />
-    <serviceTask id="ship_order" name="Ship Order" />
+    <serviceTask id="ship_order" name="Ship Order">
+      <incoming>flow_fulfill_to_ship</incoming>
+    </serviceTask>
     <sequenceFlow id="flow_ship_to_end" sourceRef="ship_order" targetRef="end_fulfilled" />
     <serviceTask id="reject_order" name="Reject Order" />
     <sequenceFlow id="flow_reject_to_end" sourceRef="reject_order" targetRef="end_rejected" />
@@ -23,30 +25,78 @@
   </process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_order_fulfillment">
     <bpmndi:BPMNPlane id="BPMNPlane_order_fulfillment" bpmnElement="order_fulfillment">
-      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
-        <omgdc:Bounds x="57" y="52" width="36" height="36" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="validate_order_di" bpmnElement="validate_order">
-        <omgdc:Bounds x="25" y="170" width="100" height="80" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="order_valid_di" bpmnElement="order_valid" isMarkerVisible="true">
-        <omgdc:Bounds x="50" y="325" width="50" height="50" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="fulfill_order_di" bpmnElement="fulfill_order">
-        <omgdc:Bounds x="25" y="450" width="100" height="80" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="ship_order_di" bpmnElement="ship_order">
-        <omgdc:Bounds x="25" y="590" width="100" height="80" />
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="reject_order_di" bpmnElement="reject_order">
-        <omgdc:Bounds x="25" y="730" width="100" height="80" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="end_fulfilled_di" bpmnElement="end_fulfilled">
-        <omgdc:Bounds x="57" y="892" width="36" height="36" />
+        <omgdc:Bounds x="580" y="230" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="end_rejected_di" bpmnElement="end_rejected">
-        <omgdc:Bounds x="57" y="1032" width="36" height="36" />
+        <omgdc:Bounds x="892" y="252" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="873" y="288" width="75" height="14" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-    <bpmndi:BPMNEdge id="flow_start_to_validate_di" bpmnElement="flow_start_to_validate"><omgdi:waypoint x="75" y="88" /><omgdi:waypoint x="75" y="170" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_validate_to_gateway_di" bpmnElement="flow_validate_to_gateway"><omgdi:waypoint x="75" y="250" /><omgdi:waypoint x="75" y="325" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_valid_to_fulfill_di" bpmnElement="flow_valid_to_fulfill"><omgdi:waypoint x="75" y="375" /><omgdi:waypoint x="75" y="450" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_invalid_to_reject_di" bpmnElement="flow_invalid_to_reject"><omgdi:waypoint x="75" y="375" /><omgdi:waypoint x="75" y="730" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_fulfill_to_ship_di" bpmnElement="flow_fulfill_to_ship"><omgdi:waypoint x="75" y="530" /><omgdi:waypoint x="75" y="590" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_ship_to_end_di" bpmnElement="flow_ship_to_end"><omgdi:waypoint x="75" y="670" /><omgdi:waypoint x="75" y="892" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_reject_to_end_di" bpmnElement="flow_reject_to_end"><omgdi:waypoint x="75" y="810" /><omgdi:waypoint x="75" y="1032" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane>
+      <bpmndi:BPMNShape id="fulfill_order_di" bpmnElement="fulfill_order">
+        <omgdc:Bounds x="580" y="78" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ship_order_di" bpmnElement="ship_order">
+        <omgdc:Bounds x="740" y="78" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_fulfilled_di" bpmnElement="end_fulfilled">
+        <omgdc:Bounds x="892" y="100" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="875" y="136" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="validate_order_di" bpmnElement="validate_order">
+        <omgdc:Bounds x="277" y="150" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <omgdc:Bounds x="179" y="172" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="158" y="208" width="78" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="order_valid_di" bpmnElement="order_valid" isMarkerVisible="true">
+        <omgdc:Bounds x="435" y="165" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="499" y="183" width="61" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_validate_to_gateway_di" bpmnElement="flow_validate_to_gateway">
+        <omgdi:waypoint x="377" y="190" />
+        <omgdi:waypoint x="435" y="190" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_valid_to_fulfill_di" bpmnElement="flow_valid_to_fulfill">
+        <omgdi:waypoint x="460" y="165" />
+        <omgdi:waypoint x="460" y="118" />
+        <omgdi:waypoint x="580" y="118" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="466" y="138.5" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_invalid_to_reject_di" bpmnElement="flow_invalid_to_reject">
+        <omgdi:waypoint x="460" y="215" />
+        <omgdi:waypoint x="460" y="270" />
+        <omgdi:waypoint x="580" y="270" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="468" y="239.5" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_reject_to_end_di" bpmnElement="flow_reject_to_end">
+        <omgdi:waypoint x="680" y="270" />
+        <omgdi:waypoint x="892" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_fulfill_to_ship_di" bpmnElement="flow_fulfill_to_ship">
+        <omgdi:waypoint x="680" y="118" />
+        <omgdi:waypoint x="740" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_ship_to_end_di" bpmnElement="flow_ship_to_end">
+        <omgdi:waypoint x="840" y="118" />
+        <omgdi:waypoint x="892" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_start_to_validate_di" bpmnElement="flow_start_to_validate">
+        <omgdi:waypoint x="215" y="190" />
+        <omgdi:waypoint x="277" y="190" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </definitions>
