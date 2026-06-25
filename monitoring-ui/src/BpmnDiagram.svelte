@@ -4,10 +4,11 @@
   let { processId = '', latency = [], counts = [] } = $props()
 
   let container = $state(null)
-  let viewer = $state(null)
-  let diagramXml = $state(null)
-  let error = $state(null)
-  let rendered = $state(false)
+  let viewer = null
+  let diagramXml = null
+  let diagramError = $state(null)
+  let rendered = false
+  let diagramLoaded = false
 
   function duration(ms) {
     const value = Number(ms || 0)
@@ -35,51 +36,6 @@
     return state.charAt(0).toUpperCase() + state.slice(1)
   }
 
-  async function loadDiagram() {
-    if (!processId) {
-      error = 'No process selected'
-      return
-    }
-
-    try {
-      const response = await fetch('/api/diagram')
-      if (!response.ok) {
-        diagramXml = null
-        error = response.status === 404 ? 'No diagram available for this process' : `Failed to load diagram (${response.status})`
-        return
-      }
-      error = null
-      diagramXml = await response.text()
-    } catch (e) {
-      error = `Cannot reach diagram endpoint: ${e.message}`
-      diagramXml = null
-    }
-  }
-
-  async function renderDiagram() {
-    if (!container || !diagramXml) return
-
-    if (viewer) {
-      viewer.detach()
-      viewer.destroy()
-      viewer = null
-    }
-
-    const BpmnViewer = (await import('bpmn-js/lib/Viewer')).default
-    viewer = new BpmnViewer({ container })
-
-    try {
-      await viewer.importXML(diagramXml)
-      const canvas = viewer.get('canvas')
-      canvas.zoom('fit-viewport')
-      rendered = true
-      applyOverlays()
-    } catch (e) {
-      error = `Failed to render diagram: ${e.message}`
-      rendered = false
-    }
-  }
-
   function applyOverlays() {
     if (!viewer || !rendered) return
 
@@ -100,10 +56,9 @@
     }
 
     const terminalStates = new Set(['completed', 'failed', 'cancelled'])
-    const lifecycleCounts = {}
     for (const row of counts) {
       if (terminalStates.has(row.state)) {
-        lifecycleCounts[row.state] = (lifecycleCounts[row.state] || 0) + Number(row.count || 0)
+        // lifecycleCounts unused but kept for symmetry
       }
     }
 
@@ -141,19 +96,46 @@
       .replace(/"/g, '&quot;')
   }
 
+  // Apply overlays reactively when data changes (but only after initial render)
   $effect(() => {
-    loadDiagram()
-  })
-
-  $effect(() => {
-    if (diagramXml && container) {
-      renderDiagram()
+    if (rendered && (latency.length > 0 || counts.length > 0)) {
+      applyOverlays()
     }
   })
 
-  $effect(() => {
-    if (rendered && (latency.length || counts.length)) {
+  onMount(async () => {
+    if (!processId) {
+      diagramError = 'No process selected'
+      return
+    }
+
+    // 1. Fetch diagram XML
+    try {
+      const response = await fetch('/api/diagram')
+      if (!response.ok) {
+        diagramError = response.status === 404 ? 'No diagram available' : `HTTP ${response.status}`
+        return
+      }
+      diagramXml = await response.text()
+    } catch (e) {
+      diagramError = `Cannot reach diagram endpoint: ${e.message}`
+      return
+    }
+
+    if (diagramLoaded) return
+    diagramLoaded = true
+
+    // 2. Render diagram (runs once)
+    try {
+      const BpmnViewer = (await import('bpmn-js/lib/Viewer')).default
+      viewer = new BpmnViewer({ container })
+      await viewer.importXML(diagramXml)
+      const canvas = viewer.get('canvas')
+      canvas.zoom('fit-viewport')
+      rendered = true
       applyOverlays()
+    } catch (e) {
+      diagramError = `Failed to render diagram: ${e.message}`
     }
   })
 
@@ -173,8 +155,8 @@
     <span>{processId || 'no process'}</span>
   </div>
 
-  {#if error}
-    <div class="diagram-error">{error}</div>
+  {#if diagramError}
+    <div class="diagram-error">{diagramError}</div>
   {:else if !diagramXml}
     <div class="diagram-loading">Loading diagram...</div>
   {:else}
