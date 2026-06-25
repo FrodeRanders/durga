@@ -138,14 +138,12 @@
   }
 
   function selectProcess(processId) {
-    s.processId = processId
+    s.selectProcessId(processId)
     s.scheduleRefresh(() => s.refresh())
   }
 
   function selectInstance(instanceId) {
-    console.log('[durga] selectInstance id=%s', instanceId)
-    s.instanceId = instanceId
-    s.refreshInstance()
+    s.selectAndFetchInstance(instanceId)
   }
 </script>
 
@@ -167,8 +165,8 @@
       <input
         type="text"
         list="processes"
-        bind:value={s.processId}
-        onchange={() => s.scheduleRefresh(() => s.refresh())}
+        value={s.processId}
+        oninput={(e) => { s.selectProcessId(e.target.value); s.scheduleRefresh(() => s.refresh()) }}
       />
       <datalist id="processes">
         {#each processRows() as row}
@@ -395,8 +393,8 @@
         <span>Instance id</span>
         <input
           type="text"
-          bind:value={s.instanceId}
-          onchange={() => s.refreshInstance()}
+          value={s.instanceId}
+          oninput={(e) => { s.selectAndFetchInstance(e.target.value) }}
         />
       </label>
       {#if s.instanceView}
