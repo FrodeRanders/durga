@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 
 /**
@@ -99,6 +100,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         this.server.createContext("/api/metrics", this::handleMetrics);
         this.server.createContext("/api/diagram", this::handleDiagram);
         this.server.createContext("/api/process", this::handleProcess);
+        this.server.setExecutor(Executors.newFixedThreadPool(4));
         LOG.info("Monitoring HTTP server created on port {}", port);
     }
 
