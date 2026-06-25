@@ -34,6 +34,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
     private final HttpServer server;
     private final String apiKey;
     private final Path bpmnFilePath;
+    private final String processId;
 
     /**
      * Creates the HTTP server bound to an existing monitoring topology.
@@ -48,28 +49,31 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             ProcessMonitoringTopology.MonitoringTopics topics,
             int port
     ) throws IOException {
-        this(streams, topics, port, null);
+        this(streams, topics, port, null, null);
     }
 
     /**
-     * Creates the HTTP server with an optional BPMN diagram file to serve.
+     * Creates the HTTP server with an optional BPMN diagram file and process identifier.
      *
      * @param streams running Kafka Streams instance
      * @param topics monitoring topic and store names
      * @param port local HTTP port
      * @param bpmnFilePath path to a BPMN 2.0 XML file (may be null)
+     * @param processId the process definition this monitor tracks (may be null)
      * @throws IOException if the embedded server cannot be created
      */
     public ProcessMonitoringHttpServer(
             KafkaStreams streams,
             ProcessMonitoringTopology.MonitoringTopics topics,
             int port,
-            Path bpmnFilePath
+            Path bpmnFilePath,
+            String processId
     ) throws IOException {
         this.streams = streams;
         this.queryService = new ProcessMonitoringQueryService(streams, topics);
         this.apiKey = resolveApiKey();
         this.bpmnFilePath = bpmnFilePath;
+        this.processId = processId;
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.createContext("/", this::handleRoot);
         this.server.createContext("/dashboard", this::handleDashboard);
@@ -81,6 +85,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         this.server.createContext("/stuck", this::handleStuck);
         this.server.createContext("/metrics", this::handleMetrics);
         this.server.createContext("/diagram", this::handleDiagram);
+        this.server.createContext("/process", this::handleProcess);
         // /api/ prefixed paths (used by the Svelte SPA via Vite proxy)
         this.server.createContext("/api/health", this::handleHealth);
         this.server.createContext("/api/instances", this::handleInstances);
@@ -89,6 +94,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         this.server.createContext("/api/stuck", this::handleStuck);
         this.server.createContext("/api/metrics", this::handleMetrics);
         this.server.createContext("/api/diagram", this::handleDiagram);
+        this.server.createContext("/api/process", this::handleProcess);
         LOG.info("Monitoring HTTP server created on port {}", port);
     }
 
@@ -280,6 +286,15 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             LOG.warn("Failed to read BPMN diagram from {}", bpmnFilePath, e);
             sendJson(exchange, 500, Map.of("error", "Failed to read BPMN diagram"));
         }
+    }
+
+    private void handleProcess(HttpExchange exchange) throws IOException {
+        if (!"GET".equals(exchange.getRequestMethod())) {
+            sendStatus(exchange, 405);
+            return;
+        }
+        if (!requireAuth(exchange)) return;
+        sendJson(exchange, 200, Map.of("processId", processId != null ? processId : ""));
     }
 
     private static String resolveApiKey() {

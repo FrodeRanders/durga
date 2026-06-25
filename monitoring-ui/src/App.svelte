@@ -11,7 +11,9 @@
   $effect(() => {
     if (!mounted) {
       mounted = true
-      s.scheduleRefresh(() => s.refresh())
+      s.discoverProcessId().then(() => {
+        s.scheduleRefresh(() => s.refresh())
+      })
       s.checkDiagramAvailable()
     }
   })

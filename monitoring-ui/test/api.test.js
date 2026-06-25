@@ -5,7 +5,8 @@ import {
   dashboardRequestPaths,
   diagramRequestPath,
   instanceRequestPath,
-  normalizeDashboardResponses
+  normalizeDashboardResponses,
+  processRequestPath
 } from '../src/api.js'
 
 test('dashboardRequestPaths URL-encodes process id and threshold', () => {
@@ -17,6 +18,10 @@ test('dashboardRequestPaths URL-encodes process id and threshold', () => {
     '/api/stuck?processId=invoice%20review%2F2026&olderThanSeconds=30',
     '/api/processes/invoice%20review%2F2026/trends'
   ])
+})
+
+test('processRequestPath returns the process endpoint', () => {
+  assert.equal(processRequestPath(), '/api/process')
 })
 
 test('diagramRequestPath returns the diagram endpoint', () => {

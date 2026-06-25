@@ -71,7 +71,7 @@ public final class MonitoringContainer {
         }
 
         try {
-            var httpServer = new ProcessMonitoringHttpServer(streams, topics, port, bpmnPath);
+            var httpServer = new ProcessMonitoringHttpServer(streams, topics, port, bpmnPath, processId);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 httpServer.close();
                 streams.close();

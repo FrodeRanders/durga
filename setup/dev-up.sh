@@ -107,12 +107,23 @@ if [[ -z "${JAR}" || ! -f "${JAR}" ]]; then
     exit 1
 fi
 
-# ── 3. Parse process definitions ────────────────────────────────────────────
+# ── 3. Clean up stale ports from previous runs ──────────────────────────────
 echo ""
+proc_idx=0
+IFS=',' read -ra PROC_ARRAY <<< "${PROCESSES}"
+for proc_def in "${PROC_ARRAY[@]}"; do
+    backend_port=$((BACKEND_PORT + proc_idx))
+    vite_port=$((VITE_PORT + proc_idx))
+    # Kill anything holding our ports
+    lsof -ti "tcp:${backend_port}" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+    lsof -ti "tcp:${vite_port}" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+    proc_idx=$((proc_idx + 1))
+done
+
+# ── 4. Parse process definitions ────────────────────────────────────────────
 banner "Starting services"
 
 proc_idx=0
-IFS=',' read -ra PROC_ARRAY <<< "${PROCESSES}"
 
 for proc_def in "${PROC_ARRAY[@]}"; do
     IFS=':' read -r pid bpmn interval <<< "${proc_def}"
@@ -159,7 +170,7 @@ for proc_def in "${PROC_ARRAY[@]}"; do
     proc_idx=$((proc_idx + 1))
 done
 
-# ── 4. Wait for backends to be ready ────────────────────────────────────────
+# ── 5. Wait for backends to be ready ────────────────────────────────────────
 echo ""
 banner "Waiting for backends"
 for i in $(seq 1 30); do
@@ -177,7 +188,7 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-# ── 5. Summary ──────────────────────────────────────────────────────────────
+# ── 6. Summary ──────────────────────────────────────────────────────────────
 echo ""
 banner "Ready — open in browser"
 echo ""
@@ -193,7 +204,7 @@ done
 echo "Press Ctrl+C to stop all services."
 echo ""
 
-# ── 6. Keep alive ───────────────────────────────────────────────────────────
+# ── 7. Keep alive ───────────────────────────────────────────────────────────
 while true; do
     sleep 5
 done

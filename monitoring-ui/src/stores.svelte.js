@@ -2,10 +2,11 @@ import {
   dashboardRequestPaths,
   diagramRequestPath,
   instanceRequestPath,
-  normalizeDashboardResponses
+  normalizeDashboardResponses,
+  processRequestPath
 } from './api.js'
 
-let processId = $state('invoice_receipt')
+let processId = $state('')
 let threshold = $state(60)
 let refreshSecs = $state(3)
 let instanceId = $state('')
@@ -58,6 +59,20 @@ export async function refreshInstance() {
   }
 }
 
+export async function discoverProcessId() {
+  try {
+    const res = await fetch(processRequestPath())
+    if (res.ok) {
+      const data = await res.json()
+      if (data.processId && data.processId.length > 0) {
+        processId = data.processId
+      }
+    }
+  } catch {
+    // keep default
+  }
+}
+
 export async function checkDiagramAvailable() {
   try {
     const res = await fetch(diagramRequestPath())
@@ -94,6 +109,7 @@ export function getState() {
     get error() { return error },
     refresh,
     refreshInstance,
+    discoverProcessId,
     checkDiagramAvailable,
     scheduleRefresh
   }

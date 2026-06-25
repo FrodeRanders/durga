@@ -11,6 +11,10 @@ export function dashboardRequestPaths(processId, thresholdSeconds) {
   ]
 }
 
+export function processRequestPath() {
+  return '/api/process'
+}
+
 export function diagramRequestPath() {
   return '/api/diagram'
 }
