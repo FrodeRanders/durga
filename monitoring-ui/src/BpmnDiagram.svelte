@@ -10,6 +10,9 @@
   let diagramError = $state(null)
   let rendered = $state(false)
   let diagramLoaded = false
+  let panMode = $state(false)
+  let panning = false
+  let panLast = { x: 0, y: 0 }
 
   function duration(ms) {
     const value = Number(ms || 0)
@@ -107,6 +110,30 @@
     canvasModule.zoom('fit-viewport')
   }
 
+  function togglePan() {
+    panMode = !panMode
+  }
+
+  function onPanDown(e) {
+    if (!panMode || !canvasModule) return
+    panning = true
+    panLast = { x: e.clientX, y: e.clientY }
+    e.preventDefault()
+  }
+
+  function onPanMove(e) {
+    if (!panning || !canvasModule) return
+    const dx = e.clientX - panLast.x
+    const dy = e.clientY - panLast.y
+    canvasModule.scroll({ dx: -dx, dy: -dy })
+    panLast = { x: e.clientX, y: e.clientY }
+    e.preventDefault()
+  }
+
+  function onPanUp() {
+    panning = false
+  }
+
   // Apply overlays reactively when data changes (but only after initial render)
   $effect(() => {
     if (rendered && (latency.length > 0 || counts.length > 0)) {
@@ -183,9 +210,18 @@
   {/if}
 
   <div class="diagram-wrapper">
-    <div bind:this={container} class="diagram-container"></div>
+    <div
+      bind:this={container}
+      class="diagram-container"
+      class:pan-active={panMode}
+      onmousedown={onPanDown}
+      onmousemove={onPanMove}
+      onmouseup={onPanUp}
+      onmouseleave={onPanUp}
+    ></div>
     {#if rendered}
       <div class="diagram-toolbar">
+        <button class:active={panMode} onclick={togglePan} title="Pan (grab to move)">&#x1F590;</button>
         <button onclick={zoomIn} title="Zoom in">+</button>
         <button onclick={zoomOut} title="Zoom out">&minus;</button>
         <button onclick={fitViewport} title="Fit to view">&#x2316;</button>
@@ -248,6 +284,15 @@
     background: #fff;
     overflow: hidden;
     touch-action: none;
+    cursor: default;
+  }
+
+  .diagram-container.pan-active {
+    cursor: grab;
+  }
+
+  .diagram-container.pan-active:active {
+    cursor: grabbing;
   }
 
   .diagram-container :global(.bjs-container) {
@@ -289,6 +334,12 @@
 
   .diagram-toolbar button:hover {
     background: rgba(240, 240, 240, 0.95);
+  }
+
+  .diagram-toolbar button.active {
+    background: #e0e7ff;
+    border-color: #818cf8;
+    color: #3730a3;
   }
 
   .diagram-legend {
