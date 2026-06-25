@@ -17,7 +17,9 @@
 
   onMount(() => {
     s.discoverProcessId().then(() => {
-      s.scheduleRefresh(() => s.refresh())
+      s.fetchProcessList().then(() => {
+        s.scheduleRefresh(() => { s.refresh(); s.fetchProcessList() })
+      })
     })
     s.checkDiagramAvailable()
   })
@@ -135,9 +137,14 @@
     return Math.max(1, ...trendBuckets().flatMap((row) => trendMetrics.map((metric) => row[metric])))
   }
 
-  function selectProcess(processId) {
-    s.processId = processId
-    s.scheduleRefresh(() => s.refresh())
+  function selectProcess(pid) {
+    s.processId = pid
+    s.scheduleRefresh(() => { s.refresh(); s.fetchProcessList() })
+  }
+
+  function deselectProcess() {
+    s.processId = ''
+    s.scheduleRefresh(() => { s.refresh(); s.fetchProcessList() })
   }
 
   function selectInstance(instanceId) {
@@ -251,7 +258,7 @@
     <section class="panel state-mix">
       <div class="panel-title">
         <h2>Current State Mix</h2>
-        <span>{s.processId}</span>
+        <span>{s.processId || 'overview'}</span>
       </div>
       {#if stateRows().length}
         <div class="state-bars">
@@ -302,6 +309,12 @@
         <p class="empty">No trend buckets for this process.</p>
       {/if}
     </section>
+
+    {#if s.processId}
+      <div class="detail-header">
+        <button class="link back-link" onclick={deselectProcess}>← All processes</button>
+        <span class="detail-label">Viewing <strong>{s.processId}</strong></span>
+      </div>
 
     <div class="row-split">
     <section class="panel latency-panel">
@@ -418,6 +431,9 @@
         <p class="empty">No instance selected.</p>
       {/if}
     </section>
+
+    {/if}
+
   </main>
 </div>
 
@@ -594,6 +610,30 @@
   }
 
   .wide { grid-column: span 2; }
+
+  .detail-header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 2px;
+  }
+
+  .detail-label {
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  .back-link {
+    color: var(--accent);
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .back-link:hover {
+    text-decoration: underline;
+  }
 
   .row-split {
     grid-column: 1 / -1;

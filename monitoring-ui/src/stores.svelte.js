@@ -3,10 +3,11 @@ import {
   diagramRequestPath,
   instanceRequestPath,
   normalizeDashboardResponses,
-  processRequestPath
+  processRequestPath,
+  processListRequestPath
 } from './api.js'
 
-let processId = $state('invoice_receipt')
+let processId = $state('')
 let threshold = $state(60)
 let refreshSecs = $state(3)
 let instanceId = $state('')
@@ -20,6 +21,7 @@ let trends = $state([])
 let instanceView = $state(null)
 let diagramAvailable = $state(false)
 let error = $state(null)
+let processList = $state([])
 
 let interval = null
 
@@ -71,15 +73,23 @@ export async function discoverProcessId() {
       }
     }
   } catch { /* fallback */ }
+
+  // Multi-process mode: pick first from the list
+  await fetchProcessList()
+  if (processList.length > 0 && !processId) {
+    processId = processList[0]
+  }
+}
+
+export async function fetchProcessList() {
   try {
-    const res = await fetch('/api/counts')
+    const res = await fetch(processListRequestPath())
     if (res.ok) {
-      const data = await res.json()
-      if (Array.isArray(data) && data.length > 0 && data[0].processId) {
-        processId = data[0].processId
-      }
+      processList = await res.json()
     }
-  } catch { /* keep default */ }
+  } catch {
+    processList = []
+  }
 }
 
 export async function checkDiagramAvailable() {
@@ -122,11 +132,13 @@ export function getState() {
     get instanceView() { return instanceView },
     get diagramAvailable() { return diagramAvailable },
     get error() { return error },
+    get processList() { return processList },
     refresh,
     refreshInstance,
     discoverProcessId,
     checkDiagramAvailable,
     scheduleRefresh,
-    lookupInstance
+    lookupInstance,
+    fetchProcessList
   }
 }

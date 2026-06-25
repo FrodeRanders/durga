@@ -87,6 +87,24 @@ public final class ProcessMonitoringQueryService {
     }
 
     /**
+     * Returns all known process IDs from the count store.
+     */
+    public List<String> listProcessIds() {
+        java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
+        try (KeyValueIterator<String, ProcessStateCount> iterator = countsStore().all()) {
+            while (iterator.hasNext()) {
+                ProcessStateCount count = iterator.next().value;
+                if (count.processId() != null && !count.processId().isBlank()) {
+                    ids.add(count.processId());
+                }
+            }
+        }
+        List<String> sorted = new ArrayList<>(ids);
+        sorted.sort(Comparator.naturalOrder());
+        return sorted;
+    }
+
+    /**
      * Returns pre-aggregated per-activity latency summaries for one process definition.
      *
      * @param processId process definition identifier

@@ -38,8 +38,8 @@ BACKEND_PORT="${BACKEND_PORT:-8081}"
 START_KAFKA="${START_KAFKA:-true}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
 # Single-process defaults (used when PROCESSES is not set)
-PROCESS_ID="${PROCESS_ID:-invoice_receipt}"
-BPMN_PATH="${BPMN_PATH:-src/test/resources/bpmn/invoice_receipt.bpmn}"
+PROCESS_ID="${PROCESS_ID:-*}"
+BPMN_PATH="${BPMN_PATH:-}"
 FEED_INTERVAL="${FEED_INTERVAL:-1000}"
 # Multi-process override
 PROCESSES="${PROCESSES:-}"
@@ -160,16 +160,29 @@ for ((j=0; j<NUM_PROCS; j++)); do
     info "API → http://localhost:${backend_port}"
 
     # ── Monitoring backend (API + SPA) ──────────────────────────────────────────
-    java -Ddurga.streams.state.dir=/tmp/kafka-streams-state-${pid} \
-        -cp "${JAR}" \
-        org.gautelis.durga.monitoring.MonitoringContainer \
-        "${BOOTSTRAP}" \
-        "${app_id}" \
-        "${backend_port}" \
-        "${pid}" \
-        "${bpmn}" \
-        "${ROOT_DIR}/monitoring-ui/dist" \
-        > /tmp/durga-backend-${pid}.log 2>&1 &
+    if [[ -n "${bpmn}" ]]; then
+      java -Ddurga.streams.state.dir=/tmp/kafka-streams-state-${pid} \
+          -cp "${JAR}" \
+          org.gautelis.durga.monitoring.MonitoringContainer \
+          "${BOOTSTRAP}" \
+          "${app_id}" \
+          "${backend_port}" \
+          "${pid}" \
+          "${bpmn}" \
+          "${ROOT_DIR}/monitoring-ui/dist" \
+          > /tmp/durga-backend-${pid}.log 2>&1 &
+    else
+      java -Ddurga.streams.state.dir=/tmp/kafka-streams-state-${pid} \
+          -cp "${JAR}" \
+          org.gautelis.durga.monitoring.MonitoringContainer \
+          "${BOOTSTRAP}" \
+          "${app_id}" \
+          "${backend_port}" \
+          "${pid}" \
+          "" \
+          "${ROOT_DIR}/monitoring-ui/dist" \
+          > /tmp/durga-backend-${pid}.log 2>&1 &
+    fi
     BG_PIDS+=($!)
 
     # ── Continuous feed ─────────────────────────────────────────────────────

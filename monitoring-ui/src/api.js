@@ -15,6 +15,10 @@ export function processRequestPath() {
   return '/api/process'
 }
 
+export function processListRequestPath() {
+  return '/api/processes/list'
+}
+
 export function diagramRequestPath() {
   return '/api/diagram'
 }

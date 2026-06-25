@@ -91,6 +91,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         this.server.createContext("/metrics", this::handleMetrics);
         this.server.createContext("/diagram", this::handleDiagram);
         this.server.createContext("/process", this::handleProcess);
+        this.server.createContext("/api/processes/list", this::handleProcessList);
         // /api/ prefixed paths (used by the Svelte SPA via Vite proxy)
         this.server.createContext("/api/health", this::handleHealth);
         this.server.createContext("/api/instances", this::handleInstances);
@@ -603,6 +604,19 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         }
         if (!requireAuth(exchange)) return;
         sendJson(exchange, 200, Map.of("processId", processId != null ? processId : ""));
+    }
+
+    private void handleProcessList(HttpExchange exchange) throws IOException {
+        if (!"GET".equals(exchange.getRequestMethod())) {
+            sendStatus(exchange, 405);
+            return;
+        }
+        if (!requireAuth(exchange)) return;
+        try {
+            sendJson(exchange, 200, queryService.listProcessIds());
+        } catch (InvalidStateStoreException e) {
+            sendJson(exchange, 503, Map.of("error", "State store not queryable yet"));
+        }
     }
 
     private static String resolveApiKey() {

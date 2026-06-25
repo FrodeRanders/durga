@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.regex.Pattern;
 
 /**
  * Builds the Kafka Streams read model used by the monitoring HTTP API, CLI, and dashboard.
@@ -81,10 +82,15 @@ public final class ProcessMonitoringTopology {
                 )
         );
 
-        KStream<String, ProcessEvent> events = builder.stream(
-                topics.eventsTopic(),
-                Consumed.with(Serdes.String(), processEventSerde)
-        ).filter((key, event) -> key != null && event != null);
+        KStream<String, ProcessEvent> events;
+        if (topics.eventsPattern() != null) {
+            events = builder.stream(topics.eventsPattern(),
+                    Consumed.with(Serdes.String(), processEventSerde));
+        } else {
+            events = builder.stream(topics.eventsTopic(),
+                    Consumed.with(Serdes.String(), processEventSerde));
+        }
+        events = events.filter((key, event) -> key != null && event != null);
 
         KTable<String, ProcessStateView> stateByInstance = events
                 .groupByKey(Grouped.with(Serdes.String(), processEventSerde))
@@ -196,18 +202,6 @@ public final class ProcessMonitoringTopology {
 
     /**
      * Names of the monitoring topics and queryable state stores.
-     *
-     * @param eventsTopic canonical lifecycle-event topic
-     * @param stateTopic latest-state output topic
-     * @param countsTopic state-count output topic
-     * @param activeTopic active-instance output topic
-     * @param latencyTopic latency-summary output topic
-     * @param trendsTopic trend output topic
-     * @param stateStore queryable global store for latest instance state
-     * @param countsStore queryable global store for counts by state
-     * @param activeStore queryable global store for active instances
-     * @param latencyStore queryable global store for activity latency summaries
-     * @param trendsStore queryable global store for trend buckets
      */
     public record MonitoringTopics(
             String eventsTopic,
@@ -220,16 +214,15 @@ public final class ProcessMonitoringTopology {
             String countsStore,
             String activeStore,
             String latencyStore,
-            String trendsStore
+            String trendsStore,
+            Pattern eventsPattern,
+            boolean multiProcess
     ) {
+        private static final Pattern ALL_EVENTS_PATTERN = Pattern.compile("process-events-.*");
+        private static final String NO_SUFFIX = "";
+
         /**
          * Returns monitoring topic and store names qualified with a process identifier.
-         * <p>
-         * Each topic and store name gets a {@code -<processId>} suffix so multiple process
-         * definitions can coexist without competing for the same topics or state stores.
-         *
-         * @param processId process definition identifier (must not be blank)
-         * @return qualified topic and store names
          */
         public static MonitoringTopics forProcess(String processId) {
             if (processId == null || processId.isBlank()) {
@@ -247,7 +240,31 @@ public final class ProcessMonitoringTopology {
                     DEFAULT_COUNTS_STORE + suffix,
                     DEFAULT_ACTIVE_STORE + suffix,
                     DEFAULT_LATENCY_STORE + suffix,
-                    DEFAULT_TRENDS_STORE + suffix
+                    DEFAULT_TRENDS_STORE + suffix,
+                    null,
+                    false
+            );
+        }
+
+        /**
+         * Returns topic and store names for monitoring ALL processes in a single instance.
+         * Subscribes to all {@code process-events-*} topics via regex.
+         */
+        public static MonitoringTopics forAllProcesses() {
+            return new MonitoringTopics(
+                    DEFAULT_EVENTS_TOPIC,
+                    DEFAULT_STATE_TOPIC,
+                    DEFAULT_COUNTS_TOPIC,
+                    DEFAULT_ACTIVE_TOPIC,
+                    DEFAULT_LATENCY_TOPIC,
+                    DEFAULT_TRENDS_TOPIC,
+                    DEFAULT_STATE_STORE,
+                    DEFAULT_COUNTS_STORE,
+                    DEFAULT_ACTIVE_STORE,
+                    DEFAULT_LATENCY_STORE,
+                    DEFAULT_TRENDS_STORE,
+                    ALL_EVENTS_PATTERN,
+                    true
             );
         }
     }

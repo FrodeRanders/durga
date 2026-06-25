@@ -27,10 +27,16 @@ public final class MonitoringContainer {
         String appId = args.length > 1 ? args[1] : "durga-monitoring";
         int port = args.length > 2 ? Integer.parseInt(args[2]) : 8081;
         String processId = args.length > 3 && !args[3].isBlank() ? args[3] : defaultProcessId();
+        boolean multiProcess = "*".equals(processId);
+        if (multiProcess) {
+            processId = null; // no single process when in multi mode
+        }
         Path bpmnPath = args.length > 4 && !args[4].isBlank() ? resolvePath(args[4], "BPMN") : null;
         Path spaDir = args.length > 5 && !args[5].isBlank() ? resolvePath(args[5], "SPA") : null;
 
-        var topics = ProcessMonitoringTopology.MonitoringTopics.forProcess(processId);
+        var topics = multiProcess
+                ? ProcessMonitoringTopology.MonitoringTopics.forAllProcesses()
+                : ProcessMonitoringTopology.MonitoringTopics.forProcess(processId);
 
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);

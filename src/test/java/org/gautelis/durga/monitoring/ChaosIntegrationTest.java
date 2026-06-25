@@ -42,7 +42,9 @@ public class ChaosIntegrationTest extends KafkaIntegrationTestBase {
             "process-state-counts-global-store" + SUFFIX,
             "process-active-state-global-store" + SUFFIX,
             "process-latency-global-store" + SUFFIX,
-            "process-trends-global-store" + SUFFIX
+            "process-trends-global-store" + SUFFIX,
+            null,
+            false
     );
     private static String APP_ID;
 
