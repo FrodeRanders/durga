@@ -57,7 +57,8 @@ public final class MonitoringContainer {
                 topics.countsTopic(),
                 topics.activeTopic(),
                 topics.latencyTopic(),
-                topics.trendsTopic());
+                topics.trendsTopic(),
+                topics.modelsTopic());
         Properties adminProps = new Properties();
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
         try (var admin = AdminClient.create(adminProps)) {

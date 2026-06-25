@@ -45,6 +45,8 @@ public final class ProcessMonitoringTopology {
     public static final String DEFAULT_ACTIVE_STORE = "process-active-state-global-store";
     public static final String DEFAULT_LATENCY_STORE = "process-latency-global-store";
     public static final String DEFAULT_TRENDS_STORE = "process-trends-global-store";
+    public static final String DEFAULT_MODELS_TOPIC = "process-models";
+    public static final String DEFAULT_MODELS_STORE = "process-models-store";
 
     private static final String LOCAL_STATE_STORE = "process-state-store";
     private static final String LOCAL_COUNTS_STORE = "process-state-counts-store";
@@ -197,6 +199,15 @@ public final class ProcessMonitoringTopology {
                         .withValueSerde(trendSerde)
         );
 
+        // Process BPMN model cache: processes post their models keyed by processId
+        builder.globalTable(
+                topics.modelsTopic(),
+                Consumed.with(Serdes.String(), Serdes.String()),
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(topics.modelsStore())
+                        .withKeySerde(Serdes.String())
+                        .withValueSerde(Serdes.String())
+        );
+
         return builder.build();
     }
 
@@ -210,16 +221,17 @@ public final class ProcessMonitoringTopology {
             String activeTopic,
             String latencyTopic,
             String trendsTopic,
+            String modelsTopic,
             String stateStore,
             String countsStore,
             String activeStore,
             String latencyStore,
             String trendsStore,
+            String modelsStore,
             Pattern eventsPattern,
             boolean multiProcess
     ) {
         private static final Pattern ALL_EVENTS_PATTERN = Pattern.compile("process-events-.*");
-        private static final String NO_SUFFIX = "";
 
         /**
          * Returns monitoring topic and store names qualified with a process identifier.
@@ -236,11 +248,13 @@ public final class ProcessMonitoringTopology {
                     DEFAULT_ACTIVE_TOPIC + suffix,
                     DEFAULT_LATENCY_TOPIC + suffix,
                     DEFAULT_TRENDS_TOPIC + suffix,
+                    DEFAULT_MODELS_TOPIC,
                     DEFAULT_STATE_STORE + suffix,
                     DEFAULT_COUNTS_STORE + suffix,
                     DEFAULT_ACTIVE_STORE + suffix,
                     DEFAULT_LATENCY_STORE + suffix,
                     DEFAULT_TRENDS_STORE + suffix,
+                    DEFAULT_MODELS_STORE,
                     null,
                     false
             );
@@ -258,11 +272,13 @@ public final class ProcessMonitoringTopology {
                     DEFAULT_ACTIVE_TOPIC,
                     DEFAULT_LATENCY_TOPIC,
                     DEFAULT_TRENDS_TOPIC,
+                    DEFAULT_MODELS_TOPIC,
                     DEFAULT_STATE_STORE,
                     DEFAULT_COUNTS_STORE,
                     DEFAULT_ACTIVE_STORE,
                     DEFAULT_LATENCY_STORE,
                     DEFAULT_TRENDS_STORE,
+                    DEFAULT_MODELS_STORE,
                     ALL_EVENTS_PATTERN,
                     true
             );

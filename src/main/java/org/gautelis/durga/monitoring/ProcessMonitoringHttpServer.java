@@ -582,10 +582,28 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         }
         if (!requireAuth(exchange)) return;
 
-        // Check for ?processId=xxx query param (multi-process mode)
         Map<String, String> params = queryParams(exchange.getRequestURI().getRawQuery());
         String requestedPid = params.get("processId");
 
+        // 1. Try Kafka state store (processes publish models via process-models topic)
+        if (requestedPid != null && !requestedPid.isBlank()) {
+            try {
+                Optional<String> model = queryService.findModel(requestedPid);
+                if (model.isPresent()) {
+                    byte[] body = model.get().getBytes(StandardCharsets.UTF_8);
+                    exchange.getResponseHeaders().set("Content-Type", "application/xml; charset=utf-8");
+                    exchange.sendResponseHeaders(200, body.length);
+                    try (OutputStream output = exchange.getResponseBody()) {
+                        output.write(body);
+                    }
+                    return;
+                }
+            } catch (InvalidStateStoreException ignored) {
+                // store not ready, fall through
+            }
+        }
+
+        // 2. Try BPMN directory ({pid}.bpmn)
         Path resolvedFile = null;
         if (requestedPid != null && !requestedPid.isBlank() && bpmnDir != null) {
             resolvedFile = bpmnDir.resolve(requestedPid + ".bpmn").normalize();
@@ -593,6 +611,8 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
                 resolvedFile = null;
             }
         }
+
+        // 3. Try single BPMN file
         if (resolvedFile == null) {
             resolvedFile = bpmnFilePath;
         }

@@ -219,4 +219,24 @@ public final class ProcessMonitoringQueryService {
                 )
         );
     }
+
+    /**
+     * Returns the BPMN 2.0 XML model cached for a process, if any.
+     * Processes publish their models to the {@code process-models} topic.
+     *
+     * @param processId process definition identifier
+     * @return BPMN XML string or empty
+     */
+    public Optional<String> findModel(String processId) {
+        return Optional.ofNullable(modelsStore().get(processId));
+    }
+
+    private ReadOnlyKeyValueStore<String, String> modelsStore() {
+        return streams.store(
+                StoreQueryParameters.fromNameAndType(
+                        topics.modelsStore(),
+                        QueryableStoreTypes.keyValueStore()
+                )
+        );
+    }
 }
