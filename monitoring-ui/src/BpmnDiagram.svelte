@@ -131,7 +131,11 @@
       viewer = new BpmnViewer({ container })
       await viewer.importXML(diagramXml)
       const canvas = viewer.get('canvas')
-      canvas.zoom('fit-viewport')
+      // Wait for browser layout, then fit and center
+      requestAnimationFrame(() => {
+        canvas.resized()
+        canvas.zoom('fit-viewport')
+      })
       rendered = true
       applyOverlays()
     } catch (e) {
