@@ -138,12 +138,12 @@
   }
 
   function selectProcess(processId) {
-    s.selectProcessId(processId)
+    s.processId = processId
     s.scheduleRefresh(() => s.refresh())
   }
 
   function selectInstance(instanceId) {
-    s.selectAndFetchInstance(instanceId)
+    s.lookupInstance(instanceId)
   }
 </script>
 
@@ -165,8 +165,8 @@
       <input
         type="text"
         list="processes"
-        value={s.processId}
-        oninput={(e) => { s.selectProcessId(e.target.value); s.scheduleRefresh(() => s.refresh()) }}
+        bind:value={s.processId}
+        onchange={() => s.scheduleRefresh(() => s.refresh())}
       />
       <datalist id="processes">
         {#each processRows() as row}
@@ -393,8 +393,8 @@
         <span>Instance id</span>
         <input
           type="text"
-          value={s.instanceId}
-          oninput={(e) => { s.selectAndFetchInstance(e.target.value) }}
+          bind:value={s.instanceId}
+          oninput={(e) => s.lookupInstance(e.target.value)}
         />
       </label>
       {#if s.instanceView}
