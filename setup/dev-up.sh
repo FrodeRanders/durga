@@ -41,12 +41,15 @@ _cleanup() {
     echo ""
     echo "━━━ Shutting down ━━━"
     for pid in "${BG_PIDS[@]}"; do
-        kill "${pid}" 2>/dev/null || true
+        # Kill the entire process group (handles vite's child node processes)
+        kill -TERM -- -"${pid}" 2>/dev/null || true
     done
-    # Give processes a moment to stop
-    sleep 1
-    # Force-kill any vite / java still hanging
-    jobs -p 2>/dev/null | xargs -r kill 2>/dev/null || true
+    sleep 2
+    # Force-kill any stragglers
+    for pid in "${BG_PIDS[@]}"; do
+        kill -KILL -- -"${pid}" 2>/dev/null || true
+    done
+    wait 2>/dev/null || true
 }
 trap _cleanup EXIT INT TERM
 
@@ -124,7 +127,8 @@ for proc_def in "${PROC_ARRAY[@]}"; do
     info "Feed interval: ${interval}ms"
 
     # ── Monitoring backend ──────────────────────────────────────────────────
-    java -cp "${JAR}" \
+    java -Ddurga.streams.state.dir=/tmp/kafka-streams-state-${pid} \
+        -cp "${JAR}" \
         org.gautelis.durga.monitoring.MonitoringContainer \
         "${BOOTSTRAP}" \
         "${app_id}" \
@@ -146,8 +150,8 @@ for proc_def in "${PROC_ARRAY[@]}"; do
     # ── Vite SPA dev server ─────────────────────────────────────────────────
     (
         cd "${ROOT_DIR}/monitoring-ui"
-        VITE_API_TARGET="http://localhost:${backend_port}" \
-            npx vite --port "${vite_port}" --strictPort \
+        export VITE_API_TARGET="http://localhost:${backend_port}"
+        exec setsid npx vite --port "${vite_port}" --strictPort \
             > /tmp/durga-vite-${pid}.log 2>&1
     ) &
     BG_PIDS+=($!)
