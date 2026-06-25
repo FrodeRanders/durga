@@ -143,6 +143,7 @@
   }
 
   function selectInstance(instanceId) {
+    console.debug('[durga] selectInstance id=%s', instanceId)
     s.instanceId = instanceId
     s.refreshInstance()
   }

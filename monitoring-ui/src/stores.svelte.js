@@ -55,12 +55,17 @@ export async function refresh() {
 }
 
 export async function refreshInstance() {
+  console.debug('[durga] refreshInstance called, id=%s', instanceId)
   if (!instanceId) {
     instanceView = null
+    console.debug('[durga] refreshInstance: no id, cleared')
     return
   }
-  const result = await safeFetchJson(instanceRequestPath(instanceId))
+  const path = instanceRequestPath(instanceId)
+  const result = await safeFetchJson(path)
+  console.debug('[durga] refreshInstance: path=%s result=%o', path, result)
   instanceView = result ? result.body : { error: 'not found' }
+  console.debug('[durga] refreshInstance: view=%o', instanceView)
 }
 
 export async function discoverProcessId() {
