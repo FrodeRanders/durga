@@ -12,7 +12,10 @@ set -euo pipefail
 #   # Custom process:
 #   PROCESS_ID=order_fulfillment BPMN_PATH=src/test/resources/bpmn/order_fulfillment.bpmn ./setup/dev-up.sh
 #
-#   # Two processes side by side:
+#   # Multi-process overview (no diagram, all processes in one view):
+#   PROCESS_ID=all ./setup/dev-up.sh
+#
+#   # Two specific processes side by side:
 #   PROCESSES="invoice_receipt:src/test/resources/bpmn/invoice_receipt.bpmn,order_fulfillment:src/test/resources/bpmn/order_fulfillment.bpmn" \
 #     ./setup/dev-up.sh
 #
@@ -38,8 +41,8 @@ BACKEND_PORT="${BACKEND_PORT:-8081}"
 START_KAFKA="${START_KAFKA:-true}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
 # Single-process defaults (used when PROCESSES is not set)
-PROCESS_ID="${PROCESS_ID:-all}"
-BPMN_PATH="${BPMN_PATH:-}"
+PROCESS_ID="${PROCESS_ID:-invoice_receipt}"
+BPMN_PATH="${BPMN_PATH:-src/test/resources/bpmn/invoice_receipt.bpmn}"
 FEED_INTERVAL="${FEED_INTERVAL:-1000}"
 # Multi-process override
 PROCESSES="${PROCESSES:-}"
