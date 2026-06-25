@@ -157,10 +157,14 @@ for proc_def in "${PROC_ARRAY[@]}"; do
     BG_PIDS+=($!)
 
     # ── Vite SPA dev server ─────────────────────────────────────────────────
-    VITE_API_TARGET="http://localhost:${backend_port}" \
-        npm run dev --prefix "${ROOT_DIR}/monitoring-ui" \
-            -- --port "${vite_port}" --strictPort \
-            > /tmp/durga-vite-${pid}.log 2>&1 &
+    (
+        cd "${ROOT_DIR}/monitoring-ui"
+        export VITE_API_TARGET="http://localhost:${backend_port}"
+        export VITE_CACHE_DIR="${ROOT_DIR}/monitoring-ui/node_modules/.vite-${pid}"
+        export VITE_NO_HMR=1
+        npm run dev -- --port "${vite_port}" --strictPort \
+            > /tmp/durga-vite-${pid}.log 2>&1
+    ) &
     BG_PIDS+=($!)
 
     proc_idx=$((proc_idx + 1))
