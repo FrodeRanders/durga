@@ -1523,6 +1523,58 @@ public class %className% {
 }
 >>
 
+modelRegistrationClass(packageName, processId, bpmnFileName) ::= <<
+package %packageName%;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Properties;
+
+/**
+ * Publishes this process's BPMN model to the {@code process-models} Kafka
+ * topic on startup so the monitoring server can serve the diagram.
+ */
+@ApplicationScoped
+public class ModelRegistration {
+    private static final Logger LOG = LoggerFactory.getLogger(ModelRegistration.class);
+    private static final String TOPIC = "process-models";
+
+    @PostConstruct
+    void publishModel() {
+        String resourcePath = "%bpmnFileName%";
+        try (InputStream in = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
+            if (in == null) {
+                LOG.warn("BPMN model not found on classpath: {}", resourcePath);
+                return;
+            }
+            String xml = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+            Properties props = new Properties();
+            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "${kafka.bootstrap.servers:localhost:9094}");
+            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+            try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+                producer.send(new ProducerRecord<>(TOPIC, "%processId%", xml));
+                producer.flush();
+                LOG.info("Published BPMN model for process '%processId%' to {} ({} bytes)", TOPIC, xml.length());
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to publish BPMN model for process '%processId%': {}", e.getMessage());
+        }
+    }
+}
+>>
+
 scopeCancellationRegistryClass() ::= <<
 package org.gautelis.durga;
 

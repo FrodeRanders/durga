@@ -238,7 +238,7 @@ public class BpmnScaffolder {
 
         // The generation order is intentional: shared runtime support first, then BPMN handlers,
         // and finally scripts/config/readme assets that describe the generated topology.
-        generateCoreClasses(group, coreJavaOutput, outputRoot, generatedFiles, parsed.dryRun);
+        generateCoreClasses(group, coreJavaOutput, outputRoot, generatedFiles, parsed.dryRun, parsed, processId);
 
         TaskRoutingGenerator.generateTaskHandlers(
                 group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, parsed.transactions,
@@ -1373,7 +1373,9 @@ public class BpmnScaffolder {
             Path coreJavaOutput,
             Path outputRoot,
             List<String> generatedFiles,
-            boolean dryRun
+            boolean dryRun,
+            ParsedArgs parsed,
+            String processId
     ) {
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "ProcessEvent.java", "processEventClass");
@@ -1391,6 +1393,25 @@ public class BpmnScaffolder {
                 "plugins/Plugin.java", "pluginInterfaceClass");
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "plugins/PipelinePlugin.java", "pipelinePluginClass");
+
+        // Model registration bean — publishes BPMN to process-models topic on startup
+        {
+            String pid = parsed.processIdOverride != null
+                    ? parsed.processIdOverride
+                    : parsed.bpmnPath; // fallback derived later, but we use override when set
+            String modelFileName = SafeXml.safePath(parsed.bpmnPath).getFileName().toString();
+            Path outputFile = coreJavaOutput.resolve("ModelRegistration.java");
+            if (!Files.exists(outputFile)) {
+                ST template = group.getInstanceOf("modelRegistrationClass");
+                template.add("packageName", generatedPackage);
+                template.add("processId", processId);
+                template.add("bpmnFileName", modelFileName);
+                if (!dryRun) {
+                    writeFile(outputFile, template.render());
+                }
+                generatedFiles.add(outputRoot.relativize(outputFile).toString());
+            }
+        }
     }
 
     private static void writeCoreClass(
