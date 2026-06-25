@@ -135,11 +135,16 @@ else
 fi
 NUM_PROCS=${#PROC_PID[@]}
 
-# ── 4. Clean up stale ports ────────────────────────────────────────────────
+# ── 4. Clean up from previous runs ──────────────────────────────────────────
 echo ""
+banner "Cleaning up"
 for ((j=0; j<NUM_PROCS; j++)); do
+    pid="${PROC_PID[$j]}"
     port=$((BACKEND_PORT + j))
+    # Kill anything holding target ports
     lsof -ti "tcp:${port}" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+    # Wipe stale Kafka Streams state
+    rm -rf "/tmp/kafka-streams-state-${pid}" 2>/dev/null || true
 done
 lsof -ti "tcp:${VITE_PORT}" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
 
@@ -182,7 +187,6 @@ done
 (
     cd "${ROOT_DIR}/monitoring-ui"
     export VITE_API_TARGET="http://localhost:${BACKEND_PORT}"
-    export VITE_NO_HMR=1
     npm run dev -- --port "${VITE_PORT}" --strictPort \
         > /tmp/durga-vite.log 2>&1
 ) &
