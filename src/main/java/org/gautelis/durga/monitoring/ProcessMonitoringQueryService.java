@@ -87,15 +87,27 @@ public final class ProcessMonitoringQueryService {
     }
 
     /**
-     * Returns all known process IDs from the count store.
+     * Returns all known process IDs from the count store and the model store.
+     * The model store acts as a registry — processes self-register by publishing
+     * their BPMN model, making their processId discoverable even before events flow.
      */
     public List<String> listProcessIds() {
         java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
+        // From count store (processes with live instances)
         try (KeyValueIterator<String, ProcessStateCount> iterator = countsStore().all()) {
             while (iterator.hasNext()) {
                 ProcessStateCount count = iterator.next().value;
                 if (count.processId() != null && !count.processId().isBlank()) {
                     ids.add(count.processId());
+                }
+            }
+        }
+        // From model store (processes that have registered their BPMN model)
+        try (KeyValueIterator<String, String> iterator = modelsStore().all()) {
+            while (iterator.hasNext()) {
+                String pid = iterator.next().key;
+                if (pid != null && !pid.isBlank()) {
+                    ids.add(pid);
                 }
             }
         }
