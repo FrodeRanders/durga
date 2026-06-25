@@ -214,6 +214,8 @@
       bind:this={container}
       class="diagram-container"
       class:pan-active={panMode}
+      role="application"
+      aria-label="BPMN diagram"
       onmousedown={onPanDown}
       onmousemove={onPanMove}
       onmouseup={onPanUp}

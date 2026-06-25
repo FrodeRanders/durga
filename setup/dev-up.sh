@@ -38,7 +38,7 @@ BACKEND_PORT="${BACKEND_PORT:-8081}"
 START_KAFKA="${START_KAFKA:-true}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
 # Single-process defaults (used when PROCESSES is not set)
-PROCESS_ID="${PROCESS_ID:-*}"
+PROCESS_ID="${PROCESS_ID:-all}"
 BPMN_PATH="${BPMN_PATH:-}"
 FEED_INTERVAL="${FEED_INTERVAL:-1000}"
 # Multi-process override
@@ -160,7 +160,7 @@ for ((j=0; j<NUM_PROCS; j++)); do
     info "API → http://localhost:${backend_port}"
 
     # ── Monitoring backend (API + SPA) ──────────────────────────────────────────
-    if [[ -n "${bpmn}" ]]; then
+    if [[ -n "${bpmn}" && "${pid}" != "all" ]]; then
       java -Ddurga.streams.state.dir=/tmp/kafka-streams-state-${pid} \
           -cp "${JAR}" \
           org.gautelis.durga.monitoring.MonitoringContainer \
@@ -170,7 +170,7 @@ for ((j=0; j<NUM_PROCS; j++)); do
           "${pid}" \
           "${bpmn}" \
           "${ROOT_DIR}/monitoring-ui/dist" \
-          > /tmp/durga-backend-${pid}.log 2>&1 &
+          > "/tmp/durga-backend-${pid}.log" 2>&1 &
     else
       java -Ddurga.streams.state.dir=/tmp/kafka-streams-state-${pid} \
           -cp "${JAR}" \
@@ -181,18 +181,20 @@ for ((j=0; j<NUM_PROCS; j++)); do
           "${pid}" \
           "" \
           "${ROOT_DIR}/monitoring-ui/dist" \
-          > /tmp/durga-backend-${pid}.log 2>&1 &
+          > "/tmp/durga-backend-${pid}.log" 2>&1 &
     fi
     BG_PIDS+=($!)
 
-    # ── Continuous feed ─────────────────────────────────────────────────────
-    java -cp "${JAR}" \
-        org.gautelis.durga.demo.ContinuousFeedPublisher \
-        "${BOOTSTRAP}" \
-        "${pid}" \
-        "${interval}" \
-        > /tmp/durga-feed-${pid}.log 2>&1 &
-    BG_PIDS+=($!)
+    # ── Continuous feed (skip for multi-process mode) ────────────────────────
+    if [[ "${pid}" != "all" ]]; then
+      java -cp "${JAR}" \
+          org.gautelis.durga.demo.ContinuousFeedPublisher \
+          "${BOOTSTRAP}" \
+          "${pid}" \
+          "${interval}" \
+          > /tmp/durga-feed-${pid}.log 2>&1 &
+      BG_PIDS+=($!)
+    fi
 done
 
 # ── 6. Wait for backends ────────────────────────────────────────────────────

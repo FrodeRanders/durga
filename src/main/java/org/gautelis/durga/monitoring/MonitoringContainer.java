@@ -27,7 +27,7 @@ public final class MonitoringContainer {
         String appId = args.length > 1 ? args[1] : "durga-monitoring";
         int port = args.length > 2 ? Integer.parseInt(args[2]) : 8081;
         String processId = args.length > 3 && !args[3].isBlank() ? args[3] : defaultProcessId();
-        boolean multiProcess = "*".equals(processId);
+        boolean multiProcess = "*".equals(processId) || "all".equals(processId);
         if (multiProcess) {
             processId = null; // no single process when in multi mode
         }
