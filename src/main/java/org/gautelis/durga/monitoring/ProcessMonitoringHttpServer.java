@@ -317,7 +317,6 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             <main>
               <section class="hero">
                 <div class="pill">Durga Monitoring Dashboard</div>
-                <h1>Process traffic, state, and lag in one place.</h1>
                 <p>Monitoring <strong>__PROCESS_ID__</strong> &mdash; live view backed by the Kafka Streams query stores.</p>
               </section>
 

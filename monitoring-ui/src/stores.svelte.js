@@ -23,27 +23,27 @@ let error = $state(null)
 
 let interval = null
 
-async function fetchJson(path) {
-  const res = await fetch(path)
-  return { status: res.status, body: await res.json() }
+async function safeFetchJson(path) {
+  try {
+    const res = await fetch(path)
+    if (!res.ok) return null
+    return { status: res.status, body: await res.json() }
+  } catch {
+    return null
+  }
 }
 
 export async function refresh() {
   error = null
-  try {
-    const responses = await Promise.all(
-      dashboardRequestPaths(processId, threshold).map(fetchJson)
-    )
-    const normalized = normalizeDashboardResponses(responses)
-    health = normalized.health
-    allCounts = normalized.allCounts
-    counts = normalized.counts
-    latency = normalized.latency
-    stuck = normalized.stuck
-    trends = normalized.trends
-  } catch (e) {
-    error = e.message
-  }
+  const paths = dashboardRequestPaths(processId, threshold)
+  const responses = await Promise.all(paths.map(safeFetchJson))
+  const normalized = normalizeDashboardResponses(responses)
+  health = normalized.health
+  allCounts = normalized.allCounts
+  counts = normalized.counts
+  latency = normalized.latency
+  stuck = normalized.stuck
+  trends = normalized.trends
 }
 
 export async function refreshInstance() {
@@ -51,12 +51,8 @@ export async function refreshInstance() {
     instanceView = null
     return
   }
-  try {
-    const res = await fetchJson(instanceRequestPath(instanceId))
-    instanceView = res.body
-  } catch (e) {
-    instanceView = { error: e.message }
-  }
+  const result = await safeFetchJson(instanceRequestPath(instanceId))
+  instanceView = result ? result.body : { error: 'not found' }
 }
 
 export async function discoverProcessId() {
