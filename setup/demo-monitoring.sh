@@ -19,7 +19,7 @@ fi
 
 cd "${PROJECT_ROOT}"
 
-mvn -q package -DskipTests=true
+mvn -q package
 
 JAR="$(find target -maxdepth 1 -name 'durga-*.jar' ! -name '*original*' -type f -exec ls -t {} + 2>/dev/null | head -n 1 || true)"
 if [[ -z "${JAR}" || ! -f "${JAR}" ]]; then
