@@ -152,6 +152,259 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         sendHtml(exchange, 200, dashboardHtml());
     }
 
+    private String dashboardHtml() {
+        String pid = processId != null ? processId : "invoice_receipt";
+        return DASHBOARD_TEMPLATE.replace("__PROCESS_ID__", pid);
+    }
+
+    private static final String DASHBOARD_TEMPLATE = """
+            <!doctype html>
+            <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>Durga Monitor – __PROCESS_ID__</title>
+              <style>
+                :root {
+                  --bg: #f4efe6;
+                  --panel: #fffaf0;
+                  --ink: #1f1a17;
+                  --muted: #6b6258;
+                  --line: #d8c7ae;
+                  --accent: #b4542f;
+                  --accent-2: #2f6c63;
+                }
+                * { box-sizing: border-box; }
+                body {
+                  margin: 0;
+                  font-family: Georgia, "Iowan Old Style", serif;
+                  color: var(--ink);
+                  background:
+                    radial-gradient(circle at top left, #f7d7b2 0, transparent 28rem),
+                    radial-gradient(circle at bottom right, #d8eadf 0, transparent 30rem),
+                    var(--bg);
+                }
+                main {
+                  max-width: 1100px;
+                  margin: 0 auto;
+                  padding: 32px 18px 60px;
+                }
+                h1, h2 {
+                  margin: 0;
+                  font-weight: 700;
+                  letter-spacing: 0.02em;
+                }
+                p { color: var(--muted); }
+                .hero {
+                  display: grid;
+                  gap: 14px;
+                  margin-bottom: 22px;
+                }
+                .hero h1 {
+                  font-size: clamp(2.4rem, 6vw, 4.6rem);
+                  line-height: 0.95;
+                }
+                .controls, .grid {
+                  display: grid;
+                  gap: 16px;
+                }
+                .controls {
+                  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                  margin-bottom: 18px;
+                }
+                label {
+                  display: grid;
+                  gap: 6px;
+                  font-size: 0.92rem;
+                  color: var(--muted);
+                }
+                input {
+                  width: 100%;
+                  padding: 12px 14px;
+                  border: 1px solid var(--line);
+                  border-radius: 14px;
+                  background: rgba(255,255,255,0.9);
+                  color: var(--ink);
+                }
+                .grid {
+                  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                }
+                .panel {
+                  background: rgba(255,250,240,0.88);
+                  border: 1px solid var(--line);
+                  border-radius: 22px;
+                  padding: 18px;
+                  box-shadow: 0 10px 30px rgba(70, 44, 24, 0.08);
+                  backdrop-filter: blur(6px);
+                }
+                .stat {
+                  font-size: 2rem;
+                  color: var(--accent);
+                  margin-top: 8px;
+                }
+                table {
+                  width: 100%;
+                  border-collapse: collapse;
+                  font-size: 0.92rem;
+                }
+                th, td {
+                  text-align: left;
+                  padding: 10px 8px;
+                  border-bottom: 1px solid var(--line);
+                  vertical-align: top;
+                }
+                th { color: var(--muted); font-weight: 600; }
+                .pill {
+                  display: inline-block;
+                  padding: 4px 10px;
+                  border-radius: 999px;
+                  background: #efe1cf;
+                  color: var(--accent-2);
+                  font-size: 0.82rem;
+                }
+                pre {
+                  margin: 0;
+                  white-space: pre-wrap;
+                  word-break: break-word;
+                  font-size: 0.88rem;
+                }
+                .muted { color: var(--muted); }
+              </style>
+            </head>
+            <body>
+            <main>
+              <section class="hero">
+                <div class="pill">Durga Monitoring Dashboard</div>
+                <h1>Process traffic, state, and lag in one place.</h1>
+                <p>Monitoring <strong>__PROCESS_ID__</strong> &mdash; live view backed by the Kafka Streams query stores.</p>
+              </section>
+
+              <section class="controls">
+                <label>
+                  Process ID
+                  <input id="processId" value="__PROCESS_ID__">
+                </label>
+                <label>
+                  Older Than Seconds
+                  <input id="olderThanSeconds" type="number" min="1" value="60">
+                </label>
+                <label>
+                  Refresh Interval Seconds
+                  <input id="refreshSeconds" type="number" min="1" value="3">
+                </label>
+              </section>
+
+              <section class="grid">
+                <article class="panel">
+                  <h2>Health</h2>
+                  <div class="stat" id="streamsState">...</div>
+                </article>
+                <article class="panel">
+                  <h2>Counts</h2>
+                  <table id="countsTable"></table>
+                </article>
+                <article class="panel">
+                  <h2>Latency</h2>
+                  <table id="latencyTable"></table>
+                </article>
+                <article class="panel">
+                  <h2>Stuck Instances</h2>
+                  <table id="stuckTable"></table>
+                </article>
+                <article class="panel" style="grid-column: 1 / -1;">
+                  <h2>Selected Instance</h2>
+                  <p class="muted">Paste a process instance id from the stuck table or your logs.</p>
+                  <label>
+                    Process Instance ID
+                    <input id="instanceId" placeholder="paste a processInstanceId">
+                  </label>
+                  <pre id="instanceView" class="muted">No instance selected.</pre>
+                </article>
+              </section>
+            </main>
+            <script>
+              const qs = (id) => document.getElementById(id);
+              const processId = qs('processId');
+              const olderThanSeconds = qs('olderThanSeconds');
+              const refreshSeconds = qs('refreshSeconds');
+              const instanceId = qs('instanceId');
+              const streamsState = qs('streamsState');
+              const countsTable = qs('countsTable');
+              const latencyTable = qs('latencyTable');
+              const stuckTable = qs('stuckTable');
+              const instanceView = qs('instanceView');
+              let timer = null;
+
+              async function fetchJson(path) {
+                const response = await fetch(path);
+                return { status: response.status, body: await response.json() };
+              }
+
+              function renderTable(target, headers, rows) {
+                const thead = `<tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr>`;
+                const tbody = rows.length === 0
+                  ? `<tr><td colspan="${headers.length}" class="muted">No data</td></tr>`
+                  : rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('');
+                target.innerHTML = thead + tbody;
+              }
+
+              async function refreshDashboard() {
+                const pid = encodeURIComponent(processId.value.trim());
+                const age = encodeURIComponent(olderThanSeconds.value.trim() || '60');
+
+                const health = await fetchJson('/health');
+                streamsState.textContent = health.body.streamsState ?? 'UNKNOWN';
+
+                const counts = await fetchJson(`/processes/${pid}/counts`);
+                renderTable(countsTable, ['State', 'Count'], (counts.body || []).map((row) => [row.state, row.count]));
+
+                const latency = await fetchJson(`/processes/${pid}/latency`);
+                renderTable(latencyTable, ['Activity', 'Samples', 'Avg ms', 'Max ms'],
+                  (latency.body || []).map((row) => [row.activityId, row.sampleCount, row.averageDurationMs, row.maxDurationMs]));
+
+                const stuck = await fetchJson(`/stuck?processId=${pid}&olderThanSeconds=${age}`);
+                renderTable(stuckTable, ['Instance', 'Activity', 'Age s', 'State'],
+                  (stuck.body || []).map((row) => [
+                    `<button type="button" data-instance="${row.processInstanceId}">${row.processInstanceId.slice(0, 8)}</button>`,
+                    row.currentActivityId ?? '',
+                    row.ageSeconds,
+                    row.lifecycleState
+                  ]));
+
+                for (const button of stuckTable.querySelectorAll('button[data-instance]')) {
+                  button.addEventListener('click', () => {
+                    instanceId.value = button.dataset.instance;
+                    refreshInstance();
+                  });
+                }
+              }
+
+              async function refreshInstance() {
+                const id = instanceId.value.trim();
+                if (!id) {
+                  instanceView.textContent = 'No instance selected.';
+                  return;
+                }
+                const result = await fetchJson(`/instances/${encodeURIComponent(id)}`);
+                instanceView.textContent = JSON.stringify(result.body, null, 2);
+              }
+
+              function scheduleRefresh() {
+                if (timer) clearInterval(timer);
+                refreshDashboard();
+                timer = setInterval(refreshDashboard, Math.max(1, Number(refreshSeconds.value || '3')) * 1000);
+              }
+
+              processId.addEventListener('change', scheduleRefresh);
+              olderThanSeconds.addEventListener('change', scheduleRefresh);
+              refreshSeconds.addEventListener('change', scheduleRefresh);
+              instanceId.addEventListener('change', refreshInstance);
+              scheduleRefresh();
+            </script>
+            </body>
+            </html>
+            """;
+
     private void handleHealth(HttpExchange exchange) throws IOException {
         if (!"GET".equals(exchange.getRequestMethod())) {
             sendStatus(exchange, 405);
@@ -367,257 +620,5 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         try (OutputStream output = exchange.getResponseBody()) {
             output.write(body);
         }
-    }
-
-    private static String dashboardHtml() {
-        // The dashboard is embedded on purpose: it stays in lockstep with the HTTP API and
-        // avoids a separate frontend build for what is primarily a local operator view.
-        return """
-                <!doctype html>
-                <html lang="en">
-                <head>
-                  <meta charset="utf-8">
-                  <meta name="viewport" content="width=device-width, initial-scale=1">
-                  <title>Durga Monitor</title>
-                  <style>
-                    :root {
-                      --bg: #f4efe6;
-                      --panel: #fffaf0;
-                      --ink: #1f1a17;
-                      --muted: #6b6258;
-                      --line: #d8c7ae;
-                      --accent: #b4542f;
-                      --accent-2: #2f6c63;
-                    }
-                    * { box-sizing: border-box; }
-                    body {
-                      margin: 0;
-                      font-family: Georgia, "Iowan Old Style", serif;
-                      color: var(--ink);
-                      background:
-                        radial-gradient(circle at top left, #f7d7b2 0, transparent 28rem),
-                        radial-gradient(circle at bottom right, #d8eadf 0, transparent 30rem),
-                        var(--bg);
-                    }
-                    main {
-                      max-width: 1100px;
-                      margin: 0 auto;
-                      padding: 32px 18px 60px;
-                    }
-                    h1, h2 {
-                      margin: 0;
-                      font-weight: 700;
-                      letter-spacing: 0.02em;
-                    }
-                    p { color: var(--muted); }
-                    .hero {
-                      display: grid;
-                      gap: 14px;
-                      margin-bottom: 22px;
-                    }
-                    .hero h1 {
-                      font-size: clamp(2.4rem, 6vw, 4.6rem);
-                      line-height: 0.95;
-                    }
-                    .controls, .grid {
-                      display: grid;
-                      gap: 16px;
-                    }
-                    .controls {
-                      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-                      margin-bottom: 18px;
-                    }
-                    label {
-                      display: grid;
-                      gap: 6px;
-                      font-size: 0.92rem;
-                      color: var(--muted);
-                    }
-                    input {
-                      width: 100%;
-                      padding: 12px 14px;
-                      border: 1px solid var(--line);
-                      border-radius: 14px;
-                      background: rgba(255,255,255,0.9);
-                      color: var(--ink);
-                    }
-                    .grid {
-                      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-                    }
-                    .panel {
-                      background: rgba(255,250,240,0.88);
-                      border: 1px solid var(--line);
-                      border-radius: 22px;
-                      padding: 18px;
-                      box-shadow: 0 10px 30px rgba(70, 44, 24, 0.08);
-                      backdrop-filter: blur(6px);
-                    }
-                    .stat {
-                      font-size: 2rem;
-                      color: var(--accent);
-                      margin-top: 8px;
-                    }
-                    table {
-                      width: 100%;
-                      border-collapse: collapse;
-                      font-size: 0.92rem;
-                    }
-                    th, td {
-                      text-align: left;
-                      padding: 10px 8px;
-                      border-bottom: 1px solid var(--line);
-                      vertical-align: top;
-                    }
-                    th { color: var(--muted); font-weight: 600; }
-                    .pill {
-                      display: inline-block;
-                      padding: 4px 10px;
-                      border-radius: 999px;
-                      background: #efe1cf;
-                      color: var(--accent-2);
-                      font-size: 0.82rem;
-                    }
-                    pre {
-                      margin: 0;
-                      white-space: pre-wrap;
-                      word-break: break-word;
-                      font-size: 0.88rem;
-                    }
-                    .muted { color: var(--muted); }
-                  </style>
-                </head>
-                <body>
-                <main>
-                  <section class="hero">
-                    <div class="pill">Durga Monitoring Dashboard</div>
-                    <h1>Process traffic, state, and lag in one place.</h1>
-                    <p>Live view backed by the Kafka Streams query stores exposed by this monitoring app.</p>
-                  </section>
-
-                  <section class="controls">
-                    <label>
-                      Process ID
-                      <input id="processId" value="invoice_receipt">
-                    </label>
-                    <label>
-                      Older Than Seconds
-                      <input id="olderThanSeconds" type="number" min="1" value="60">
-                    </label>
-                    <label>
-                      Refresh Interval Seconds
-                      <input id="refreshSeconds" type="number" min="1" value="3">
-                    </label>
-                  </section>
-
-                  <section class="grid">
-                    <article class="panel">
-                      <h2>Health</h2>
-                      <div class="stat" id="streamsState">...</div>
-                    </article>
-                    <article class="panel">
-                      <h2>Counts</h2>
-                      <table id="countsTable"></table>
-                    </article>
-                    <article class="panel">
-                      <h2>Latency</h2>
-                      <table id="latencyTable"></table>
-                    </article>
-                    <article class="panel">
-                      <h2>Stuck Instances</h2>
-                      <table id="stuckTable"></table>
-                    </article>
-                    <article class="panel" style="grid-column: 1 / -1;">
-                      <h2>Selected Instance</h2>
-                      <p class="muted">Paste a process instance id from the stuck table or your logs.</p>
-                      <label>
-                        Process Instance ID
-                        <input id="instanceId" placeholder="paste a processInstanceId">
-                      </label>
-                      <pre id="instanceView" class="muted">No instance selected.</pre>
-                    </article>
-                  </section>
-                </main>
-                <script>
-                  const qs = (id) => document.getElementById(id);
-                  const processId = qs('processId');
-                  const olderThanSeconds = qs('olderThanSeconds');
-                  const refreshSeconds = qs('refreshSeconds');
-                  const instanceId = qs('instanceId');
-                  const streamsState = qs('streamsState');
-                  const countsTable = qs('countsTable');
-                  const latencyTable = qs('latencyTable');
-                  const stuckTable = qs('stuckTable');
-                  const instanceView = qs('instanceView');
-                  let timer = null;
-
-                  async function fetchJson(path) {
-                    const response = await fetch(path);
-                    return { status: response.status, body: await response.json() };
-                  }
-
-                  function renderTable(target, headers, rows) {
-                    const thead = `<tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr>`;
-                    const tbody = rows.length === 0
-                      ? `<tr><td colspan="${headers.length}" class="muted">No data</td></tr>`
-                      : rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('');
-                    target.innerHTML = thead + tbody;
-                  }
-
-                  async function refreshDashboard() {
-                    const pid = encodeURIComponent(processId.value.trim());
-                    const age = encodeURIComponent(olderThanSeconds.value.trim() || '60');
-
-                    const health = await fetchJson('/health');
-                    streamsState.textContent = health.body.streamsState ?? 'UNKNOWN';
-
-                    const counts = await fetchJson(`/processes/${pid}/counts`);
-                    renderTable(countsTable, ['State', 'Count'], (counts.body || []).map((row) => [row.state, row.count]));
-
-                    const latency = await fetchJson(`/processes/${pid}/latency`);
-                    renderTable(latencyTable, ['Activity', 'Samples', 'Avg ms', 'Max ms'],
-                      (latency.body || []).map((row) => [row.activityId, row.sampleCount, row.averageDurationMs, row.maxDurationMs]));
-
-                    const stuck = await fetchJson(`/stuck?processId=${pid}&olderThanSeconds=${age}`);
-                    renderTable(stuckTable, ['Instance', 'Activity', 'Age s', 'State'],
-                      (stuck.body || []).map((row) => [
-                        `<button type="button" data-instance="${row.processInstanceId}">${row.processInstanceId.slice(0, 8)}</button>`,
-                        row.currentActivityId ?? '',
-                        row.ageSeconds,
-                        row.lifecycleState
-                      ]));
-
-                    for (const button of stuckTable.querySelectorAll('button[data-instance]')) {
-                      button.addEventListener('click', () => {
-                        instanceId.value = button.dataset.instance;
-                        refreshInstance();
-                      });
-                    }
-                  }
-
-                  async function refreshInstance() {
-                    const id = instanceId.value.trim();
-                    if (!id) {
-                      instanceView.textContent = 'No instance selected.';
-                      return;
-                    }
-                    const result = await fetchJson(`/instances/${encodeURIComponent(id)}`);
-                    instanceView.textContent = JSON.stringify(result.body, null, 2);
-                  }
-
-                  function scheduleRefresh() {
-                    if (timer) clearInterval(timer);
-                    refreshDashboard();
-                    timer = setInterval(refreshDashboard, Math.max(1, Number(refreshSeconds.value || '3')) * 1000);
-                  }
-
-                  processId.addEventListener('change', scheduleRefresh);
-                  olderThanSeconds.addEventListener('change', scheduleRefresh);
-                  refreshSeconds.addEventListener('change', scheduleRefresh);
-                  instanceId.addEventListener('change', refreshInstance);
-                  scheduleRefresh();
-                </script>
-                </body>
-                </html>
-                """;
     }
 }

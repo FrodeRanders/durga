@@ -41,13 +41,11 @@ _cleanup() {
     echo ""
     echo "━━━ Shutting down ━━━"
     for pid in "${BG_PIDS[@]}"; do
-        # Kill the entire process group (handles vite's child node processes)
-        kill -TERM -- -"${pid}" 2>/dev/null || true
+        kill "${pid}" 2>/dev/null || true
     done
     sleep 2
-    # Force-kill any stragglers
     for pid in "${BG_PIDS[@]}"; do
-        kill -KILL -- -"${pid}" 2>/dev/null || true
+        kill -9 "${pid}" 2>/dev/null || true
     done
     wait 2>/dev/null || true
 }
@@ -159,12 +157,10 @@ for proc_def in "${PROC_ARRAY[@]}"; do
     BG_PIDS+=($!)
 
     # ── Vite SPA dev server ─────────────────────────────────────────────────
-    (
-        cd "${ROOT_DIR}/monitoring-ui"
-        export VITE_API_TARGET="http://localhost:${backend_port}"
-        exec setsid npx vite --port "${vite_port}" --strictPort \
-            > /tmp/durga-vite-${pid}.log 2>&1
-    ) &
+    VITE_API_TARGET="http://localhost:${backend_port}" \
+        npm run dev --prefix "${ROOT_DIR}/monitoring-ui" \
+            -- --port "${vite_port}" --strictPort \
+            > /tmp/durga-vite-${pid}.log 2>&1 &
     BG_PIDS+=($!)
 
     proc_idx=$((proc_idx + 1))
