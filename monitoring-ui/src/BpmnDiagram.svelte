@@ -233,7 +233,7 @@
 
   .diagram-container {
     width: 100%;
-    min-height: 400px;
+    height: 550px;
     border: 1px solid var(--line);
     border-radius: 8px;
     background: #fff;
@@ -241,6 +241,11 @@
   }
 
   .diagram-container :global(.bjs-container) {
+    width: 100%;
+    height: 100%;
+  }
+
+  .diagram-container :global(svg) {
     width: 100%;
     height: 100%;
   }

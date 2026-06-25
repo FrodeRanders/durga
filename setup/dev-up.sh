@@ -2,13 +2,16 @@
 set -euo pipefail
 
 # ── dev-up.sh ───────────────────────────────────────────────────────────────
-# One-command full-stack demo: Kafka, monitoring backends, Svelte SPA, and
-# process feed generators.  Configure via env vars or edit the defaults below.
+# One-command full-stack demo: Kafka, monitoring backend, Svelte SPA, and
+# process feed generator.  Configure via env vars or edit the defaults below.
 #
 # Usage:
 #   ./setup/dev-up.sh
 #
-#   # Two processes side by side:
+#   # Custom process:
+#   PROCESS_ID=order_fulfillment BPMN_PATH=src/test/resources/bpmn/order_fulfillment.bpmn ./setup/dev-up.sh
+#
+#   # Two processes side by side (API backends + HTML dashboards, single SPA):
 #   PROCESSES="invoice_receipt:src/test/resources/bpmn/invoice_receipt.bpmn,order_fulfillment:src/test/resources/bpmn/order_fulfillment.bpmn" \
 #     ./setup/dev-up.sh
 #
@@ -16,10 +19,12 @@ set -euo pipefail
 #   START_KAFKA=false ./setup/dev-up.sh
 #
 # Env vars:
-#   PROCESSES      comma-separated "pid:bpmnPath[:intervalMs]" entries
+#   PROCESS_ID     single process id (default invoice_receipt)
+#   BPMN_PATH      path to BPMN file for this process
+#   PROCESSES      comma-separated "pid:bpmnPath[:intervalMs]" for multi-backend
 #   BOOTSTRAP      Kafka bootstrap servers (default localhost:9094)
-#   BACKEND_PORT   base backend API port (default 8081)
-#   VITE_PORT      base Vite dev-server port (default 5173)
+#   BACKEND_PORT   backend API start port (default 8081)
+#   VITE_PORT      Vite dev-server port (default 5173)
 #   START_KAFKA    auto-start Kafka via docker compose (default true)
 #   SKIP_BUILD     skip Maven + npm build (default false)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -33,7 +38,12 @@ BACKEND_PORT="${BACKEND_PORT:-8081}"
 VITE_PORT="${VITE_PORT:-5173}"
 START_KAFKA="${START_KAFKA:-true}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
-PROCESSES="${PROCESSES:-invoice_receipt:src/test/resources/bpmn/invoice_receipt.bpmn:1000}"
+# Single-process defaults (used when PROCESSES is not set)
+PROCESS_ID="${PROCESS_ID:-invoice_receipt}"
+BPMN_PATH="${BPMN_PATH:-src/test/resources/bpmn/invoice_receipt.bpmn}"
+FEED_INTERVAL="${FEED_INTERVAL:-1000}"
+# Multi-process override
+PROCESSES="${PROCESSES:-}"
 
 declare -a BG_PIDS=()
 
@@ -105,35 +115,46 @@ if [[ -z "${JAR}" || ! -f "${JAR}" ]]; then
     exit 1
 fi
 
-# ── 3. Clean up stale ports from previous runs ──────────────────────────────
-echo ""
-proc_idx=0
-IFS=',' read -ra PROC_ARRAY <<< "${PROCESSES}"
-for proc_def in "${PROC_ARRAY[@]}"; do
-    backend_port=$((BACKEND_PORT + proc_idx))
-    vite_port=$((VITE_PORT + proc_idx))
-    # Kill anything holding our ports
-    lsof -ti "tcp:${backend_port}" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
-    lsof -ti "tcp:${vite_port}" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
-    proc_idx=$((proc_idx + 1))
-done
+# ── 3. Build process list ───────────────────────────────────────────────────
+declare -a PROC_PID=()
+declare -a PROC_BPMN=()
+declare -a PROC_INTERVAL=()
 
-# ── 4. Parse process definitions ────────────────────────────────────────────
+if [[ -n "${PROCESSES}" ]]; then
+    IFS=',' read -ra PROC_ARRAY <<< "${PROCESSES}"
+    for proc_def in "${PROC_ARRAY[@]}"; do
+        IFS=':' read -r pid bpmn interval <<< "${proc_def}"
+        PROC_PID+=("${pid}")
+        PROC_BPMN+=("${bpmn}")
+        PROC_INTERVAL+=("${interval:-1000}")
+    done
+else
+    PROC_PID+=("${PROCESS_ID}")
+    PROC_BPMN+=("${BPMN_PATH}")
+    PROC_INTERVAL+=("${FEED_INTERVAL}")
+fi
+NUM_PROCS=${#PROC_PID[@]}
+
+# ── 4. Clean up stale ports ────────────────────────────────────────────────
+echo ""
+for ((j=0; j<NUM_PROCS; j++)); do
+    port=$((BACKEND_PORT + j))
+    lsof -ti "tcp:${port}" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+done
+lsof -ti "tcp:${VITE_PORT}" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+
+# ── 5. Start backends and feeds ────────────────────────────────────────────
 banner "Starting services"
 
-proc_idx=0
-
-for proc_def in "${PROC_ARRAY[@]}"; do
-    IFS=':' read -r pid bpmn interval <<< "${proc_def}"
-    interval="${interval:-1000}"
-    backend_port=$((BACKEND_PORT + proc_idx))
-    vite_port=$((VITE_PORT + proc_idx))
+for ((j=0; j<NUM_PROCS; j++)); do
+    pid="${PROC_PID[$j]}"
+    bpmn="${PROC_BPMN[$j]}"
+    interval="${PROC_INTERVAL[$j]}"
+    backend_port=$((BACKEND_PORT + j))
     app_id="durga-mon-${pid}"
 
     printf "\n  ${BOLD}%s${RESET}\n" "${pid}"
     info "API → http://localhost:${backend_port}"
-    info "SPA → http://localhost:${vite_port}"
-    info "Feed interval: ${interval}ms"
 
     # ── Monitoring backend ──────────────────────────────────────────────────
     java -Ddurga.streams.state.dir=/tmp/kafka-streams-state-${pid} \
@@ -155,27 +176,26 @@ for proc_def in "${PROC_ARRAY[@]}"; do
         "${interval}" \
         > /tmp/durga-feed-${pid}.log 2>&1 &
     BG_PIDS+=($!)
-
-    # ── Vite SPA dev server ─────────────────────────────────────────────────
-    (
-        cd "${ROOT_DIR}/monitoring-ui"
-        export VITE_API_TARGET="http://localhost:${backend_port}"
-        export VITE_CACHE_DIR="${ROOT_DIR}/monitoring-ui/node_modules/.vite-${pid}"
-        export VITE_NO_HMR=1
-        npm run dev -- --port "${vite_port}" --strictPort \
-            > /tmp/durga-vite-${pid}.log 2>&1
-    ) &
-    BG_PIDS+=($!)
-
-    proc_idx=$((proc_idx + 1))
 done
 
-# ── 5. Wait for backends to be ready ────────────────────────────────────────
+# ── 6. Start single Vite SPA (proxies to first backend) ─────────────────────
+(
+    cd "${ROOT_DIR}/monitoring-ui"
+    export VITE_API_TARGET="http://localhost:${BACKEND_PORT}"
+    export VITE_NO_HMR=1
+    npm run dev -- --port "${VITE_PORT}" --strictPort \
+        > /tmp/durga-vite.log 2>&1
+) &
+BG_PIDS+=($!)
+
+info "SPA → http://localhost:${VITE_PORT}"
+
+# ── 7. Wait for backends ────────────────────────────────────────────────────
 echo ""
 banner "Waiting for backends"
 for i in $(seq 1 30); do
     all_ready=true
-    for ((j=0; j<proc_idx; j++)); do
+    for ((j=0; j<NUM_PROCS; j++)); do
         port=$((BACKEND_PORT + j))
         if ! curl -sf "http://localhost:${port}/health" > /dev/null 2>&1; then
             all_ready=false
@@ -188,23 +208,30 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-# ── 6. Summary ──────────────────────────────────────────────────────────────
+# ── 8. Summary ──────────────────────────────────────────────────────────────
 echo ""
 banner "Ready — open in browser"
 echo ""
-for ((j=0; j<proc_idx; j++)); do
-    IFS=':' read -r pid bpmn interval <<< "${PROC_ARRAY[$j]}"
-    vite_port=$((VITE_PORT + j))
+link "    SPA  → http://localhost:${VITE_PORT}"
+echo ""
+for ((j=0; j<NUM_PROCS; j++)); do
+    pid="${PROC_PID[$j]}"
     backend_port=$((BACKEND_PORT + j))
     printf "  ${BOLD}%s${RESET}\n" "${pid}"
-    link "    SPA  → http://localhost:${vite_port}"
-    info  "    API  → http://localhost:${backend_port}"
+    info  "    API        → http://localhost:${backend_port}"
+    info  "    Dashboard  → http://localhost:${backend_port}/dashboard"
     echo ""
 done
+
+if [[ ${NUM_PROCS} -gt 1 ]]; then
+    echo "The SPA connects to the first backend (${PROC_PID[0]})."
+    echo "To view other processes, open their HTML dashboard links above."
+    echo ""
+fi
 echo "Press Ctrl+C to stop all services."
 echo ""
 
-# ── 7. Keep alive ───────────────────────────────────────────────────────────
+# ── 9. Keep alive ───────────────────────────────────────────────────────────
 while true; do
     sleep 5
 done
