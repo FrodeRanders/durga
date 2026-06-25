@@ -262,7 +262,7 @@
 
   .diagram-toolbar {
     position: absolute;
-    bottom: 10px;
+    top: 10px;
     right: 10px;
     display: flex;
     gap: 4px;
