@@ -5,9 +5,9 @@
 
   let container = $state(null)
   let viewer = null
-  let diagramXml = null
+  let diagramXml = $state(null)
   let diagramError = $state(null)
-  let rendered = false
+  let rendered = $state(false)
   let diagramLoaded = false
 
   function duration(ms) {
