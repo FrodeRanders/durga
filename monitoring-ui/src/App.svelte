@@ -1,5 +1,6 @@
 <script>
   import { getState } from './stores.svelte.js'
+  import BpmnDiagram from './BpmnDiagram.svelte'
 
   const s = getState()
 
@@ -11,6 +12,7 @@
     if (!mounted) {
       mounted = true
       s.scheduleRefresh(() => s.refresh())
+      s.checkDiagramAvailable()
     }
   })
 
@@ -368,6 +370,12 @@
         <p class="empty">No stuck instances at the current threshold.</p>
       {/if}
     </section>
+
+    {#if s.diagramAvailable}
+      <section class="panel wide">
+        <BpmnDiagram processId={s.processId} latency={s.latency} counts={s.counts} />
+      </section>
+    {/if}
 
     <section class="panel instance-panel">
       <div class="panel-title">

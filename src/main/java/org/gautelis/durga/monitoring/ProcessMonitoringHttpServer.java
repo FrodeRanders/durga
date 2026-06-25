@@ -11,6 +11,9 @@ import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,6 +33,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
     private final ProcessMonitoringQueryService queryService;
     private final HttpServer server;
     private final String apiKey;
+    private final Path bpmnFilePath;
 
     /**
      * Creates the HTTP server bound to an existing monitoring topology.
@@ -44,9 +48,28 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             ProcessMonitoringTopology.MonitoringTopics topics,
             int port
     ) throws IOException {
+        this(streams, topics, port, null);
+    }
+
+    /**
+     * Creates the HTTP server with an optional BPMN diagram file to serve.
+     *
+     * @param streams running Kafka Streams instance
+     * @param topics monitoring topic and store names
+     * @param port local HTTP port
+     * @param bpmnFilePath path to a BPMN 2.0 XML file (may be null)
+     * @throws IOException if the embedded server cannot be created
+     */
+    public ProcessMonitoringHttpServer(
+            KafkaStreams streams,
+            ProcessMonitoringTopology.MonitoringTopics topics,
+            int port,
+            Path bpmnFilePath
+    ) throws IOException {
         this.streams = streams;
         this.queryService = new ProcessMonitoringQueryService(streams, topics);
         this.apiKey = resolveApiKey();
+        this.bpmnFilePath = bpmnFilePath;
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.createContext("/", this::handleRoot);
         this.server.createContext("/dashboard", this::handleDashboard);
@@ -56,6 +79,8 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         this.server.createContext("/counts", this::handleCounts);
         this.server.createContext("/stuck", this::handleStuck);
         this.server.createContext("/metrics", this::handleMetrics);
+        this.server.createContext("/diagram", this::handleDiagram);
+        this.server.createContext("/api/diagram", this::handleDiagram);
         LOG.info("Monitoring HTTP server created on port {}", port);
     }
 
@@ -220,6 +245,32 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         exchange.sendResponseHeaders(200, body.length);
         try (OutputStream output = exchange.getResponseBody()) {
             output.write(body);
+        }
+    }
+
+    private void handleDiagram(HttpExchange exchange) throws IOException {
+        if (!"GET".equals(exchange.getRequestMethod())) {
+            sendStatus(exchange, 405);
+            return;
+        }
+        if (!requireAuth(exchange)) return;
+
+        if (bpmnFilePath == null) {
+            sendJson(exchange, 404, Map.of("error", "No BPMN diagram available for this process"));
+            return;
+        }
+
+        try {
+            String xml = Files.readString(bpmnFilePath, StandardCharsets.UTF_8);
+            byte[] body = xml.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/xml; charset=utf-8");
+            exchange.sendResponseHeaders(200, body.length);
+            try (OutputStream output = exchange.getResponseBody()) {
+                output.write(body);
+            }
+        } catch (IOException e) {
+            LOG.warn("Failed to read BPMN diagram from {}", bpmnFilePath, e);
+            sendJson(exchange, 500, Map.of("error", "Failed to read BPMN diagram"));
         }
     }
 

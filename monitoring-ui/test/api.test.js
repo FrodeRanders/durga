@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   dashboardRequestPaths,
+  diagramRequestPath,
   instanceRequestPath,
   normalizeDashboardResponses
 } from '../src/api.js'
@@ -16,6 +17,10 @@ test('dashboardRequestPaths URL-encodes process id and threshold', () => {
     '/api/stuck?processId=invoice%20review%2F2026&olderThanSeconds=30',
     '/api/processes/invoice%20review%2F2026/trends'
   ])
+})
+
+test('diagramRequestPath returns the diagram endpoint', () => {
+  assert.equal(diagramRequestPath(), '/api/diagram')
 })
 
 test('instanceRequestPath returns null for empty input and encodes ids', () => {

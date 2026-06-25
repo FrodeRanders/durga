@@ -9,6 +9,8 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Properties;
 
@@ -23,6 +25,7 @@ public final class ProcessMonitoringApp {
     static String bootstrapServers;
     static String applicationId;
     static String processId;
+    static Path bpmnPath;
 
     private ProcessMonitoringApp() {
     }
@@ -33,6 +36,7 @@ public final class ProcessMonitoringApp {
             bootstrapServers = args.length > 0 ? args[0] : bootstrapServersDefault();
             applicationId = args.length > 1 ? args[1] : "durga-monitoring";
             processId = args.length > 2 ? args[2] : defaultProcessId();
+            bpmnPath = args.length > 3 && !args[3].isBlank() ? resolveBpmnPath(args[3]) : null;
             Quarkus.run(args);
             LOG.info("ProcessMonitoringApp completed successfully");
         } catch (Exception e) {
@@ -68,13 +72,14 @@ public final class ProcessMonitoringApp {
         streams.start();
         LOG.info("Monitoring topology started (state dir: {})", props.getProperty(StreamsConfig.STATE_DIR_CONFIG));
 
-        return new MonitoringState(streams, queryService);
+        return new MonitoringState(streams, queryService, bpmnPath);
     }
 
     /** Injectable state holder for the REST resource. */
     public record MonitoringState(
             KafkaStreams streams,
-            ProcessMonitoringQueryService queryService
+            ProcessMonitoringQueryService queryService,
+            Path bpmnPath
     ) {
     }
 
@@ -84,5 +89,14 @@ public final class ProcessMonitoringApp {
 
     private static String defaultProcessId() {
         return System.getProperty("durga.monitoring.process.id", "default");
+    }
+
+    private static Path resolveBpmnPath(String arg) {
+        Path path = Path.of(arg);
+        if (!Files.isRegularFile(path)) {
+            LOG.warn("BPMN file not found: {}", arg);
+            return null;
+        }
+        return path;
     }
 }

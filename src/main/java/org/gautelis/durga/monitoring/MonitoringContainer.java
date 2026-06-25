@@ -6,6 +6,8 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Properties;
 
@@ -23,6 +25,7 @@ public final class MonitoringContainer {
         String appId = args.length > 1 ? args[1] : "durga-monitoring";
         int port = args.length > 2 ? Integer.parseInt(args[2]) : 8081;
         String processId = args.length > 3 && !args[3].isBlank() ? args[3] : defaultProcessId();
+        Path bpmnPath = args.length > 4 && !args[4].isBlank() ? resolveBpmnPath(args[4]) : null;
 
         var topics = ProcessMonitoringTopology.MonitoringTopics.forProcess(processId);
 
@@ -52,7 +55,7 @@ public final class MonitoringContainer {
         }
 
         try {
-            var httpServer = new ProcessMonitoringHttpServer(streams, topics, port);
+            var httpServer = new ProcessMonitoringHttpServer(streams, topics, port, bpmnPath);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 httpServer.close();
                 streams.close();
@@ -72,5 +75,14 @@ public final class MonitoringContainer {
 
     private static String defaultProcessId() {
         return System.getProperty("durga.monitoring.process.id", "default");
+    }
+
+    private static Path resolveBpmnPath(String arg) {
+        Path path = Path.of(arg);
+        if (!Files.isRegularFile(path)) {
+            System.err.println("Warning: BPMN file not found: " + arg);
+            return null;
+        }
+        return path;
     }
 }

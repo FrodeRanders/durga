@@ -14,6 +14,8 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Map;
 import java.util.Optional;
 
@@ -167,6 +169,27 @@ public class ProcessMonitoringResource {
             return Response.ok(sb.toString()).build();
         } catch (Exception e) {
             return Response.status(503).entity("# error: " + e.getMessage()).build();
+        }
+    }
+
+    @GET
+    @Path("/diagram")
+    @Produces(MediaType.APPLICATION_XML)
+    public Response diagram(@HeaderParam("Authorization") String authorization) {
+        Response auth = requireAuth(authorization);
+        if (auth != null) return auth;
+
+        java.nio.file.Path path = state.bpmnPath();
+        if (path == null) {
+            return Response.status(404).entity(Map.of("error", "No BPMN diagram available")).build();
+        }
+
+        try {
+            String xml = Files.readString(path, StandardCharsets.UTF_8);
+            return Response.ok(xml).build();
+        } catch (Exception e) {
+            LOG.warn("Failed to read BPMN diagram from {}", path, e);
+            return Response.status(500).entity(Map.of("error", "Failed to read BPMN diagram")).build();
         }
     }
 

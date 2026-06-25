@@ -1,5 +1,6 @@
 import {
   dashboardRequestPaths,
+  diagramRequestPath,
   instanceRequestPath,
   normalizeDashboardResponses
 } from './api.js'
@@ -16,6 +17,7 @@ let latency = $state([])
 let stuck = $state([])
 let trends = $state([])
 let instanceView = $state(null)
+let diagramAvailable = $state(false)
 let error = $state(null)
 
 let interval = null
@@ -56,6 +58,15 @@ export async function refreshInstance() {
   }
 }
 
+export async function checkDiagramAvailable() {
+  try {
+    const res = await fetch(diagramRequestPath())
+    diagramAvailable = res.ok
+  } catch {
+    diagramAvailable = false
+  }
+}
+
 export function scheduleRefresh(getRefresh) {
   if (interval) clearInterval(interval)
   getRefresh()
@@ -79,9 +90,11 @@ export function getState() {
     get stuck() { return stuck },
     get trends() { return trends },
     get instanceView() { return instanceView },
+    get diagramAvailable() { return diagramAvailable },
     get error() { return error },
     refresh,
     refreshInstance,
+    checkDiagramAvailable,
     scheduleRefresh
   }
 }
