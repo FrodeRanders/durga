@@ -60,13 +60,18 @@ export async function refreshInstance() {
     return
   }
   try {
-    const res = await fetch(`/api/instances/${encodeURIComponent(instanceId)}`)
+    const url = `/api/instances/${encodeURIComponent(instanceId)}`
+    console.log('[durga] instance fetch %s', url)
+    const res = await fetch(url)
+    console.log('[durga] instance response %d', res.status)
     if (!res.ok) {
       instanceView = { error: `HTTP ${res.status}` }
       return
     }
     instanceView = await res.json()
+    console.log('[durga] instance loaded %o', instanceView)
   } catch (e) {
+    console.log('[durga] instance error %s', e.message)
     instanceView = { error: e.message }
   }
 }
