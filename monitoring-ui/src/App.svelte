@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte'
   import { getState } from './stores.svelte.js'
   import BpmnDiagram from './BpmnDiagram.svelte'
 
@@ -7,21 +8,18 @@
   const terminalStates = new Set(['completed', 'failed', 'cancelled'])
   const trendMetrics = ['started', 'completed', 'failed']
 
-  let mounted = false
-  $effect(() => {
-    if (!mounted) {
-      mounted = true
-      window.addEventListener('unhandledrejection', (e) => {
-        console.error('[durga] unhandled rejection', e.reason)
-      })
-      window.addEventListener('error', (e) => {
-        console.error('[durga] runtime error', e.message)
-      })
-      s.discoverProcessId().then(() => {
-        s.scheduleRefresh(() => s.refresh())
-      })
-      s.checkDiagramAvailable()
-    }
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('[durga] unhandled rejection', e.reason)
+  })
+  window.addEventListener('error', (e) => {
+    console.error('[durga] runtime error', e.message)
+  })
+
+  onMount(() => {
+    s.discoverProcessId().then(() => {
+      s.scheduleRefresh(() => s.refresh())
+    })
+    s.checkDiagramAvailable()
   })
 
   function number(value) {
