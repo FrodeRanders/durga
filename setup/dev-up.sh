@@ -163,7 +163,19 @@ for ((j=0; j<NUM_PROCS; j++)); do
     info "API → http://localhost:${backend_port}"
 
     # ── Monitoring backend (API + SPA) ──────────────────────────────────────────
-    if [[ -n "${bpmn}" && "${pid}" != "all" ]]; then
+    if [[ "${pid}" == "all" ]]; then
+      java -Ddurga.streams.state.dir=/tmp/kafka-streams-state-${pid} \
+          -cp "${JAR}" \
+          org.gautelis.durga.monitoring.MonitoringContainer \
+          "${BOOTSTRAP}" \
+          "${app_id}" \
+          "${backend_port}" \
+          "${pid}" \
+          "" \
+          "${ROOT_DIR}/monitoring-ui/dist" \
+          "${ROOT_DIR}/src/test/resources/bpmn" \
+          > "/tmp/durga-backend-${pid}.log" 2>&1 &
+    elif [[ -n "${bpmn}" ]]; then
       java -Ddurga.streams.state.dir=/tmp/kafka-streams-state-${pid} \
           -cp "${JAR}" \
           org.gautelis.durga.monitoring.MonitoringContainer \

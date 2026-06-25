@@ -24,8 +24,11 @@ test('processRequestPath returns the process endpoint', () => {
   assert.equal(processRequestPath(), '/api/process')
 })
 
-test('diagramRequestPath returns the diagram endpoint', () => {
+test('diagramRequestPath returns endpoint with optional processId', () => {
   assert.equal(diagramRequestPath(), '/api/diagram')
+  assert.equal(diagramRequestPath(''), '/api/diagram')
+  assert.equal(diagramRequestPath('invoice'), '/api/diagram?processId=invoice')
+  assert.equal(diagramRequestPath('order/fulfill'), '/api/diagram?processId=order%2Ffulfill')
 })
 
 test('instanceRequestPath returns null for empty input and encodes ids', () => {

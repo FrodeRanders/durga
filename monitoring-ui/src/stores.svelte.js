@@ -94,7 +94,7 @@ export async function fetchProcessList() {
 
 export async function checkDiagramAvailable() {
   try {
-    const res = await fetch(diagramRequestPath())
+    const res = await fetch(diagramRequestPath(processId))
     diagramAvailable = res.ok
   } catch {
     diagramAvailable = false

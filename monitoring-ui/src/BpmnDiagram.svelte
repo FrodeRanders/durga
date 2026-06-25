@@ -149,7 +149,9 @@
 
     // 1. Fetch diagram XML
     try {
-      const response = await fetch('/api/diagram')
+      const pid = encodeURIComponent(processId || '')
+      const url = pid ? `/api/diagram?processId=${pid}` : '/api/diagram'
+      const response = await fetch(url)
       if (!response.ok) {
         diagramError = response.status === 404 ? 'No diagram available' : `HTTP ${response.status}`
         return

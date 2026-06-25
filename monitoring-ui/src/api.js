@@ -19,8 +19,9 @@ export function processListRequestPath() {
   return '/api/processes/list'
 }
 
-export function diagramRequestPath() {
-  return '/api/diagram'
+export function diagramRequestPath(processId) {
+  const pid = processId ? encodeURIComponent(processId) : ''
+  return pid ? `/api/diagram?processId=${pid}` : '/api/diagram'
 }
 
 export function instanceRequestPath(instanceId) {

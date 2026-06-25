@@ -32,6 +32,7 @@ public final class MonitoringContainer {
             processId = null; // no single process when in multi mode
         }
         Path bpmnPath = args.length > 4 && !args[4].isBlank() ? resolvePath(args[4], "BPMN") : null;
+        Path bpmnDir = args.length > 6 && !args[6].isBlank() ? resolvePath(args[6], "BPMN dir") : null;
         Path spaDir = args.length > 5 && !args[5].isBlank() ? resolvePath(args[5], "SPA") : null;
 
         var topics = multiProcess
@@ -78,7 +79,7 @@ public final class MonitoringContainer {
         }
 
         try {
-            var httpServer = new ProcessMonitoringHttpServer(streams, topics, port, bpmnPath, spaDir, processId);
+            var httpServer = new ProcessMonitoringHttpServer(streams, topics, port, bpmnPath, bpmnDir, spaDir, processId);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 httpServer.close();
                 streams.close();

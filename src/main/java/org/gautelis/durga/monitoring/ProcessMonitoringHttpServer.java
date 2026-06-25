@@ -35,6 +35,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
     private final HttpServer server;
     private final String apiKey;
     private final Path bpmnFilePath;
+    private final Path bpmnDir;
     private final Path spaDir;
     private final String processId;
 
@@ -51,7 +52,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             ProcessMonitoringTopology.MonitoringTopics topics,
             int port
     ) throws IOException {
-        this(streams, topics, port, null, null, null);
+        this(streams, topics, port, null, null, null, null);
     }
 
     /**
@@ -60,8 +61,9 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
      * @param streams running Kafka Streams instance
      * @param topics monitoring topic and store names
      * @param port local HTTP port
-     * @param bpmnFilePath path to a BPMN 2.0 XML file (may be null)
-     * @param spaDir path to a built SPA directory (may be null, disables SPA serving)
+     * @param bpmnFilePath path to a single BPMN 2.0 XML file (may be null)
+     * @param bpmnDir path to a directory of {processId}.bpmn files (may be null)
+     * @param spaDir path to a built SPA directory (may be null)
      * @param processId the process definition this monitor tracks (may be null)
      * @throws IOException if the embedded server cannot be created
      */
@@ -70,6 +72,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
             ProcessMonitoringTopology.MonitoringTopics topics,
             int port,
             Path bpmnFilePath,
+            Path bpmnDir,
             Path spaDir,
             String processId
     ) throws IOException {
@@ -77,6 +80,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         this.queryService = new ProcessMonitoringQueryService(streams, topics);
         this.apiKey = resolveApiKey();
         this.bpmnFilePath = bpmnFilePath;
+        this.bpmnDir = bpmnDir;
         this.spaDir = spaDir;
         this.processId = processId;
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -578,13 +582,28 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         }
         if (!requireAuth(exchange)) return;
 
-        if (bpmnFilePath == null) {
+        // Check for ?processId=xxx query param (multi-process mode)
+        Map<String, String> params = queryParams(exchange.getRequestURI().getRawQuery());
+        String requestedPid = params.get("processId");
+
+        Path resolvedFile = null;
+        if (requestedPid != null && !requestedPid.isBlank() && bpmnDir != null) {
+            resolvedFile = bpmnDir.resolve(requestedPid + ".bpmn").normalize();
+            if (!resolvedFile.startsWith(bpmnDir) || !Files.isRegularFile(resolvedFile)) {
+                resolvedFile = null;
+            }
+        }
+        if (resolvedFile == null) {
+            resolvedFile = bpmnFilePath;
+        }
+
+        if (resolvedFile == null) {
             sendJson(exchange, 404, Map.of("error", "No BPMN diagram available for this process"));
             return;
         }
 
         try {
-            String xml = Files.readString(bpmnFilePath, StandardCharsets.UTF_8);
+            String xml = Files.readString(resolvedFile, StandardCharsets.UTF_8);
             byte[] body = xml.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/xml; charset=utf-8");
             exchange.sendResponseHeaders(200, body.length);
@@ -592,7 +611,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
                 output.write(body);
             }
         } catch (IOException e) {
-            LOG.warn("Failed to read BPMN diagram from {}", bpmnFilePath, e);
+            LOG.warn("Failed to read BPMN diagram from {}", resolvedFile, e);
             sendJson(exchange, 500, Map.of("error", "Failed to read BPMN diagram"));
         }
     }
