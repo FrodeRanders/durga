@@ -17,8 +17,6 @@ import java.util.UUID;
  * Publishes a simple synthetic lifecycle directly to the canonical {@code process-events} topic.
  */
 public final class ProcessEventDemoPublisher {
-    private static final String TOPIC = "process-events";
-
     private ProcessEventDemoPublisher() {
     }
 
@@ -32,6 +30,7 @@ public final class ProcessEventDemoPublisher {
         String processId = args.length > 1 ? args[1] : "invoice_receipt";
         String activitiesArg = args.length > 2 ? args[2] : "register_invoice,review_invoice,notify_requester";
         String businessKey = args.length > 3 ? args[3] : "demo-" + UUID.randomUUID();
+        String topic = topicForProcess(processId);
 
         List<String> activities = parseActivities(activitiesArg);
         String processInstanceId = UUID.randomUUID().toString();
@@ -47,7 +46,7 @@ public final class ProcessEventDemoPublisher {
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
-            publish(producer, processInstanceId, new ProcessEvent(
+            publish(producer, topic, processInstanceId, new ProcessEvent(
                     processInstanceId,
                     processId,
                     "start",
@@ -63,7 +62,7 @@ public final class ProcessEventDemoPublisher {
             ));
 
             for (String activity : activities) {
-                publish(producer, processInstanceId, new ProcessEvent(
+                publish(producer, topic, processInstanceId, new ProcessEvent(
                         processInstanceId,
                         processId,
                         activity,
@@ -77,7 +76,7 @@ public final class ProcessEventDemoPublisher {
                         businessKey,
                         null
                 ));
-                publish(producer, processInstanceId, new ProcessEvent(
+                publish(producer, topic, processInstanceId, new ProcessEvent(
                         processInstanceId,
                         processId,
                         activity,
@@ -93,7 +92,7 @@ public final class ProcessEventDemoPublisher {
                 ));
             }
 
-            publish(producer, processInstanceId, new ProcessEvent(
+            publish(producer, topic, processInstanceId, new ProcessEvent(
                     processInstanceId,
                     processId,
                     "completed",
@@ -111,11 +110,15 @@ public final class ProcessEventDemoPublisher {
             producer.flush();
         }
 
-        System.out.println("Published demo lifecycle to " + TOPIC + " for instanceId=" + processInstanceId);
+        System.out.println("Published demo lifecycle to " + topic + " for instanceId=" + processInstanceId);
     }
 
-    private static void publish(KafkaProducer<String, String> producer, String key, ProcessEvent event) {
-        producer.send(new ProducerRecord<>(TOPIC, key, event.toJson()));
+    private static void publish(KafkaProducer<String, String> producer, String topic, String key, ProcessEvent event) {
+        producer.send(new ProducerRecord<>(topic, key, event.toJson()));
+    }
+
+    private static String topicForProcess(String processId) {
+        return "process-events-" + processId;
     }
 
     private static List<String> parseActivities(String activitiesArg) {

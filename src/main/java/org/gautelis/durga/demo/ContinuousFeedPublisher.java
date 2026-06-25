@@ -17,8 +17,6 @@ import java.util.UUID;
  */
 public final class ContinuousFeedPublisher {
 
-    private static final String TOPIC = "process-events";
-
     private ContinuousFeedPublisher() {
     }
 
@@ -29,6 +27,7 @@ public final class ContinuousFeedPublisher {
                 : System.getenv().getOrDefault("FEED_PROCESS_ID", "invoice_receipt");
         long intervalMs = Long.parseLong(args.length > 2 ? args[2]
                 : System.getenv().getOrDefault("FEED_INTERVAL_MS", "1000"));
+        String topic = topicForProcess(processId);
 
         List<String> activities = List.of("register_invoice", "review_invoice", "notify_requester");
 
@@ -48,13 +47,13 @@ public final class ContinuousFeedPublisher {
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("source", "continuous-feed");
 
-                publish(producer, instanceId, new ProcessEvent(
+                publish(producer, topic, instanceId, new ProcessEvent(
                         instanceId, processId, "start", UUID.randomUUID().toString(),
                         corrId, payload, ProcessEvent.Status.STARTED, null,
                         ProcessEvent.EventType.PROCESS_STARTED, "v1", null, null));
 
                 for (String activity : activities) {
-                    publish(producer, instanceId, new ProcessEvent(
+                    publish(producer, topic, instanceId, new ProcessEvent(
                             instanceId, processId, activity, UUID.randomUUID().toString(),
                             corrId, payload, null, null,
                             ProcessEvent.EventType.ACTIVITY_ENTERED, "v1", null, null));
@@ -67,13 +66,13 @@ public final class ContinuousFeedPublisher {
                         break;
                     }
 
-                    publish(producer, instanceId, new ProcessEvent(
+                    publish(producer, topic, instanceId, new ProcessEvent(
                             instanceId, processId, activity, UUID.randomUUID().toString(),
                             corrId, payload, ProcessEvent.Status.COMPLETED, null,
                             ProcessEvent.EventType.ACTIVITY_COMPLETED, "v1", null, null));
                 }
 
-                publish(producer, instanceId, new ProcessEvent(
+                publish(producer, topic, instanceId, new ProcessEvent(
                         instanceId, processId, "completed", UUID.randomUUID().toString(),
                         corrId, payload, ProcessEvent.Status.COMPLETED, null,
                         ProcessEvent.EventType.PROCESS_COMPLETED, "v1", null, null));
@@ -91,7 +90,11 @@ public final class ContinuousFeedPublisher {
         }
     }
 
-    private static void publish(KafkaProducer<String, String> producer, String key, ProcessEvent event) {
-        producer.send(new ProducerRecord<>(TOPIC, key, event.toJson()));
+    private static void publish(KafkaProducer<String, String> producer, String topic, String key, ProcessEvent event) {
+        producer.send(new ProducerRecord<>(topic, key, event.toJson()));
+    }
+
+    private static String topicForProcess(String processId) {
+        return "process-events-" + processId;
     }
 }

@@ -17,4 +17,5 @@ ENTRYPOINT ["java", "-Dlog-path=/tmp/logs", \
   "-Ddurga.streams.state.dir=/tmp/kafka-streams-state", \
   "-Dkafka.bootstrap.servers=kafka:9092", \
   "-cp", "/app/durga.jar", \
-  "org.gautelis.durga.monitoring.MonitoringContainer"]
+  "org.gautelis.durga.monitoring.MonitoringContainer", \
+  "kafka:9092", "durga-monitoring", "8081", "invoice_receipt"]

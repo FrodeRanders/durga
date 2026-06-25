@@ -17,7 +17,7 @@ import java.util.UUID;
  * Publishes named monitoring scenarios directly to the canonical {@code process-events} topic.
  */
 public final class ProcessEventScenarioRunner {
-    private static final String TOPIC = "process-events";
+    private static String topic;
 
     private ProcessEventScenarioRunner() {
     }
@@ -29,10 +29,11 @@ public final class ProcessEventScenarioRunner {
      *             {@code <bootstrapServers> <scenario> <processId> <activity1,activity2,...> <businessKey>}
      */
     public static void main(String[] args) {
-        String bootstrapServers = args.length > 0 ? args[0] : bootstrapServersDefault();
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
         String scenario = args.length > 1 ? args[1] : "happy";
         String processId = args.length > 2 ? args[2] : "invoice_receipt";
         String activitiesArg = args.length > 3 ? args[3] : "register_invoice,review_invoice,notify_requester";
+        topic = topicForProcess(processId);
         String businessKey = args.length > 4 ? args[4] : scenario + "-" + UUID.randomUUID();
 
         List<String> activities = parseActivities(activitiesArg);
@@ -44,12 +45,12 @@ public final class ProcessEventScenarioRunner {
         payload.put("valid", true);
 
         Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
-            publish(producer, processInstanceId, event(
+            publish(producer, topic, processInstanceId, event(
                     processInstanceId, processId, "start", correlationId, payload,
                     ProcessEvent.Status.STARTED, null, ProcessEvent.EventType.PROCESS_STARTED, businessKey
             ));
@@ -64,7 +65,7 @@ public final class ProcessEventScenarioRunner {
             producer.flush();
         }
 
-        System.out.println("Published scenario=" + scenario + " to " + TOPIC + " for instanceId=" + processInstanceId);
+        System.out.println("Published scenario=" + scenario + " to " + topic + " for instanceId=" + processInstanceId);
     }
 
     private static void runHappyPath(
@@ -77,16 +78,16 @@ public final class ProcessEventScenarioRunner {
             String businessKey
     ) {
         for (String activity : activities) {
-            publish(producer, processInstanceId, event(
+            publish(producer, topic, processInstanceId, event(
                     processInstanceId, processId, activity, correlationId, payload,
                     ProcessEvent.Status.STARTED, null, ProcessEvent.EventType.ACTIVITY_ENTERED, businessKey
             ));
-            publish(producer, processInstanceId, event(
+            publish(producer, topic, processInstanceId, event(
                     processInstanceId, processId, activity, correlationId, payload,
                     ProcessEvent.Status.COMPLETED, null, ProcessEvent.EventType.ACTIVITY_COMPLETED, businessKey
             ));
         }
-        publish(producer, processInstanceId, event(
+        publish(producer, topic, processInstanceId, event(
                 processInstanceId, processId, "completed", correlationId, payload,
                 ProcessEvent.Status.COMPLETED, null, ProcessEvent.EventType.PROCESS_COMPLETED, businessKey
         ));
@@ -103,12 +104,12 @@ public final class ProcessEventScenarioRunner {
     ) {
         for (int i = 0; i < activities.size(); i++) {
             String activity = activities.get(i);
-            publish(producer, processInstanceId, event(
+            publish(producer, topic, processInstanceId, event(
                     processInstanceId, processId, activity, correlationId, payload,
                     ProcessEvent.Status.STARTED, null, ProcessEvent.EventType.ACTIVITY_ENTERED, businessKey
             ));
             if (i < activities.size() - 1) {
-                publish(producer, processInstanceId, event(
+                publish(producer, topic, processInstanceId, event(
                         processInstanceId, processId, activity, correlationId, payload,
                         ProcessEvent.Status.COMPLETED, null, ProcessEvent.EventType.ACTIVITY_COMPLETED, businessKey
                 ));
@@ -127,12 +128,12 @@ public final class ProcessEventScenarioRunner {
     ) {
         String failingActivity = activities.getLast();
         for (String activity : activities) {
-            publish(producer, processInstanceId, event(
+            publish(producer, topic, processInstanceId, event(
                     processInstanceId, processId, activity, correlationId, payload,
                     ProcessEvent.Status.STARTED, null, ProcessEvent.EventType.ACTIVITY_ENTERED, businessKey
             ));
             if (activity.equals(failingActivity)) {
-                publish(producer, processInstanceId, event(
+                publish(producer, topic, processInstanceId, event(
                         processInstanceId,
                         processId,
                         activity,
@@ -145,7 +146,7 @@ public final class ProcessEventScenarioRunner {
                 ));
                 return;
             }
-            publish(producer, processInstanceId, event(
+            publish(producer, topic, processInstanceId, event(
                     processInstanceId, processId, activity, correlationId, payload,
                     ProcessEvent.Status.COMPLETED, null, ProcessEvent.EventType.ACTIVITY_COMPLETED, businessKey
             ));
@@ -179,8 +180,12 @@ public final class ProcessEventScenarioRunner {
         );
     }
 
-    private static void publish(KafkaProducer<String, String> producer, String key, ProcessEvent event) {
-        producer.send(new ProducerRecord<>(TOPIC, key, event.toJson()));
+    private static void publish(KafkaProducer<String, String> producer, String topic, String key, ProcessEvent event) {
+        producer.send(new ProducerRecord<>(topic, key, event.toJson()));
+    }
+
+    private static String topicForProcess(String processId) {
+        return "process-events-" + processId;
     }
 
     private static List<String> parseActivities(String activitiesArg) {

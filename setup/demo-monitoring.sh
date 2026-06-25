@@ -8,6 +8,7 @@ PROCESS_ID=${PROCESS_ID:-invoice_receipt}
 ACTIVITIES=${ACTIVITIES:-register_invoice,review_invoice,notify_requester}
 SCENARIO=${SCENARIO:-happy}
 START_KAFKA=${START_KAFKA:-false}
+BPMN_PATH=${BPMN_PATH:-}
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
@@ -26,11 +27,20 @@ if [[ -z "${JAR}" || ! -f "${JAR}" ]]; then
   exit 1
 fi
 
-java -cp "${JAR}" \
-  org.gautelis.durga.monitoring.ProcessMonitoringApp \
-  "${BOOTSTRAP}" \
-  "${APPLICATION_ID}" \
-  "${HTTP_PORT}" &
+if [[ -n "${BPMN_PATH}" ]]; then
+  java -Dquarkus.http.port="${HTTP_PORT}" -cp "${JAR}" \
+    org.gautelis.durga.monitoring.ProcessMonitoringApp \
+    "${BOOTSTRAP}" \
+    "${APPLICATION_ID}" \
+    "${PROCESS_ID}" \
+    "${BPMN_PATH}" &
+else
+  java -Dquarkus.http.port="${HTTP_PORT}" -cp "${JAR}" \
+    org.gautelis.durga.monitoring.ProcessMonitoringApp \
+    "${BOOTSTRAP}" \
+    "${APPLICATION_ID}" \
+    "${PROCESS_ID}" &
+fi
 MONITOR_PID=$!
 
 cleanup() {
