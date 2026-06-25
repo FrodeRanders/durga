@@ -54,10 +54,11 @@ cleanup() {
 trap cleanup EXIT
 
 for _ in $(seq 1 30); do
-  if java -cp "${JAR}" \
+  health_output=$(java -cp "${JAR}" \
     org.gautelis.durga.monitoring.ProcessMonitoringClient \
     "http://localhost:${HTTP_PORT}" \
-    health >/dev/null 2>&1; then
+    health 2>/dev/null || true)
+  if echo "${health_output}" | grep -q '"RUNNING"'; then
     break
   fi
   sleep 1

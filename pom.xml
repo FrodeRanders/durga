@@ -363,13 +363,6 @@ log.info("Rendered ModelEnricher.java from template (" + rendered.length() + " c
                                 </filter>
 
                                 <filter>
-                                    <artifact>io.quarkus:quarkus-bootstrap-runner</artifact>
-                                    <includes>
-                                        <include>**</include>
-                                    </includes>
-                                </filter>
-
-                                <filter>
                                     <artifact>com.fasterxml.uuid:java-uuid-generator</artifact>
                                     <includes>
                                         <include>**</include>
