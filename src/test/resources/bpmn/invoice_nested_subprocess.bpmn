@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" targetNamespace="http://example.com/bpmn">
+<?xml version='1.0' encoding='UTF-8'?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" targetNamespace="http://example.com/bpmn">
   <process id="invoice_nested_subprocess" name="Invoice Nested Subprocess" isExecutable="true">
     <startEvent id="start" name="Invoice Received" />
     <sequenceFlow id="flow_start_to_register" sourceRef="start" targetRef="register_invoice" />
@@ -63,6 +63,6 @@
       <bpmndi:BPMNShape id="approval_scope_end_di" bpmnElement="approval_scope_end">
         <omgdc:Bounds x="57" y="472" width="36" height="36" />
       </bpmndi:BPMNShape>
-    </bpmndi:BPMNPlane>
+    <bpmndi:BPMNEdge id="flow_start_to_register_di" bpmnElement="flow_start_to_register"><omgdi:waypoint x="75" y="88" /><omgdi:waypoint x="75" y="170" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_register_to_outer_scope_di" bpmnElement="flow_register_to_outer_scope"><omgdi:waypoint x="75" y="250" /><omgdi:waypoint x="75" y="310" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_outer_scope_to_notify_di" bpmnElement="flow_outer_scope_to_notify"><omgdi:waypoint x="75" y="390" /><omgdi:waypoint x="75" y="450" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_notify_to_end_di" bpmnElement="flow_notify_to_end"><omgdi:waypoint x="75" y="530" /><omgdi:waypoint x="75" y="612" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </definitions>

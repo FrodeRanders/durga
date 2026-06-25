@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" targetNamespace="http://example.com/bpmn">
+<?xml version='1.0' encoding='UTF-8'?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" targetNamespace="http://example.com/bpmn">
   <signal id="invoice_review_signal_def" name="invoice_review_signal" />
   <process id="invoice_signal_exchange" name="Invoice Signal Exchange" isExecutable="true">
     <startEvent id="start" name="Invoice Received" />
@@ -38,6 +38,6 @@
       <bpmndi:BPMNShape id="end_completed_di" bpmnElement="end_completed">
         <omgdc:Bounds x="57" y="752" width="36" height="36" />
       </bpmndi:BPMNShape>
-    </bpmndi:BPMNPlane>
+    <bpmndi:BPMNEdge id="flow_start_to_register_di" bpmnElement="flow_start_to_register"><omgdi:waypoint x="75" y="88" /><omgdi:waypoint x="75" y="170" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_register_to_throw_di" bpmnElement="flow_register_to_throw"><omgdi:waypoint x="75" y="250" /><omgdi:waypoint x="75" y="332" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_throw_to_wait_di" bpmnElement="flow_throw_to_wait"><omgdi:waypoint x="75" y="368" /><omgdi:waypoint x="75" y="472" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_wait_to_notify_di" bpmnElement="flow_wait_to_notify"><omgdi:waypoint x="75" y="508" /><omgdi:waypoint x="75" y="590" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="flow_notify_to_end_di" bpmnElement="flow_notify_to_end"><omgdi:waypoint x="75" y="670" /><omgdi:waypoint x="75" y="752" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </definitions>
