@@ -5,6 +5,7 @@
 
   let container = $state(null)
   let viewer = null
+  let canvasModule = null
   let diagramXml = $state(null)
   let diagramError = $state(null)
   let rendered = $state(false)
@@ -55,13 +56,6 @@
       }
     }
 
-    const terminalStates = new Set(['completed', 'failed', 'cancelled'])
-    for (const row of counts) {
-      if (terminalStates.has(row.state)) {
-        // lifecycleCounts unused but kept for symmetry
-      }
-    }
-
     for (const element of elementRegistry.getAll()) {
       const id = element.businessObject?.id || element.id
       if (!id) continue
@@ -94,6 +88,23 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
+  }
+
+  function zoomIn() {
+    if (!canvasModule) return
+    const current = canvasModule.zoom()
+    canvasModule.zoom(current * 1.2, { x: container.clientWidth / 2, y: container.clientHeight / 2 })
+  }
+
+  function zoomOut() {
+    if (!canvasModule) return
+    const current = canvasModule.zoom()
+    canvasModule.zoom(current * 0.8, { x: container.clientWidth / 2, y: container.clientHeight / 2 })
+  }
+
+  function fitViewport() {
+    if (!canvasModule) return
+    canvasModule.zoom('fit-viewport')
   }
 
   // Apply overlays reactively when data changes (but only after initial render)
@@ -129,12 +140,11 @@
     try {
       const BpmnViewer = (await import('bpmn-js/lib/Viewer')).default
       viewer = new BpmnViewer({ container })
+      canvasModule = viewer.get('canvas')
       await viewer.importXML(diagramXml)
-      const canvas = viewer.get('canvas')
-      // Wait for browser layout, then fit and center
       requestAnimationFrame(() => {
-        canvas.resized()
-        canvas.zoom('fit-viewport')
+        canvasModule.resized()
+        canvasModule.zoom('fit-viewport')
       })
       rendered = true
       applyOverlays()
@@ -172,7 +182,16 @@
     </div>
   {/if}
 
-  <div bind:this={container} class="diagram-container"></div>
+  <div class="diagram-wrapper">
+    <div bind:this={container} class="diagram-container"></div>
+    {#if rendered}
+      <div class="diagram-toolbar">
+        <button onclick={zoomIn} title="Zoom in">+</button>
+        <button onclick={zoomOut} title="Zoom out">&minus;</button>
+        <button onclick={fitViewport} title="Fit to view">&#x2316;</button>
+      </div>
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -217,6 +236,10 @@
     font-size: 0.9rem;
   }
 
+  .diagram-wrapper {
+    position: relative;
+  }
+
   .diagram-container {
     width: 100%;
     height: 550px;
@@ -224,6 +247,7 @@
     border-radius: 8px;
     background: #fff;
     overflow: hidden;
+    touch-action: none;
   }
 
   .diagram-container :global(.bjs-container) {
@@ -234,6 +258,37 @@
   .diagram-container :global(svg) {
     width: 100%;
     height: 100%;
+  }
+
+  .diagram-toolbar {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    display: flex;
+    gap: 4px;
+    z-index: 10;
+  }
+
+  .diagram-toolbar button {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    backdrop-filter: blur(4px);
+    transition: background 0.15s;
+  }
+
+  .diagram-toolbar button:hover {
+    background: rgba(240, 240, 240, 0.95);
   }
 
   .diagram-legend {

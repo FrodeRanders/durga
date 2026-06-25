@@ -362,7 +362,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
                   <h2>Latency</h2>
                   <table id="latencyTable"></table>
                 </article>
-                <article class="panel">
+                <article class="panel" style="grid-column: 1 / -1;">
                   <h2>Stuck Instances</h2>
                   <table id="stuckTable"></table>
                 </article>
