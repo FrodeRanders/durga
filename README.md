@@ -1,7 +1,5 @@
 # Durga
 
-![The pipeline demo, viewed in Camunda Modeler](./doc/images/data_pipeline_demo.png)
-
 BPMN-driven Kafka scaffolding tool. Reads a BPMN model and generates Kafka-oriented
 worker, gateway, orchestration, and topic setup skeletons for process implementations.
 
@@ -278,3 +276,12 @@ message or signal starts generate start/completion services driven by external K
 Interrupting starts emit cancellation for the enclosing scope; non-interrupting starts
 branch alongside the parent flow. Timer, error, and escalation event subprocess starts
 are supported within embedded subprocesses.
+
+## User interfaces
+
+Processes (or data pipelines) are managmed using any BPMN modeler, such as Camunda Modeler.
+![The pipeline demo, viewed in Camunda Modeler](./doc/images/data_pipeline_demo.png)
+
+The monitoring tool also uses the BPMN model as a backdrop to presenting statistics.
+![The monitoring tool](./doc/images/monitoring.png)
+
