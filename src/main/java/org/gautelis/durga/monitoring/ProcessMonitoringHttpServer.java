@@ -73,6 +73,7 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.createContext("/", this::handleRoot);
         this.server.createContext("/dashboard", this::handleDashboard);
+        // Plain paths (used by CLI client / direct access)
         this.server.createContext("/health", this::handleHealth);
         this.server.createContext("/instances", this::handleInstances);
         this.server.createContext("/processes", this::handleProcesses);
@@ -80,6 +81,13 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
         this.server.createContext("/stuck", this::handleStuck);
         this.server.createContext("/metrics", this::handleMetrics);
         this.server.createContext("/diagram", this::handleDiagram);
+        // /api/ prefixed paths (used by the Svelte SPA via Vite proxy)
+        this.server.createContext("/api/health", this::handleHealth);
+        this.server.createContext("/api/instances", this::handleInstances);
+        this.server.createContext("/api/processes", this::handleProcesses);
+        this.server.createContext("/api/counts", this::handleCounts);
+        this.server.createContext("/api/stuck", this::handleStuck);
+        this.server.createContext("/api/metrics", this::handleMetrics);
         this.server.createContext("/api/diagram", this::handleDiagram);
         LOG.info("Monitoring HTTP server created on port {}", port);
     }
@@ -289,7 +297,8 @@ public final class ProcessMonitoringHttpServer implements AutoCloseable {
     }
 
     private static List<String> pathParts(String path) {
-        return Stream.of(path.split("/"))
+        String normalized = path.startsWith("/api/") ? path.substring(4) : path;
+        return Stream.of(normalized.split("/"))
                 .filter(part -> !part.isBlank())
                 .toList();
     }

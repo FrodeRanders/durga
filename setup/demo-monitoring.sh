@@ -28,17 +28,19 @@ if [[ -z "${JAR}" || ! -f "${JAR}" ]]; then
 fi
 
 if [[ -n "${BPMN_PATH}" ]]; then
-  java -Dquarkus.http.port="${HTTP_PORT}" -cp "${JAR}" \
-    org.gautelis.durga.monitoring.ProcessMonitoringApp \
+  java -cp "${JAR}" \
+    org.gautelis.durga.monitoring.MonitoringContainer \
     "${BOOTSTRAP}" \
     "${APPLICATION_ID}" \
+    "${HTTP_PORT}" \
     "${PROCESS_ID}" \
     "${BPMN_PATH}" &
 else
-  java -Dquarkus.http.port="${HTTP_PORT}" -cp "${JAR}" \
-    org.gautelis.durga.monitoring.ProcessMonitoringApp \
+  java -cp "${JAR}" \
+    org.gautelis.durga.monitoring.MonitoringContainer \
     "${BOOTSTRAP}" \
     "${APPLICATION_ID}" \
+    "${HTTP_PORT}" \
     "${PROCESS_ID}" &
 fi
 MONITOR_PID=$!
