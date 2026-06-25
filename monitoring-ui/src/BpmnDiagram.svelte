@@ -125,7 +125,7 @@
     if (!panning || !canvasModule) return
     const dx = e.clientX - panLast.x
     const dy = e.clientY - panLast.y
-    canvasModule.scroll({ dx: -dx, dy: -dy })
+    canvasModule.scroll({ dx, dy })
     panLast = { x: e.clientX, y: e.clientY }
     e.preventDefault()
   }
