@@ -65,7 +65,8 @@ public class ChaosIntegrationTest extends KafkaIntegrationTestBase {
                     new NewTopic(TOPICS.countsTopic(), 1, (short) 1),
                     new NewTopic(TOPICS.activeTopic(), 1, (short) 1),
                     new NewTopic(TOPICS.latencyTopic(), 1, (short) 1),
-                    new NewTopic(TOPICS.trendsTopic(), 1, (short) 1)
+                    new NewTopic(TOPICS.trendsTopic(), 1, (short) 1),
+                    new NewTopic(TOPICS.modelsTopic(), 1, (short) 1)
             );
             admin.createTopics(topics).all().get();
         }
