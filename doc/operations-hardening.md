@@ -55,6 +55,9 @@ Before production use:
   are required operationally.
 - Do not expose the monitoring HTTP API or dashboard without network controls or
   authentication in shared environments.
+- Set `DURGA_MONITORING_API_KEY` or `-Ddurga.monitoring.api.key=<key>` to require
+  `Authorization: Bearer <key>` on monitoring JSON endpoints. Keep `/api/metrics`
+  behind the same network controls when it is scraped without an API token.
 - Avoid logging full payloads when payloads may contain personal, regulated, or
   customer-sensitive data.
 

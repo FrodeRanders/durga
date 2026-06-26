@@ -13,7 +13,7 @@
 
 ## Build, Test, and Development Commands
 - `mvn clean package` builds the shaded JAR and cleans logs configured by the clean plugin.
-- `mvn test` runs all JUnit 4 tests (currently 196 unit tests across 21 test classes). Integration tests require Docker and are suffixed `IntegrationTest`.
+- `mvn test` runs all JUnit 4 tests. As of 2026-06-26, `mvn test -Dtest='!*IntegrationTest'` runs 219 non-Docker tests; integration tests require Docker and are suffixed `IntegrationTest`.
 - `mvn test -Dtest='!*IntegrationTest'` runs unit tests only (no Docker required).
 - `mvn test -Dtest='*IntegrationTest'` runs integration tests only (requires Docker).
 - `mvn compile` compiles sources without running tests.
@@ -27,7 +27,7 @@
 - Java uses 4-space indentation with standard brace placement (match existing files).
 - Package names are lowercase (`org.gautelis.durga`); classes use UpperCamelCase; methods/fields use lowerCamelCase.
 - Use SLF4J (`LoggerFactory.getLogger`) for logging — do not use `System.out`/`System.err` for log messages.
-- Component-level observability uses Micrometer (`Metrics.registry()`). Expose metrics via the `/metrics` HTTP endpoint.
+- Component-level observability uses Micrometer (`Metrics.registry()`). Expose monitoring metrics via the `/api/metrics` HTTP endpoint.
 - Keep configuration keys in `application.yml` and logging in `log4j2.xml`; avoid hardcoding broker settings.
 
 ## Testing Guidelines

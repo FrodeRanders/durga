@@ -14,7 +14,8 @@ Entry point: \texttt{ProcessMonitoringApp} (Quarkus). Query layer:
 
 Endpoints (all under \texttt{/api/}):
 \begin{itemize}
-\item \texttt{/api/health} --- Kafka Streams readiness,
+\item \texttt{/health} --- Kafka Streams readiness for probes and load balancers,
+\item \texttt{/api/health} --- API-namespace health alias,
 \item \texttt{/api/processes/list} --- all known process IDs (from counts + model registry),
 \item \texttt{/api/instances/\{processInstanceId\}} --- latest instance view,
 \item \texttt{/api/processes/\{processId\}/counts} --- process-specific state counts,

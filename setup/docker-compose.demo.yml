@@ -41,6 +41,7 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - FEED_INTERVAL_MS=1000
       - FEED_PROCESS_ID=invoice_receipt
+      - BPMN_DIR=/app/bpmn
     depends_on:
       kafka:
         condition: service_healthy

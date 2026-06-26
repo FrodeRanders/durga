@@ -121,8 +121,8 @@ from this registry — no pre-configured process ID list needed.
 ```
 
 Starts **everything** — Kafka in Docker, the monitoring backend, auto-registers
-all BPMN models from `src/test/resources/bpmn/`, starts a continuous feed for
-`invoice_receipt`, and serves the Svelte SPA.
+all BPMN models from `src/test/resources/bpmn/`, starts continuous feeds for
+`invoice_receipt` and `order_fulfillment`, and serves the Svelte SPA.
 Open `http://localhost:8081`. Press Ctrl+C to stop all services.
 
 **Multiple processes:**
@@ -141,7 +141,7 @@ SKIP_BUILD=true ./setup/dev-up.sh
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `FEED_PIDS` | `invoice_receipt` | Comma-separated process IDs to feed |
+| `FEED_PIDS` | `invoice_receipt,order_fulfillment` | Comma-separated process IDs to feed |
 | `BOOTSTRAP` | `localhost:9094` | Kafka bootstrap servers |
 | `PORT` | `8081` | Backend HTTP port (API + SPA) |
 | `START_KAFKA` | `true` | Auto-start Kafka via Docker Compose |
@@ -185,7 +185,11 @@ the BPMN diagram.
 
 ### HTTP API endpoints
 
-All paths are under the `/api/` prefix:
+Health is also available at the conventional root path:
+
+- `GET /health` — Kafka Streams state (`RUNNING`, `REBALANCING`, etc.)
+
+The API namespace also exposes:
 
 - `GET /api/health` — Kafka Streams state (`RUNNING`, `REBALANCING`, etc.)
 - `GET /api/processes/list` — all known process IDs (from models + counts)
@@ -197,6 +201,10 @@ All paths are under the `/api/` prefix:
 - `GET /api/stuck?processId=<id>&olderThanSeconds=60` — stuck-instance detection
 - `GET /api/diagram?processId=<id>` — BPMN 2.0 XML from the process-models cache
 - `GET /api/metrics` — Micrometer metrics in Prometheus text format
+
+Set `DURGA_MONITORING_API_KEY` or `-Ddurga.monitoring.api.key=<key>` to require
+`Authorization: Bearer <key>` on monitoring JSON endpoints. `/api/metrics`
+remains unauthenticated for Prometheus-style scrapes.
 
 ### CLI client
 
@@ -224,6 +232,9 @@ java -cp "${JAR}" \
   http://localhost:8081 instance <processInstanceId>
 ```
 
+For an authenticated monitoring API, set `DURGA_MONITORING_API_KEY` in the
+client environment before running the commands.
+
 ### Demo scenarios (without a generated process)
 
 ```bash
@@ -247,7 +258,6 @@ Open `http://localhost:8081` for the dashboard (API + SPA),
 ```bash
 FEED_PROCESS_ID=order_fulfillment FEED_INTERVAL_MS=2000 \
   docker compose -f setup/docker-compose.demo.yml up --build
-```
 ```
 
 ## Generated project probes
@@ -275,9 +285,8 @@ are supported within embedded subprocesses.
 
 ## User interfaces
 
-Processes (or data pipelines) are managmed using any BPMN modeler, such as Camunda Modeler.
+Processes (or data pipelines) are managed using any BPMN modeler, such as Camunda Modeler.
 ![The pipeline demo, viewed in Camunda Modeler](./doc/images/data_pipeline_demo.png)
 
 The monitoring tool also uses the BPMN model as a backdrop to presenting statistics.
 ![The monitoring tool](./doc/images/monitoring.png)
-

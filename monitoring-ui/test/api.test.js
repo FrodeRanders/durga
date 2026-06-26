@@ -6,12 +6,12 @@ import {
   diagramRequestPath,
   instanceRequestPath,
   normalizeDashboardResponses,
-  processRequestPath
+  processListRequestPath
 } from '../src/api.js'
 
 test('dashboardRequestPaths URL-encodes process id and threshold', () => {
   assert.deepEqual(dashboardRequestPaths('invoice review/2026', 30), [
-    '/api/health',
+    '/health',
     '/api/counts',
     '/api/processes/invoice%20review%2F2026/counts',
     '/api/processes/invoice%20review%2F2026/latency',
@@ -20,8 +20,8 @@ test('dashboardRequestPaths URL-encodes process id and threshold', () => {
   ])
 })
 
-test('processRequestPath returns the process endpoint', () => {
-  assert.equal(processRequestPath(), '/api/process')
+test('processListRequestPath returns the process inventory endpoint', () => {
+  assert.equal(processListRequestPath(), '/api/processes/list')
 })
 
 test('diagramRequestPath returns endpoint with optional processId', () => {

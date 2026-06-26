@@ -155,7 +155,8 @@ Camunda Modeler and regenerate.
 Durga is at v0.1.0. It compiles 24 BPMN test fixtures covering the
 full BPMN execution subset (tasks, gateways, timers, boundary events,
 subprocesses, call activities, message/signal events, and data pipeline
-plugins). 196 tests pass, including a compilation integration test that
+plugins). The non-Docker verification suite currently runs 219 tests,
+including compilation checks that
 verifies generated projects actually compile against their dependencies.
 The generated projects run on Quarkus + Kafka.
 

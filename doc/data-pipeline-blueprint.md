@@ -139,15 +139,17 @@ events, same error channel conventions.
 1. Define the contract in this document (topics, lifecycle, error handling).
 2. Create the category directory in `plugins/`.
 3. Implement at least one reference plugin in the category.
-4. Add the category contract to the scaffolder's validation logic.
+4. Add the category contract to the scaffolder's descriptor-loading and generation path.
 5. Update the plugin template generator to handle the new category.
 
 ### 3.3 Plugin versioning
 
-- **Semantic versioning**: `major.minor.patch`.
-- Config schema changes that add optional fields → minor bump.
-- Config schema changes that break existing configs → major bump.
-- The scaffolder validates that the BPMN model's `pluginVersion` constraint matches.
+- **Semantic versioning**: descriptors use `major.minor.patch`.
+- Config schema changes that add optional fields should use a minor bump.
+- Config schema changes that break existing configs should use a major bump.
+- Current scaffolder behavior does not semver-match BPMN `pluginVersion`
+  constraints. It resolves the plugin id and implementation class at scaffold
+  time, while version-resolution tooling remains future work.
 
 ### 3.4 Plugin lifecycle states
 
@@ -173,13 +175,10 @@ Plugins are bound to BPMN tasks via Camunda extension attributes on the
 ```xml
 <bpmn:serviceTask id="transform_invoice"
                   name="Transform Invoice"
-                  camunda:plugin="json-transform"
-                  camunda:pluginVersion="^1.0"
-                  camunda:pluginConfigExpression="'.'">
+                  camunda:plugin="json-transform">
   <bpmn:extensionElements>
     <camunda:properties>
       <camunda:property name="plugin" value="json-transform" />
-      <camunda:property name="pluginVersion" value="^1.0" />
       <camunda:property name="pluginConfig" value=".data | {name: .name, total: .amount}" />
     </camunda:properties>
   </bpmn:extensionElements>
@@ -188,16 +187,18 @@ Plugins are bound to BPMN tasks via Camunda extension attributes on the
 
 The scaffolder resolves these to plugin configuration:
 - `plugin` → which descriptor to load
-- `pluginVersion` → version constraint (semver range)
-- `pluginConfig` → inline configuration string (or reference to a config file)
+- `pluginConfig` → inline configuration string passed to the generated executor
 
-### 4.2 Alternative: explicit config reference
+### 4.2 Future option: explicit config reference
 
-For complex configurations:
+For complex configurations, a future generator could support references such as:
 
 ```xml
 <camunda:property name="pluginConfigFile" value="pipelines/invoice/transform-config.yml" />
 ```
+
+Current generated workers expect inline `pluginConfig`; config files and
+scaffold-time config-schema validation are not implemented.
 
 ---
 

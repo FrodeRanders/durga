@@ -16,7 +16,7 @@ set -euo pipefail
 #   START_KAFKA=false ./setup/dev-up.sh
 #
 # Env vars:
-#   FEED_PIDS      comma-separated process IDs to auto-feed (default invoice_receipt)
+#   FEED_PIDS      comma-separated process IDs to auto-feed (default invoice_receipt,order_fulfillment)
 #   BOOTSTRAP      Kafka bootstrap servers (default localhost:9094)
 #   PORT           backend API port (default 8081)
 #   START_KAFKA    auto-start Kafka via docker compose (default true)

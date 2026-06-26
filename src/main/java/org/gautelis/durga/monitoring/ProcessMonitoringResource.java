@@ -33,9 +33,7 @@ public class ProcessMonitoringResource {
     public Response health(@HeaderParam("Authorization") String authorization) {
         Response auth = requireAuth(authorization);
         if (auth != null) return auth;
-        return Response.ok(Map.of(
-                "streamsState", state.streams().state().name()
-        )).build();
+        return Response.ok(healthPayload(state)).build();
     }
 
     @GET
@@ -229,5 +227,9 @@ public class ProcessMonitoringResource {
                     .build();
         }
         return null;
+    }
+
+    static Map<String, String> healthPayload(ProcessMonitoringApp.MonitoringState state) {
+        return Map.of("streamsState", state.streams().state().name());
     }
 }

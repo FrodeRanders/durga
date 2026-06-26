@@ -2,7 +2,7 @@ export function dashboardRequestPaths(processId, thresholdSeconds) {
   const pid = encodeURIComponent(processId ?? '')
   const age = encodeURIComponent(thresholdSeconds ?? '')
   return [
-    '/api/health',
+    '/health',
     '/api/counts',
     `/api/processes/${pid}/counts`,
     `/api/processes/${pid}/latency`,

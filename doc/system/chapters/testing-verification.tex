@@ -27,7 +27,7 @@ The verification set spans 24 BPMN fixtures covering:
 
 \subsection{Plugin verification}
 
-Each of the 13 plugin implementations has dedicated unit tests (55 total)
+Each of the 13 Java plugin implementations has dedicated unit tests
 covering normal operation, edge cases, and error handling. The plugin
 registry loading and descriptor validation are exercised by the scaffolder
 tests.
@@ -85,8 +85,9 @@ without a full generated process runtime.
 
 \subsection{CI pipeline}
 
-GitHub Actions runs \texttt{mvn test} on push and PR to \texttt{main} using JDK 21.
-196 tests execute in approximately 25 seconds.
+The non-Docker verification command \texttt{mvn test -Dtest='!*IntegrationTest'}
+currently runs 219 tests. Docker-backed integration tests are suffixed
+\texttt{IntegrationTest} and are run separately for release gates.
 
 \subsection{Not fully covered}
 

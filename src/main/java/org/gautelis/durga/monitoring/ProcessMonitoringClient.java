@@ -25,7 +25,7 @@ public final class ProcessMonitoringClient {
         String command = args.length > 1 ? args[1] : "health";
 
         String path = switch (command) {
-            case "health" -> "/api/health";
+            case "health" -> "/health";
             case "instance" -> {
                 if (args.length < 3) {
                     throw new IllegalArgumentException("Usage: ProcessMonitoringClient <baseUrl> instance <processInstanceId>");
@@ -71,9 +71,13 @@ public final class ProcessMonitoringClient {
         };
 
         try (HttpClient client = HttpClient.newHttpClient()) {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(normalizeBaseUrl(baseUrl) + path))
-                .GET()
-                .build();
+            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(normalizeBaseUrl(baseUrl) + path))
+                .GET();
+            String apiKey = System.getenv("DURGA_MONITORING_API_KEY");
+            if (apiKey != null && !apiKey.isBlank()) {
+                requestBuilder.header("Authorization", "Bearer " + apiKey);
+            }
+            HttpRequest request = requestBuilder.build();
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             System.out.println("HTTP " + response.statusCode());
