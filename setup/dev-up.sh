@@ -137,6 +137,7 @@ for pid in "${PIDS[@]}"; do
         "${BOOTSTRAP}" \
         "${pid}" \
         "${FEED_INTERVAL}" \
+        "${BPMN_DIR}" \
         > "/tmp/durga-feed-${pid}.log" 2>&1 &
     BG_PIDS+=($!)
     info "  ${pid} (${FEED_INTERVAL}ms)"

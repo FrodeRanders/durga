@@ -4,8 +4,16 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.camunda.bpm.model.bpmn.Bpmn;
+import org.camunda.bpm.model.bpmn.BpmnModelInstance;
+import org.camunda.bpm.model.bpmn.instance.Activity;
 import org.gautelis.durga.ProcessEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,8 +22,12 @@ import java.util.UUID;
 
 /**
  * Continuously publishes lifecycle events to exercise the monitoring topology.
+ * Reads the BPMN model to extract actual activity IDs, making it generic across
+ * any process definition.
  */
 public final class ContinuousFeedPublisher {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ContinuousFeedPublisher.class);
 
     private ContinuousFeedPublisher() {
     }
@@ -27,9 +39,16 @@ public final class ContinuousFeedPublisher {
                 : System.getenv().getOrDefault("FEED_PROCESS_ID", "invoice_receipt");
         long intervalMs = Long.parseLong(args.length > 2 ? args[2]
                 : System.getenv().getOrDefault("FEED_INTERVAL_MS", "1000"));
-        String topic = topicForProcess(processId);
+        String bpmnDir = args.length > 3 ? args[3]
+                : System.getenv().getOrDefault("BPMN_DIR", "src/test/resources/bpmn");
 
-        List<String> activities = List.of("register_invoice", "review_invoice", "notify_requester");
+        List<String> activities = resolveActivities(processId, bpmnDir);
+        if (activities.isEmpty()) {
+            LOG.error("No activities found for process '{}' in {}", processId, bpmnDir);
+            System.exit(1);
+        }
+
+        String topic = topicForProcess(processId);
 
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
@@ -38,7 +57,8 @@ public final class ContinuousFeedPublisher {
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             System.out.println("Continuous feed started: process=" + processId
-                    + ", interval=" + intervalMs + "ms, bootstrap=" + bootstrap);
+                    + ", interval=" + intervalMs + "ms, bootstrap=" + bootstrap
+                    + ", activities=" + activities);
 
             //noinspection InfiniteLoopStatement
             while (true) {
@@ -87,6 +107,25 @@ public final class ContinuousFeedPublisher {
                     break;
                 }
             }
+        }
+    }
+
+    private static List<String> resolveActivities(String processId, String bpmnDir) {
+        Path bpmnFile = Path.of(bpmnDir, processId + ".bpmn");
+        if (!Files.isRegularFile(bpmnFile)) {
+            LOG.warn("BPMN file not found: {}", bpmnFile);
+            return List.of();
+        }
+        try {
+            BpmnModelInstance model = Bpmn.readModelFromFile(bpmnFile.toFile());
+            return model.getModelElementsByType(Activity.class).stream()
+                    .map(Activity::getId)
+                    .filter(id -> id != null && !id.isBlank())
+                    .distinct()
+                    .toList();
+        } catch (Exception e) {
+            LOG.error("Failed to read BPMN model from {}", bpmnFile, e);
+            return List.of();
         }
     }
 
