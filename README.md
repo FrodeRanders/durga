@@ -1,7 +1,9 @@
 # Durga
 
-BPMN-driven Kafka scaffolding tool. Reads a BPMN model and generates Kafka-oriented
-worker, gateway, orchestration, and topic setup skeletons for process implementations.
+BPMN → Kafka code generation and process monitoring. Two tools:
+
+- **Scaffolder** — reads a BPMN model and generates Kafka-oriented worker, gateway, orchestration, and topic setup skeletons.
+- **Monitoring app** — a Quarkus SPA that tracks all running Durga processes via Kafka Streams, showing state, latency, stuck instances, and BPMN diagrams with live overlays.
 
 [System manual](doc/system/sysdoc.pdf) | [BPMN coverage matrix](doc/bpmn-kafka-coverage.md) | [Beta support boundary](doc/beta-support-boundary.md) | [Maturity plan](doc/maturity-plan.md) | [Release checklist](doc/release-checklist.md) | [Operations hardening](doc/operations-hardening.md) | [Deployment guide](doc/deployment.md) | [Plugin architecture](doc/data-pipeline-blueprint.md) | [Testcontainers setup](doc/testcontainers-setup.md)
 
