@@ -28,9 +28,8 @@ to the \texttt{process-models} Kafka topic. Each generated project includes a
 \end{itemize}
 
 The monitoring server caches models in the \texttt{process-models-store} state store.
-The \texttt{/api/diagram?processId=\textit{id}} endpoint serves the cached model, with
-a fallback to a local BPMN directory for development convenience. Model updates
-overwrite previous versions (latest-wins semantics).
+The \texttt{/api/diagram?processId=\textit{id}} endpoint serves the cached model.
+Model updates overwrite previous versions (latest-wins semantics).
 
 This registry makes processes discoverable: \texttt{/api/processes/list} merges
 process IDs from both the count store (processes with live instances) and the model
@@ -39,15 +38,10 @@ before their first lifecycle event arrives.
 
 \subsection{Kafka Streams topology}
 
-The monitoring topology can run in two modes:
-
-\begin{description}
-\item[Single-process] Subscribes to \texttt{process-events-\{processId\}}.
-  Suitable for dedicated monitoring per process definition.
-\item[Multi-process] Subscribes to \texttt{process-events-.*} via a regex pattern.
-  All processes share one monitoring instance. State stores use unsuffixed names.
-  The SPA shows an inventory of all known processes with drill-down to per-process detail.
-\end{description}
+The monitoring topology subscribes to \texttt{process-events-.*} via a regex
+pattern, monitoring all processes in a single instance. State stores use
+unsuffixed names. The SPA shows an inventory of all known processes with
+drill-down to per-process detail.
 
 The topology consumes lifecycle events and materializes:
 \begin{itemize}
@@ -59,15 +53,13 @@ The topology consumes lifecycle events and materializes:
 \item BPMN model cache.
 \end{itemize}
 
-The main entry point is \texttt{org.gautelis.durga.monitoring.MonitoringContainer}.
-Pass \texttt{all} as the process ID argument for multi-process mode.
+The main entry point is \texttt{org.gautelis.durga.monitoring.ProcessMonitoringApp}.
 
 \subsection{HTTP API}
 
 The monitoring service exposes endpoints for health, process discovery, instance
 lookup, counts, latency, stuck instances, diagram serving, and a dashboard.
-Supported by both the embedded JDK HTTP server and the Quarkus REST container.
-All paths accept an \texttt{/api/} prefix for SPA proxy compatibility.
+All paths are served under the \texttt{/api/} prefix by the Quarkus REST container.
 
 The local development loop is:
 \begin{enumerate}

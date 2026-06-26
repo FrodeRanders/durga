@@ -8,7 +8,6 @@ PROCESS_ID=${PROCESS_ID:-invoice_receipt}
 ACTIVITIES=${ACTIVITIES:-register_invoice,review_invoice,notify_requester}
 SCENARIO=${SCENARIO:-happy}
 START_KAFKA=${START_KAFKA:-false}
-BPMN_PATH=${BPMN_PATH:-}
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
@@ -19,30 +18,18 @@ fi
 
 cd "${PROJECT_ROOT}"
 
-mvn -q package
+mvn -q package -Pmonitoring
 
-JAR="$(find target -maxdepth 1 -name 'durga-*.jar' ! -name '*original*' -type f -exec ls -t {} + 2>/dev/null | head -n 1 || true)"
+JAR="$(find target -maxdepth 1 -name 'durga-*-runner.jar' -type f -exec ls -t {} + 2>/dev/null | head -n 1 || true)"
 if [[ -z "${JAR}" || ! -f "${JAR}" ]]; then
   echo "Could not find built Durga JAR under target/" >&2
   exit 1
 fi
 
-if [[ -n "${BPMN_PATH}" ]]; then
-  java -cp "${JAR}" \
-    org.gautelis.durga.monitoring.MonitoringContainer \
-    "${BOOTSTRAP}" \
-    "${APPLICATION_ID}" \
-    "${HTTP_PORT}" \
-    "${PROCESS_ID}" \
-    "${BPMN_PATH}" &
-else
-  java -cp "${JAR}" \
-    org.gautelis.durga.monitoring.MonitoringContainer \
-    "${BOOTSTRAP}" \
-    "${APPLICATION_ID}" \
-    "${HTTP_PORT}" \
-    "${PROCESS_ID}" &
-fi
+java -Dquarkus.http.port="${HTTP_PORT}" \
+  -jar "${JAR}" \
+  "${BOOTSTRAP}" \
+  "${APPLICATION_ID}" &
 MONITOR_PID=$!
 
 cleanup() {

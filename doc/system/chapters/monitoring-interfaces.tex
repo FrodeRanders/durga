@@ -3,36 +3,32 @@
 
 The monitoring subsystem exposes these interfaces over the same Kafka Streams state:
 \begin{itemize}
-\item an HTTP API and embedded SPA,
-\item a command-line client,
-\item a browser HTML dashboard.
+\item a Quarkus HTTP API and embedded SPA,
+\item a command-line client.
 \end{itemize}
 
 \subsection{HTTP service}
 
-Entry point: \texttt{MonitoringContainer}. Query layer:
-\texttt{ProcessMonitoringQueryService} and \texttt{ProcessMonitoringHttpServer}.
+Entry point: \texttt{ProcessMonitoringApp} (Quarkus). Query layer:
+\texttt{ProcessMonitoringQueryService}.
 
-Endpoints:
+Endpoints (all under \texttt{/api/}):
 \begin{itemize}
-\item \texttt{/health} --- Kafka Streams readiness,
-\item \texttt{/processes/list} --- all known process IDs (from counts + model registry),
-\item \texttt{/process} --- the single process ID when running in single-process mode,
-\item \texttt{/instances/\{processInstanceId\}} --- latest instance view,
-\item \texttt{/processes/\{processId\}/counts} --- process-specific state counts,
-\item \texttt{/processes/\{processId\}/latency} --- activity latency summaries,
-\item \texttt{/processes/\{processId\}/trends} --- bucketed start/completion/failure history,
-\item \texttt{/counts} --- global state-count view,
-\item \texttt{/stuck} --- stuck-instance detection,
-\item \texttt{/diagram?processId=\textit{id}} --- BPMN 2.0 XML from the model cache,
-\item \texttt{/metrics} --- Prometheus-format metrics,
-\item \texttt{/dashboard} --- browser HTML dashboard.
+\item \texttt{/api/health} --- Kafka Streams readiness,
+\item \texttt{/api/processes/list} --- all known process IDs (from counts + model registry),
+\item \texttt{/api/instances/\{processInstanceId\}} --- latest instance view,
+\item \texttt{/api/processes/\{processId\}/counts} --- process-specific state counts,
+\item \texttt{/api/processes/\{processId\}/latency} --- activity latency summaries,
+\item \texttt{/api/processes/\{processId\}/trends} --- bucketed start/completion/failure history,
+\item \texttt{/api/counts} --- global state-count view,
+\item \texttt{/api/stuck} --- stuck-instance detection,
+\item \texttt{/api/diagram?processId=\textit{id}} --- BPMN 2.0 XML from the model cache,
+\item \texttt{/api/metrics} --- Prometheus-format metrics.
 \end{itemize}
 
-All paths accept an \texttt{/api/} prefix. The diagram endpoint queries the
-\texttt{process-models-store} first, then falls back to a local BPMN directory
-(\texttt{\{bpmnDir\}/\{processId\}.bpmn}), and finally to a single BPMN file
-for development convenience.
+The diagram endpoint serves models from the \texttt{process-models-store}
+Kafka state store, where processes self-register by publishing their BPMN
+XML on startup.
 
 The HTTP API is designed for internal operational use. Put it behind the same
 network and identity controls used for other production admin interfaces before
@@ -73,9 +69,9 @@ from the monitoring backend. It shows:
 The diagram viewer uses \texttt{bpmn-js} with built-in zoom (scroll wheel),
 pan (grab tool), and fit-to-viewport controls.
 
-The HTML dashboard (\texttt{/dashboard}) is a standalone server-rendered page
-that polls the same HTTP API. It serves as a lightweight alternative when the
-SPA is unavailable.
+The monitoring SPA is served from the same Quarkus HTTP server that hosts the
+REST API. It polls \texttt{/api/*} endpoints and renders an interactive
+dashboard with a BPMN diagram viewer.
 
 \subsection{How the interfaces fit together}
 

@@ -32,7 +32,7 @@ BOOTSTRAP="${BOOTSTRAP:-localhost:9094}"
 PORT="${PORT:-8081}"
 START_KAFKA="${START_KAFKA:-true}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
-FEED_PIDS="${FEED_PIDS:-invoice_receipt}"
+FEED_PIDS="${FEED_PIDS:-invoice_receipt,order_fulfillment}"
 FEED_INTERVAL="${FEED_INTERVAL:-1000}"
 BPMN_DIR="${BPMN_DIR:-${ROOT_DIR}/src/test/resources/bpmn}"
 
@@ -84,14 +84,14 @@ if [[ "${SKIP_BUILD}" != "true" ]]; then
     banner "Building"
     cd "${ROOT_DIR}"
     mkdir -p monitoring-ui/dist && touch monitoring-ui/dist/.gitkeep
-    mvn -q package -DskipTests
     (cd monitoring-ui && npm install --silent 2>/dev/null && npm run build)
+    mvn -q package -DskipTests -Pmonitoring
     info "Jar and SPA ready"
 fi
 
-JAR="$(find "${ROOT_DIR}/target" -maxdepth 1 -name 'durga-*.jar' ! -name '*original*' -type f -print -quit)"
+JAR="$(find "${ROOT_DIR}/target" -maxdepth 1 -name 'durga-*-runner.jar' -type f -print -quit)"
 if [[ -z "${JAR}" || ! -f "${JAR}" ]]; then
-    echo "ERROR: Could not find built Durga JAR under target/" >&2; exit 1
+    echo "ERROR: Could not find built Durga runner JAR under target/" >&2; exit 1
 fi
 
 # ── 3. Clean up ────────────────────────────────────────────────────────────
@@ -102,16 +102,11 @@ rm -rf "/tmp/kafka-streams-state-all" 2>/dev/null || true
 
 # ── 4. Start monitoring backend ────────────────────────────────────────────
 banner "Starting monitor (all processes)"
-java -Ddurga.streams.state.dir=/tmp/kafka-streams-state-all \
-    -cp "${JAR}" \
-    org.gautelis.durga.monitoring.MonitoringContainer \
+java -Dquarkus.http.port="${PORT}" \
+    -Ddurga.streams.state.dir=/tmp/kafka-streams-state-all \
+    -jar "${JAR}" \
     "${BOOTSTRAP}" \
     "durga-monitor" \
-    "${PORT}" \
-    "all" \
-    "" \
-    "${ROOT_DIR}/monitoring-ui/dist" \
-    "${BPMN_DIR}" \
     > /tmp/durga-backend.log 2>&1 &
 BG_PIDS+=($!)
 
@@ -163,11 +158,7 @@ echo ""
 link "    SPA + API  → http://localhost:${PORT}"
 echo ""
 
-if [[ ${#PIDS[@]} -gt 1 ]]; then
-    echo "Feeding ${#PIDS[@]} processes. Click a process in the inventory to drill down."
-else
-    echo "Feeding '${PIDS[0]}'. The diagram should appear once the model arrives."
-fi
+echo "Feeding ${#PIDS[@]} process(es). Click a process in the inventory to drill down."
 echo ""
 echo "Press Ctrl+C to stop all services."
 echo ""

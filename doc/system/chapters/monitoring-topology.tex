@@ -18,9 +18,9 @@ Execution topics show how work is routed. The monitoring topology answers:
 
 \subsection{Topology structure}
 
-The entry point is \texttt{ProcessMonitoringTopology.buildTopology()}. In
-multi-process mode it subscribes to \texttt{process-events-.*} via regex;
-in single-process mode it subscribes to \texttt{process-events-\{processId\}}.
+The entry point is \texttt{ProcessMonitoringTopology.buildTopology()}. It
+subscribes to \texttt{process-events-.*} via regex, monitoring all processes
+in a single instance.
 It consumes events, filters null keys and values, and forks the stream into
 five parallel sub-topologies plus a BPMN model cache, each with a dedicated
 local state store:
@@ -49,8 +49,7 @@ every monitoring instance and are what the query service reads.
 \item[BPMN model cache] A global table on \texttt{process-models} stores the latest
 BPMN 2.0 XML per process ID (String key, String value). Processes publish their
 models here on startup via \texttt{BpmnModelPublisher} or the generated
-\texttt{ModelRegistration} bean. The diagram endpoint serves models from this cache
-with a fallback to a local BPMN directory.
+\texttt{ModelRegistration} bean. The diagram endpoint serves models from this cache.
 \end{description}
 
 \subsection{State stores}
@@ -127,7 +126,6 @@ independently testable without a full generated process runtime.
 
 The monitoring path now supports:
 \begin{itemize}
-\item multi-process monitoring from a single server instance via regex-based topic subscription,
 \item process self-registration: generated projects publish their BPMN models on startup,
 \item process discovery from the model cache, so new processes appear before events flow,
 \item queryable state replicated from monitoring topics into global read-side stores,

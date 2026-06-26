@@ -234,33 +234,6 @@ public final class ProcessMonitoringTopology {
         private static final Pattern ALL_EVENTS_PATTERN = Pattern.compile("process-events-.*");
 
         /**
-         * Returns monitoring topic and store names qualified with a process identifier.
-         */
-        public static MonitoringTopics forProcess(String processId) {
-            if (processId == null || processId.isBlank()) {
-                throw new IllegalArgumentException("processId must not be blank");
-            }
-            String suffix = "-" + processId;
-            return new MonitoringTopics(
-                    DEFAULT_EVENTS_TOPIC + suffix,
-                    DEFAULT_STATE_TOPIC + suffix,
-                    DEFAULT_COUNTS_TOPIC + suffix,
-                    DEFAULT_ACTIVE_TOPIC + suffix,
-                    DEFAULT_LATENCY_TOPIC + suffix,
-                    DEFAULT_TRENDS_TOPIC + suffix,
-                    DEFAULT_MODELS_TOPIC,
-                    DEFAULT_STATE_STORE + suffix,
-                    DEFAULT_COUNTS_STORE + suffix,
-                    DEFAULT_ACTIVE_STORE + suffix,
-                    DEFAULT_LATENCY_STORE + suffix,
-                    DEFAULT_TRENDS_STORE + suffix,
-                    DEFAULT_MODELS_STORE,
-                    null,
-                    false
-            );
-        }
-
-        /**
          * Returns topic and store names for monitoring ALL processes in a single instance.
          * Subscribes to all {@code process-events-*} topics via regex.
          */

@@ -3,7 +3,6 @@ import {
   diagramRequestPath,
   instanceRequestPath,
   normalizeDashboardResponses,
-  processRequestPath,
   processListRequestPath
 } from './api.js'
 
@@ -62,25 +61,6 @@ export async function refreshInstance() {
   }
 }
 
-export async function discoverProcessId() {
-  try {
-    const res = await fetch(processRequestPath())
-    if (res.ok) {
-      const data = await res.json()
-      if (data.processId && data.processId.length > 0) {
-        processId = data.processId
-        return
-      }
-    }
-  } catch { /* fallback */ }
-
-  // Multi-process mode: pick first from the list
-  await fetchProcessList()
-  if (processList.length > 0 && !processId) {
-    processId = processList[0]
-  }
-}
-
 export async function fetchProcessList() {
   try {
     const res = await fetch(processListRequestPath())
@@ -135,8 +115,6 @@ export function getState() {
     get processList() { return processList },
     refresh,
     refreshInstance,
-    discoverProcessId,
-    checkDiagramAvailable,
     scheduleRefresh,
     lookupInstance,
     fetchProcessList

@@ -24,38 +24,36 @@ public final class ProcessMonitoringClient {
         String baseUrl = args.length > 0 ? args[0] : "http://localhost:8081";
         String command = args.length > 1 ? args[1] : "health";
 
-        // The CLI deliberately mirrors the HTTP resource layout so examples can move almost
-        // mechanically between terminal use and browser/API use.
         String path = switch (command) {
-            case "health" -> "/health";
+            case "health" -> "/api/health";
             case "instance" -> {
                 if (args.length < 3) {
                     throw new IllegalArgumentException("Usage: ProcessMonitoringClient <baseUrl> instance <processInstanceId>");
                 }
-                yield "/instances/" + args[2];
+                yield "/api/instances/" + args[2];
             }
             case "counts" -> {
                 if (args.length > 2) {
-                    yield "/processes/" + args[2] + "/counts";
+                    yield "/api/processes/" + args[2] + "/counts";
                 }
-                yield "/counts";
+                yield "/api/counts";
             }
             case "latency" -> {
                 if (args.length < 3) {
                     throw new IllegalArgumentException("Usage: ProcessMonitoringClient <baseUrl> latency <processId>");
                 }
-                yield "/processes/" + args[2] + "/latency";
+                yield "/api/processes/" + args[2] + "/latency";
             }
             case "trends" -> {
                 if (args.length < 3) {
                     throw new IllegalArgumentException("Usage: ProcessMonitoringClient <baseUrl> trends <processId>");
                 }
-                yield "/processes/" + args[2] + "/trends";
+                yield "/api/processes/" + args[2] + "/trends";
             }
             case "stuck" -> {
                 String processId = args.length > 2 ? args[2] : null;
                 String olderThanSeconds = args.length > 3 ? args[3] : "60";
-                StringBuilder pathBuilder = new StringBuilder("/stuck?olderThanSeconds=").append(olderThanSeconds);
+                StringBuilder pathBuilder = new StringBuilder("/api/stuck?olderThanSeconds=").append(olderThanSeconds);
                 if (processId != null && !processId.isBlank()) {
                     pathBuilder.append("&processId=").append(processId);
                 }

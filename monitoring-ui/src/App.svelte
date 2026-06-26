@@ -16,12 +16,9 @@
   })
 
   onMount(() => {
-    s.discoverProcessId().then(() => {
-      s.fetchProcessList().then(() => {
-        s.scheduleRefresh(() => { s.refresh(); s.fetchProcessList() })
-      })
+    s.fetchProcessList().then(() => {
+      s.scheduleRefresh(() => { s.refresh(); s.fetchProcessList() })
     })
-    s.checkDiagramAvailable()
   })
 
   function number(value) {

@@ -118,9 +118,9 @@ from this registry — no pre-configured process ID list needed.
 ./setup/dev-up.sh
 ```
 
-Starts **everything** — Kafka in Docker, the monitoring backend (multi-process
-mode), auto-registers all BPMN models from `src/test/resources/bpmn/`, starts
-a continuous feed for `invoice_receipt`, and serves the Svelte SPA.
+Starts **everything** — Kafka in Docker, the monitoring backend, auto-registers
+all BPMN models from `src/test/resources/bpmn/`, starts a continuous feed for
+`invoice_receipt`, and serves the Svelte SPA.
 Open `http://localhost:8081`. Press Ctrl+C to stop all services.
 
 **Multiple processes:**
@@ -154,45 +154,24 @@ SKIP_BUILD=true ./setup/dev-up.sh
 cd setup && docker compose up -d
 
 # Terminal 2 — Build
-mvn -q package -DskipTests
 cd monitoring-ui && npm install && npm run build && cd ..
+mvn -q package -DskipTests -Pmonitoring
+JAR="$(find target -maxdepth 1 -name 'durga-*-runner.jar' -print -quit)"
 
-# Terminal 3 — Monitoring backend (all processes)
-java -Ddurga.streams.state.dir=/tmp/kafka-streams-state \
-  -cp target/durga-0.1.0-beta.1.jar \
-  org.gautelis.durga.monitoring.MonitoringContainer \
-  localhost:9094 durga-monitor 8081 all \
-  "" monitoring-ui/dist src/test/resources/bpmn
+# Terminal 3 — Monitoring backend
+java -Dquarkus.http.port=8081 -Ddurga.streams.state.dir=/tmp/kafka-streams-state \
+  -jar "${JAR}" \
+  localhost:9094 durga-monitor
 
 # Terminal 4 — Register BPMN models
 for f in src/test/resources/bpmn/*.bpmn; do
-  java -cp target/durga-0.1.0-beta.1.jar \
+  java -cp "${JAR}" \
     org.gautelis.durga.demo.BpmnModelPublisher \
     localhost:9094 "$(basename "$f" .bpmn)" "$f"
 done
 
 # Terminal 5 — Feed
-java -cp target/durga-0.1.0-beta.1.jar \
-  org.gautelis.durga.demo.ContinuousFeedPublisher \
-  localhost:9094 invoice_receipt 1000
-```
-
-Open `http://localhost:8081` for the dashboard. The SPA displays an
-overview of all registered processes with KPIs. Click any process row to
-drill down into latency, stuck instances, trends, instance detail, and
-the BPMN diagram.
-
-# Terminal 2 — Monitoring backend (API + BPMN diagram)
-java -cp target/durga-0.1.0-beta.1.jar \
-  org.gautelis.durga.monitoring.MonitoringContainer \
-  localhost:9094 durga-monitoring 8081 invoice_receipt \
-  src/test/resources/bpmn/invoice_receipt.bpmn
-
-# Terminal 3 — Svelte SPA (Vite dev server, proxies /api → :8081)
-cd monitoring-ui && npm run dev
-
-# Terminal 4 — Continuous process feed
-java -cp target/durga-0.1.0-beta.1.jar \
+java -cp "${JAR}" \
   org.gautelis.durga.demo.ContinuousFeedPublisher \
   localhost:9094 invoice_receipt 1000
 ```
@@ -204,42 +183,41 @@ the BPMN diagram.
 
 ### HTTP API endpoints
 
-All paths are available with or without the `/api/` prefix:
+All paths are under the `/api/` prefix:
 
-- `GET /health` — Kafka Streams state (`RUNNING`, `REBALANCING`, etc.)
-- `GET /dashboard` — minimal HTML dashboard
-- `GET /processes/list` — all known process IDs (from models + counts)
-- `GET /instances/{processInstanceId}` — latest state view for one instance
-- `GET /processes/{processId}/counts` — state counts per process
-- `GET /processes/{processId}/latency` — per-activity latency summaries
-- `GET /processes/{processId}/trends` — lifecycle trend buckets
-- `GET /counts` — counts across all monitored processes
-- `GET /stuck?processId=<id>&olderThanSeconds=60` — stuck-instance detection
-- `GET /diagram` — BPMN 2.0 XML from the process-models cache
-- `GET /diagram?processId=<id>` — BPMN for a specific process
-- `GET /process` — the single processId this monitor tracks (if in single mode)
-- `GET /metrics` — Micrometer metrics in Prometheus text format
+- `GET /api/health` — Kafka Streams state (`RUNNING`, `REBALANCING`, etc.)
+- `GET /api/processes/list` — all known process IDs (from models + counts)
+- `GET /api/instances/{processInstanceId}` — latest state view for one instance
+- `GET /api/processes/{processId}/counts` — state counts per process
+- `GET /api/processes/{processId}/latency` — per-activity latency summaries
+- `GET /api/processes/{processId}/trends` — lifecycle trend buckets
+- `GET /api/counts` — counts across all monitored processes
+- `GET /api/stuck?processId=<id>&olderThanSeconds=60` — stuck-instance detection
+- `GET /api/diagram?processId=<id>` — BPMN 2.0 XML from the process-models cache
+- `GET /api/metrics` — Micrometer metrics in Prometheus text format
 
 ### CLI client
 
 ```bash
-java -cp target/durga-0.1.0-beta.1.jar \
+JAR="$(find target -maxdepth 1 -name 'durga-*-runner.jar' -print -quit)"
+
+java -cp "${JAR}" \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   http://localhost:8081 health
 
-java -cp target/durga-0.1.0-beta.1.jar \
+java -cp "${JAR}" \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   http://localhost:8081 counts invoice_receipt
 
-java -cp target/durga-0.1.0-beta.1.jar \
+java -cp "${JAR}" \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   http://localhost:8081 latency invoice_receipt
 
-java -cp target/durga-0.1.0-beta.1.jar \
+java -cp "${JAR}" \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   http://localhost:8081 stuck invoice_receipt 60
 
-java -cp target/durga-0.1.0-beta.1.jar \
+java -cp "${JAR}" \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   http://localhost:8081 instance <processInstanceId>
 ```

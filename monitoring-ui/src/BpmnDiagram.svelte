@@ -1,6 +1,4 @@
 <script>
-  import { onMount } from 'svelte'
-
   let { processId = '', latency = [], counts = [] } = $props()
 
   let container = $state(null)
@@ -9,7 +7,7 @@
   let diagramXml = $state(null)
   let diagramError = $state(null)
   let rendered = $state(false)
-  let diagramLoaded = false
+  let loadedForProcessId = null
   let panMode = $state(false)
   let panning = false
   let panLast = { x: 0, y: 0 }
@@ -141,7 +139,33 @@
     }
   })
 
-  onMount(async () => {
+  const MAX_RETRIES = 12
+  const RETRY_INTERVAL_MS = 5000
+  let retryTimer = null
+  let retryCount = 0
+
+  function clearRetry() {
+    if (retryTimer) {
+      clearInterval(retryTimer)
+      retryTimer = null
+    }
+    retryCount = 0
+  }
+
+  function scheduleRetry() {
+    if (retryTimer) return
+    retryTimer = setInterval(() => {
+      retryCount++
+      if (retryCount > MAX_RETRIES) {
+        clearRetry()
+        diagramError = 'Model not available — try reselecting the process'
+        return
+      }
+      fetchAndRender()
+    }, RETRY_INTERVAL_MS)
+  }
+
+  async function fetchAndRender() {
     if (!processId) {
       diagramError = 'No process selected'
       return
@@ -153,17 +177,24 @@
       const url = pid ? `/api/diagram?processId=${pid}` : '/api/diagram'
       const response = await fetch(url)
       if (!response.ok) {
-        diagramError = response.status === 404 ? 'No diagram available' : `HTTP ${response.status}`
+        if (response.status === 404) {
+          diagramError = 'Waiting for model to become available...'
+          scheduleRetry()
+        } else {
+          diagramError = `HTTP ${response.status}`
+        }
         return
       }
       diagramXml = await response.text()
+      clearRetry()
     } catch (e) {
       diagramError = `Cannot reach diagram endpoint: ${e.message}`
+      scheduleRetry()
       return
     }
 
-    if (diagramLoaded) return
-    diagramLoaded = true
+    if (loadedForProcessId === processId) return
+    loadedForProcessId = processId
 
     // 2. Render diagram (runs once)
     try {
@@ -176,14 +207,34 @@
         canvasModule.zoom('fit-viewport')
       })
       rendered = true
+      diagramError = null
       applyOverlays()
     } catch (e) {
       diagramError = `Failed to render diagram: ${e.message}`
     }
-  })
+  }
 
-  onMount(() => {
+  $effect(() => {
+    const pid = processId
+
+    clearRetry()
+    diagramXml = null
+    diagramError = null
+    rendered = false
+    loadedForProcessId = null
+    if (viewer) {
+      viewer.detach()
+      viewer.destroy()
+      viewer = null
+      canvasModule = null
+    }
+
+    if (pid) {
+      fetchAndRender()
+    }
+
     return () => {
+      clearRetry()
       if (viewer) {
         viewer.detach()
         viewer.destroy()

@@ -14,8 +14,6 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Map;
 import java.util.Optional;
 
@@ -38,6 +36,18 @@ public class ProcessMonitoringResource {
         return Response.ok(Map.of(
                 "streamsState", state.streams().state().name()
         )).build();
+    }
+
+    @GET
+    @Path("/processes/list")
+    public Response processList(@HeaderParam("Authorization") String authorization) {
+        Response auth = requireAuth(authorization);
+        if (auth != null) return auth;
+        try {
+            return Response.ok(state.queryService().listProcessIds()).build();
+        } catch (InvalidStateStoreException e) {
+            return Response.status(503).entity(Map.of("error", "state store not queryable yet")).build();
+        }
     }
 
     @GET
@@ -174,23 +184,23 @@ public class ProcessMonitoringResource {
 
     @GET
     @Path("/diagram")
-    @Produces(MediaType.APPLICATION_XML)
-    public Response diagram(@HeaderParam("Authorization") String authorization) {
+    public Response diagram(@HeaderParam("Authorization") String authorization,
+                            @QueryParam("processId") String processId) {
         Response auth = requireAuth(authorization);
         if (auth != null) return auth;
 
-        java.nio.file.Path path = state.bpmnPath();
-        if (path == null) {
-            return Response.status(404).entity(Map.of("error", "No BPMN diagram available")).build();
+        // Kafka state store is the canonical source (processes publish models via process-models topic)
+        if (processId != null && !processId.isBlank()) {
+            try {
+                Optional<String> model = state.queryService().findModel(processId);
+                if (model.isPresent()) {
+                    return Response.ok(model.get(), MediaType.APPLICATION_XML).build();
+                }
+            } catch (InvalidStateStoreException ignored) {
+            }
         }
 
-        try {
-            String xml = Files.readString(path, StandardCharsets.UTF_8);
-            return Response.ok(xml).build();
-        } catch (Exception e) {
-            LOG.warn("Failed to read BPMN diagram from {}", path, e);
-            return Response.status(500).entity(Map.of("error", "Failed to read BPMN diagram")).build();
-        }
+        return Response.status(404).entity(Map.of("error", "No BPMN diagram available for this process")).build();
     }
 
     private static String resolveApiKey() {

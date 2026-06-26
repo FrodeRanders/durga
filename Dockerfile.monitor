@@ -2,20 +2,19 @@ FROM maven:3.9-eclipse-temurin-21 AS builder
 WORKDIR /build
 COPY . .
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -q package -DskipTests
+    mvn -q package -DskipTests -Pmonitoring
 
 FROM eclipse-temurin:21-jre-alpine
 RUN apk add --no-cache libstdc++
 RUN addgroup -S durga && adduser -S durga -G durga
 USER durga
 RUN mkdir -p /tmp/logs /tmp/kafka-streams-state
-COPY --from=builder /build/target/durga-*.jar /app/durga.jar
+COPY --from=builder /build/target/durga-*-runner.jar /app/durga.jar
 HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
-  CMD wget -qO- http://localhost:8081/health || exit 1
+  CMD wget -qO- http://localhost:8081/api/health || exit 1
 EXPOSE 8081
 ENTRYPOINT ["java", "-Dlog-path=/tmp/logs", \
   "-Ddurga.streams.state.dir=/tmp/kafka-streams-state", \
   "-Dkafka.bootstrap.servers=kafka:9092", \
-  "-cp", "/app/durga.jar", \
-  "org.gautelis.durga.monitoring.MonitoringContainer", \
-  "kafka:9092", "durga-monitoring", "8081", "invoice_receipt"]
+  "-jar", "/app/durga.jar", \
+  "kafka:9092", "durga-monitoring"]

@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 - `src/main/java/org/gautelis/durga/tools/` contains the BPMN scaffolder (entry point: `BpmnScaffolder`). Shared spec types are in `BpmnModelSupport.java`; model element collection is in `BpmnModelCollector.java`; CLI argument parsing is in `CliParser.java`; code generation helpers are in `EventTemplateGenerator.java`, `TaskRoutingGenerator.java`, `SubProcessTemplateGenerator.java`, and `GeneratedProjectSupport.java`.
-- `src/main/java/org/gautelis/durga/monitoring/` holds Kafka Streams monitoring topology, JDK HTTP server (`ProcessMonitoringHttpServer`), Quarkus REST container (`MonitoringContainer`), CLI client, query service, and component-level metrics (`Metrics.java`).
+- `src/main/java/org/gautelis/durga/monitoring/` holds Kafka Streams monitoring topology, Quarkus REST API (`ProcessMonitoringApp`), CLI client, query service, and component-level metrics (`Metrics.java`).
 - `src/main/java/org/gautelis/durga/plugins/` contains 15 data pipeline plugins implementing the `Plugin` interface, plus shared utilities (`PipelinePlugin.java`).
 - `src/main/java/org/gautelis/durga/demo/` contains demo publishers and scenario runners.
 - `src/main/java/org/gautelis/durga/` holds core runtime contracts (`ProcessEvent`, `ProcessState`, `ScopeCancellationRegistry`, `ProcessStateStore`).

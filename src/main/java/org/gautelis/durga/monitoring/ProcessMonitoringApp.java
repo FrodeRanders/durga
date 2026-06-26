@@ -4,18 +4,23 @@ import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.annotations.QuarkusMain;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * Quarkus entry point for the monitoring topology and REST API.
+ * Monitors all Durga processes across the organisation — always multi-process.
  */
 @QuarkusMain
 public final class ProcessMonitoringApp {
@@ -24,8 +29,6 @@ public final class ProcessMonitoringApp {
 
     static String bootstrapServers;
     static String applicationId;
-    static String processId;
-    static Path bpmnPath;
 
     private ProcessMonitoringApp() {
     }
@@ -35,8 +38,6 @@ public final class ProcessMonitoringApp {
         try {
             bootstrapServers = args.length > 0 ? args[0] : bootstrapServersDefault();
             applicationId = args.length > 1 ? args[1] : "durga-monitoring";
-            processId = args.length > 2 ? args[2] : defaultProcessId();
-            bpmnPath = args.length > 3 && !args[3].isBlank() ? resolveBpmnPath(args[3]) : null;
             Quarkus.run(args);
             LOG.info("ProcessMonitoringApp completed successfully");
         } catch (Exception e) {
@@ -49,7 +50,7 @@ public final class ProcessMonitoringApp {
     @Singleton
     MonitoringState monitoringState() {
         ProcessMonitoringTopology.MonitoringTopics topics =
-                ProcessMonitoringTopology.MonitoringTopics.forProcess(processId);
+                ProcessMonitoringTopology.MonitoringTopics.forAllProcesses();
 
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
@@ -69,34 +70,49 @@ public final class ProcessMonitoringApp {
             streams.close(Duration.ofSeconds(30));
         }));
 
+        createTopicsIfNeeded(bootstrapServers, topics);
+
         streams.start();
         LOG.info("Monitoring topology started (state dir: {})", props.getProperty(StreamsConfig.STATE_DIR_CONFIG));
 
-        return new MonitoringState(streams, queryService, bpmnPath);
+        return new MonitoringState(streams, queryService);
+    }
+
+    private static void createTopicsIfNeeded(String bootstrapServers, ProcessMonitoringTopology.MonitoringTopics topics) {
+        List<String> allTopics = List.of(
+                topics.stateTopic(),
+                topics.countsTopic(),
+                topics.activeTopic(),
+                topics.latencyTopic(),
+                topics.trendsTopic(),
+                topics.modelsTopic());
+        Properties adminProps = new Properties();
+        adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        try (var admin = AdminClient.create(adminProps)) {
+            Set<String> existing = admin.listTopics().names().get();
+            List<NewTopic> toCreate = new ArrayList<>();
+            for (String t : allTopics) {
+                if (!existing.contains(t)) {
+                    toCreate.add(new NewTopic(t, 2, (short) 1));
+                }
+            }
+            if (!toCreate.isEmpty()) {
+                admin.createTopics(toCreate).all().get();
+                LOG.info("Created topics: {}", toCreate.stream().map(NewTopic::name).toList());
+            }
+        } catch (Exception e) {
+            LOG.warn("Could not auto-create Kafka topics (broker may not be reachable yet): {}", e.getMessage());
+        }
     }
 
     /** Injectable state holder for the REST resource. */
     public record MonitoringState(
             KafkaStreams streams,
-            ProcessMonitoringQueryService queryService,
-            Path bpmnPath
+            ProcessMonitoringQueryService queryService
     ) {
     }
 
     private static String bootstrapServersDefault() {
         return System.getProperty("kafka.bootstrap.servers", "localhost:9094");
-    }
-
-    private static String defaultProcessId() {
-        return System.getProperty("durga.monitoring.process.id", "default");
-    }
-
-    private static Path resolveBpmnPath(String arg) {
-        Path path = Path.of(arg);
-        if (!Files.isRegularFile(path)) {
-            LOG.warn("BPMN file not found: {}", arg);
-            return null;
-        }
-        return path;
     }
 }
