@@ -191,9 +191,9 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.14.1</version>
+                <version>3.15.0</version>
                 <configuration>
-                    <release>21</release>
+                    <release>25</release>
                     <compilerArgs>
                         <arg>-Xlint:deprecation</arg>
                         <arg>-Xlint:unchecked</arg>
@@ -209,12 +209,12 @@
             <plugin>
                 <groupId>org.codehaus.gmavenplus</groupId>
                 <artifactId>gmavenplus-plugin</artifactId>
-                <version>3.0.2</version>
+                <version>5.0.0</version>
                 <dependencies>
                     <dependency>
                         <groupId>org.apache.groovy</groupId>
                         <artifactId>groovy</artifactId>
-                        <version>4.0.22</version>
+                        <version>4.0.32</version>
                     </dependency>
                     <dependency>
                         <groupId>org.antlr</groupId>
@@ -262,7 +262,7 @@ log.info("Rendered ModelEnricher.java from template (" + rendered.length() + " c
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
-                <version>3.6.0</version>
+                <version>3.6.1</version>
                 <executions>
                     <execution>
                         <id>add-generated-sources</id>
@@ -282,7 +282,7 @@ log.info("Rendered ModelEnricher.java from template (" + rendered.length() + " c
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.5.4</version>
+                <version>3.6.0-M1</version>
                 <configuration>
                     <systemPropertyVariables>
                         <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
@@ -295,7 +295,7 @@ log.info("Rendered ModelEnricher.java from template (" + rendered.length() + " c
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.6.0</version>
+                <version>3.6.2</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -386,7 +386,7 @@ log.info("Rendered ModelEnricher.java from template (" + rendered.length() + " c
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-clean-plugin</artifactId>
-                <version>3.3.2</version>
+                <version>3.5.0</version>
                 <configuration>
                     <filesets>
                         <fileset>
@@ -404,7 +404,7 @@ log.info("Rendered ModelEnricher.java from template (" + rendered.length() + " c
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.12</version>
+                <version>0.8.15</version>
                 <executions>
                     <execution>
                         <id>prepare-agent</id>
@@ -469,7 +469,7 @@ log.info("Rendered ModelEnricher.java from template (" + rendered.length() + " c
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.9.1.0</version>
+                <version>4.10.2.0</version>
                 <configuration>
                     <excludeFilterFile>config/spotbugs-exclude.xml</excludeFilterFile>
                     <effort>Default</effort>
@@ -497,7 +497,7 @@ log.info("Rendered ModelEnricher.java from template (" + rendered.length() + " c
                     <plugin>
                         <groupId>org.codehaus.mojo</groupId>
                         <artifactId>versions-maven-plugin</artifactId>
-                        <version>2.18.0</version>
+                        <version>2.21.0</version>
                         <executions>
                             <execution>
                                 <id>show‑updates</id>

@@ -386,17 +386,17 @@ class BpmnModelCollector {
         if (element instanceof DataStoreReference reference) {
             return normalize(nameOrId(reference.getName(), reference.getId()));
         }
-        if (element instanceof BaseElement base && base.getId() != null) {
-            return normalize(base.getId());
+        if (element.getId() != null) {
+            return normalize(element.getId());
         }
         return "unnamed";
     }
 
     private static Map<String, String> extensionProperties(ItemAwareElement element) {
-        if (!(element instanceof BaseElement base) || base.getExtensionElements() == null) {
+        if (element.getExtensionElements() == null) {
             return Map.of();
         }
-        CamundaProperties props = base.getExtensionElements()
+        CamundaProperties props = element.getExtensionElements()
                 .getElementsQuery()
                 .filterByType(CamundaProperties.class)
                 .singleResult();

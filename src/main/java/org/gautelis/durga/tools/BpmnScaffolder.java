@@ -1396,9 +1396,6 @@ public class BpmnScaffolder {
 
         // Model registration bean — publishes BPMN to process-models topic on startup
         {
-            String pid = parsed.processIdOverride != null
-                    ? parsed.processIdOverride
-                    : parsed.bpmnPath; // fallback derived later, but we use override when set
             String modelFileName = SafeXml.safePath(parsed.bpmnPath).getFileName().toString();
             Path outputFile = coreJavaOutput.resolve("ModelRegistration.java");
             if (!Files.exists(outputFile)) {
