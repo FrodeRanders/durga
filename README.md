@@ -3,7 +3,7 @@
 [![CI](https://github.com/FrodeRanders/durga/actions/workflows/ci.yml/badge.svg)](https://github.com/FrodeRanders/durga/actions/workflows/ci.yml)
 [![Build](https://github.com/FrodeRanders/durga/actions/workflows/build.yml/badge.svg)](https://github.com/FrodeRanders/durga/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Java](https://img.shields.io/badge/Java-25-green.svg)](https://adoptium.net/)
+![Java](https://img.shields.io/badge/Java-25-green.svg)
 [![Version](https://img.shields.io/badge/version-0.1.0--beta.1-yellow.svg)](pom.xml)
 
 BPMN → Kafka code generation and process monitoring. Two tools:
