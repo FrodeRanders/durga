@@ -1,5 +1,11 @@
 # Durga
 
+[![CI](https://github.com/FrodeRanders/durga/actions/workflows/ci.yml/badge.svg)](https://github.com/FrodeRanders/durga/actions/workflows/ci.yml)
+[![Build](https://github.com/FrodeRanders/durga/actions/workflows/build.yml/badge.svg)](https://github.com/FrodeRanders/durga/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://adoptium.net/)
+[![Version](https://img.shields.io/badge/version-0.1.0--beta.1-yellow.svg)](pom.xml)
+
 BPMN → Kafka code generation and process monitoring. Two tools:
 
 - **Scaffolder** — reads a BPMN model and generates Kafka-oriented worker, gateway, orchestration, and topic setup skeletons.
