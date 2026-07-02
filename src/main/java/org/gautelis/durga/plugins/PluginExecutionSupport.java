@@ -24,14 +24,14 @@ public final class PluginExecutionSupport {
         if (!"materialize".equalsIgnoreCase(mode)) {
             PluginResult pluginResult = plugin.executeWithResult(payload, pluginConfig);
             return new Result(pluginResult.output(), payload, false, pluginResult.idempotencyKey(),
-                    pluginResult.errorStrategy(), pluginResult.metadata());
+                    pluginResult.errorStrategy(), pluginResult.sideEffectDescription(), pluginResult.metadata());
         }
 
         Handle inputHandle = findHandle(payload, ObjectStoreSupport.handleField(options));
         if (inputHandle == null) {
             PluginResult pluginResult = plugin.executeWithResult(payload, pluginConfig);
             return new Result(pluginResult.output(), payload, false, pluginResult.idempotencyKey(),
-                    pluginResult.errorStrategy(), pluginResult.metadata());
+                    pluginResult.errorStrategy(), pluginResult.sideEffectDescription(), pluginResult.metadata());
         }
 
         byte[] rawInput = ObjectStoreSupport.read(inputHandle.uri());
@@ -74,7 +74,8 @@ public final class PluginExecutionSupport {
             output.set("format", FormatDetector.toJson(detection));
         }
         return new Result(output.toString().getBytes(StandardCharsets.UTF_8), rawInput, true,
-                pluginResult.idempotencyKey(), pluginResult.errorStrategy(), pluginResult.metadata());
+                pluginResult.idempotencyKey(), pluginResult.errorStrategy(),
+                pluginResult.sideEffectDescription(), pluginResult.metadata());
     }
 
     static Handle findHandle(byte[] payload, String handleField) throws Exception {
@@ -97,6 +98,7 @@ public final class PluginExecutionSupport {
     public record Result(byte[] output, byte[] pluginInput, boolean materializedHandle,
                          String idempotencyKey,
                          PluginResult.ErrorStrategy errorStrategy,
+                         String sideEffectDescription,
                          java.util.Map<String, Object> metadata) {
     }
 

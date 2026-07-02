@@ -215,9 +215,10 @@ public final class SchemaSupport {
             List<String> newReq = new ArrayList<>();
             oldRequired.forEach(n -> oldReq.add(n.asText()));
             newRequired.forEach(n -> newReq.add(n.asText()));
-            for (String req : oldReq) {
-                if (!newReq.contains(req)) {
-                    issues.add("Required field removed: " + req);
+            for (String req : newReq) {
+                if (!oldReq.contains(req)) {
+                    String fieldPath = path.isEmpty() ? req : path + "." + req;
+                    issues.add("Required field added: " + fieldPath);
                 }
             }
         }

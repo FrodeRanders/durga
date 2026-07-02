@@ -47,15 +47,15 @@ public class PipelinePluginTest {
     }
 
     @Test
-    public void shouldCreateErrorRecord() {
-        System.out.println("TC: errorRecord creates JSON error record without embedding original payload");
+    public void shouldCreateReplayableErrorRecord() throws Exception {
+        System.out.println("TC: errorRecord creates replayable JSON error record with original payload");
         String record = PipelinePlugin.errorRecord("{\"secret\":\"value\"}", "test", "something broke");
-        assertTrue(record.contains("\"plugin\":\"test\""));
-        assertTrue(record.contains("\"error\":\"something broke\""));
-        assertTrue(record.contains("\"originalBytes\""));
-        assertTrue(record.contains("\"originalSha256\""));
-        assertFalse(record.contains("secret"));
-        assertFalse(record.contains("value"));
+        JsonNode node = mapper.readTree(record);
+        assertEquals("test", node.get("plugin").asText());
+        assertEquals("something broke", node.get("error").asText());
+        assertTrue(node.has("originalBytes"));
+        assertTrue(node.has("originalSha256"));
+        assertEquals("{\"secret\":\"value\"}", node.get("originalJson").asText());
     }
 
     @Test(expected = IllegalArgumentException.class)

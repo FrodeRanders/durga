@@ -609,24 +609,23 @@ public class %className% {
     public CompletionStage<Void> split(Message<String> msg) {
         ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
 %outputs:{o|
-        if (cancellationRegistry.isCancelled(event.processInstanceId(), "%o.taskId%")) {
-            continue;
-        }
-        %o.emitter%.send(msg.getPayload());
-        processEventsEmitter.send(new ProcessEvent(
-                event.processInstanceId(),
-                event.processId(),
-                "%o.taskId%",
-                event.tokenId(),
-                event.correlationId(),
-                event.payload(),
-                ProcessEvent.Status.STARTED,
-                null,
-                ProcessEvent.EventType.GATEWAY_TAKEN,
-                event.processVersion(),
-                event.businessKey(),
-                null
-        ).toJson());
+        if (!cancellationRegistry.isCancelled(event.processInstanceId(), "%o.taskId%")) {
+            %o.emitter%.send(msg.getPayload());
+            processEventsEmitter.send(new ProcessEvent(
+                    event.processInstanceId(),
+                    event.processId(),
+                    "%o.taskId%",
+                    event.tokenId(),
+                    event.correlationId(),
+                    event.payload(),
+                    ProcessEvent.Status.STARTED,
+                    null,
+                    ProcessEvent.EventType.GATEWAY_TAKEN,
+                    event.processVersion(),
+                    event.businessKey(),
+                    null
+            ).toJson());
+        \}
 }%
         return msg.ack();
     }
@@ -1550,6 +1549,21 @@ public class %className% {
                             implementation,
                             payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                             "%pluginConfig%");
+            if (pluginResult.errorStrategy() == org.gautelis.durga.plugins.PluginResult.ErrorStrategy.SKIP) {
+                return msg.ack();
+            }
+            if (pluginResult.errorStrategy() == org.gautelis.durga.plugins.PluginResult.ErrorStrategy.DLQ) {
+                String dlqRecord = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
+                        msg.getPayload(), "custom:%taskId%",
+                        pluginResult.sideEffectDescription() != null
+                                ? pluginResult.sideEffectDescription() : "Plugin routed to DLQ");
+                dlqEmitter.send(dlqRecord);
+                return msg.ack();
+            }
+            if (pluginResult.errorStrategy() == org.gautelis.durga.plugins.PluginResult.ErrorStrategy.FAIL) {
+                throw new IllegalStateException(pluginResult.sideEffectDescription() != null
+                        ? pluginResult.sideEffectDescription() : "Plugin requested failure");
+            }
             byte[] output = pluginResult.output();
             java.util.Map<String, Object> outputPayload = inputEvent.payload();
             if (output != null) {
@@ -1692,6 +1706,10 @@ public class %className% {
                                 ? pluginResult.sideEffectDescription() : "Plugin routed to DLQ");
                 dlqEmitter.send(dlqRecord);
                 return msg.ack();
+            }
+            if (pluginResult.errorStrategy() == PluginResult.ErrorStrategy.FAIL) {
+                throw new IllegalStateException(pluginResult.sideEffectDescription() != null
+                        ? pluginResult.sideEffectDescription() : "Plugin requested failure");
             }
             byte[] output = pluginResult.output();
             java.util.Map<String, Object> outputPayload = inputEvent.payload();

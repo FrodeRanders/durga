@@ -2410,6 +2410,9 @@ pluginInterfaceClass() ::= <<
 package org.gautelis.durga.plugins;
 
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 public interface Plugin {
     default byte[] execute(byte[] payload, String config) throws Exception {
@@ -2422,12 +2425,100 @@ public interface Plugin {
                 "Plugin does not support text payloads — override execute(byte[], String) instead");
     }
 
+    default PluginResult executeWithResult(byte[] payload, String config) throws Exception {
+        byte[] output = execute(payload, config);
+        return PluginResult.success(output, idempotencyKey(payload, config));
+    }
+
+    default String idempotencyKey(byte[] payload, String config) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(payload != null ? payload : new byte[0]);
+            if (config != null) {
+                digest.update(config.getBytes(StandardCharsets.UTF_8));
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
+
     static String toString(byte[] data) {
         return new String(data, StandardCharsets.UTF_8);
     }
 
     static byte[] toBytes(String data) {
         return data.getBytes(StandardCharsets.UTF_8);
+    }
+}
+>>
+
+pluginResultClass() ::= <<
+package org.gautelis.durga.plugins;
+
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+
+public final class PluginResult {
+    public enum ErrorStrategy {
+        FAIL, SKIP, DLQ
+    }
+
+    private final byte[] output;
+    private final String idempotencyKey;
+    private final ErrorStrategy errorStrategy;
+    private final String sideEffectDescription;
+    private final Map<String, Object> metadata;
+
+    private PluginResult(byte[] output, String idempotencyKey, ErrorStrategy errorStrategy,
+                         String sideEffectDescription, Map<String, Object> metadata) {
+        this.output = output;
+        this.idempotencyKey = Objects.requireNonNull(idempotencyKey, "idempotencyKey must not be null");
+        this.errorStrategy = errorStrategy;
+        this.sideEffectDescription = sideEffectDescription;
+        this.metadata = metadata != null ? Collections.unmodifiableMap(new LinkedHashMap<>(metadata)) : Map.of();
+    }
+
+    public byte[] output() {
+        return output;
+    }
+
+    public String idempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public ErrorStrategy errorStrategy() {
+        return errorStrategy;
+    }
+
+    public String sideEffectDescription() {
+        return sideEffectDescription;
+    }
+
+    public Map<String, Object> metadata() {
+        return metadata;
+    }
+
+    public static PluginResult success(byte[] output, String idempotencyKey) {
+        return new PluginResult(output, idempotencyKey, null, null, Map.of());
+    }
+
+    public static PluginResult success(byte[] output, String idempotencyKey, Map<String, Object> metadata) {
+        return new PluginResult(output, idempotencyKey, null, null, metadata);
+    }
+
+    public static PluginResult dlq(byte[] output, String idempotencyKey, String reason) {
+        return new PluginResult(output, idempotencyKey, ErrorStrategy.DLQ, reason, Map.of());
+    }
+
+    public static PluginResult skip(String idempotencyKey, String reason) {
+        return new PluginResult(null, idempotencyKey, ErrorStrategy.SKIP, reason, Map.of());
+    }
+
+    public static PluginResult fail(String idempotencyKey, String reason) {
+        return new PluginResult(null, idempotencyKey, ErrorStrategy.FAIL, reason, Map.of());
     }
 }
 >>
@@ -2448,7 +2539,18 @@ public abstract class PipelinePlugin implements Plugin {
                 digest = "sha256-unavailable";
             }
         }
-        return "plugin=" + plugin + ";error=" + sanitizeErrorMessage(error) + ";payloadBytes=" + bytes + ";payloadSha256=" + digest;
+        StringBuilder record = new StringBuilder();
+        record.append("{");
+        record.append("\"plugin\":\"").append(escapeJson(plugin)).append("\",");
+        record.append("\"error\":\"").append(escapeJson(sanitizeErrorMessage(error))).append("\",");
+        record.append("\"timestamp\":").append(System.currentTimeMillis()).append(",");
+        record.append("\"originalBytes\":").append(bytes).append(",");
+        record.append("\"originalSha256\":\"").append(escapeJson(digest)).append("\"");
+        if (payload != null) {
+            record.append(",\"originalJson\":\"").append(escapeJson(payload)).append("\"");
+        }
+        record.append("}");
+        return record.toString();
     }
 
     public static String sanitizeErrorMessage(String message) {
@@ -2456,6 +2558,38 @@ public abstract class PipelinePlugin implements Plugin {
             return "Plugin execution failed";
         }
         return message.length() <= 512 ? message : message.substring(0, 512);
+    }
+
+    private static String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        StringBuilder escaped = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"' -> escaped.append("\\\\\"");
+                case '\\\\' -> escaped.append("\\\\\\\\");
+                case '\\b' -> escaped.append("\\\\b");
+                case '\\f' -> escaped.append("\\\\f");
+                case '\\n' -> escaped.append("\\\\n");
+                case '\\r' -> escaped.append("\\\\r");
+                case '\\t' -> escaped.append("\\\\t");
+                default -> {
+                    if (c < 0x20) {
+                        String hex = Integer.toHexString(c);
+                        escaped.append("\\\\u");
+                        for (int j = hex.length(); j < 4; j++) {
+                            escaped.append('0');
+                        }
+                        escaped.append(hex);
+                    } else {
+                        escaped.append(c);
+                    }
+                }
+            }
+        }
+        return escaped.toString();
     }
 }
 >>
@@ -2493,16 +2627,21 @@ public final class PluginExecutionSupport {
         String mode = options.getOrDefault("handleMode", options.getOrDefault("dataHandleMode", "payload"));
         String pluginConfig = options.getOrDefault("pluginConfig", config);
         if (!"materialize".equalsIgnoreCase(mode)) {
-            return new Result(plugin.execute(payload, pluginConfig), payload, false);
+            PluginResult pluginResult = plugin.executeWithResult(payload, pluginConfig);
+            return new Result(pluginResult.output(), payload, false, pluginResult.idempotencyKey(),
+                    pluginResult.errorStrategy(), pluginResult.sideEffectDescription(), pluginResult.metadata());
         }
 
         Handle inputHandle = findHandle(payload, handleField(options));
         if (inputHandle == null) {
-            return new Result(plugin.execute(payload, pluginConfig), payload, false);
+            PluginResult pluginResult = plugin.executeWithResult(payload, pluginConfig);
+            return new Result(pluginResult.output(), payload, false, pluginResult.idempotencyKey(),
+                    pluginResult.errorStrategy(), pluginResult.sideEffectDescription(), pluginResult.metadata());
         }
 
         byte[] rawInput = read(inputHandle.uri());
-        byte[] rawOutput = plugin.execute(rawInput, pluginConfig);
+        PluginResult pluginResult = plugin.executeWithResult(rawInput, pluginConfig);
+        byte[] rawOutput = pluginResult.output();
         if (rawOutput == null) {
             rawOutput = rawInput;
         }
@@ -2539,7 +2678,9 @@ public final class PluginExecutionSupport {
         if (Boolean.parseBoolean(options.getOrDefault("includeFormat", "true"))) {
             output.set("format", detectionJson(detection));
         }
-        return new Result(output.toString().getBytes(StandardCharsets.UTF_8), rawInput, true);
+        return new Result(output.toString().getBytes(StandardCharsets.UTF_8), rawInput, true,
+                pluginResult.idempotencyKey(), pluginResult.errorStrategy(),
+                pluginResult.sideEffectDescription(), pluginResult.metadata());
     }
 
     static Handle findHandle(byte[] payload, String handleField) throws Exception {
@@ -2744,7 +2885,11 @@ public final class PluginExecutionSupport {
         return third != null && !third.isBlank() ? third : null;
     }
 
-    public record Result(byte[] output, byte[] pluginInput, boolean materializedHandle) {
+    public record Result(byte[] output, byte[] pluginInput, boolean materializedHandle,
+                         String idempotencyKey,
+                         PluginResult.ErrorStrategy errorStrategy,
+                         String sideEffectDescription,
+                         java.util.Map<String, Object> metadata) {
     }
 
     record Handle(String name, String uri, String mediaType, String schema) {

@@ -1,9 +1,12 @@
 package org.gautelis.durga.tools;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -15,7 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +39,7 @@ import java.util.UUID;
 public final class ReplayTool {
 
     private static final Logger LOG = LoggerFactory.getLogger(ReplayTool.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private ReplayTool() {
     }
@@ -104,31 +107,25 @@ public final class ReplayTool {
         LOG.info("{} replay from DLQ topic '{}'", dryRun ? "Dry-run" : "Replaying", dlqTopic);
         ReplayPlan plan = new ReplayPlan("dlq:" + dlqTopic);
         Properties consumerProps = consumerProperties(bootstrap, "durga-replay-dlq-" + UUID.randomUUID());
-        List<ProcessEvent> events = new ArrayList<>();
 
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps)) {
-            TopicPartition tp = new TopicPartition(dlqTopic, 0);
-            consumer.assign(List.of(tp));
-            consumer.seekToBeginning(List.of(tp));
+            List<TopicPartition> partitions = partitionsForTopic(consumer, dlqTopic);
+            consumer.assign(partitions);
+            consumer.seekToBeginning(partitions);
 
-            long endOffset = consumer.endOffsets(List.of(tp)).get(tp);
+            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
             long deadline = System.currentTimeMillis() + timeoutSeconds * 1000;
-            boolean found = false;
 
-            while (consumer.position(tp) < endOffset && System.currentTimeMillis() < deadline) {
+            while (hasRemaining(consumer, endOffsets) && System.currentTimeMillis() < deadline) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
                 for (ConsumerRecord<String, String> record : records) {
-                    found = true;
                     try {
-                        ProcessEvent event = ProcessEvent.fromJson(record.value());
+                        ProcessEvent event = parseReplayEvent(record.value());
                         plan.add(new ReplayItem(event, dlqTopic, record.partition(), record.offset(),
                                 record.key(), record.value()));
                     } catch (Exception e) {
                         LOG.warn("Skipping unparseable DLQ record at offset {}: {}", record.offset(), e.getMessage());
                     }
-                }
-                if (!found && consumer.position(tp) >= endOffset) {
-                    break;
                 }
             }
         }
@@ -162,9 +159,11 @@ public final class ReplayTool {
             long deadline = System.currentTimeMillis() + timeoutSeconds * 1000;
             while (consumer.position(tp) < toOffset && System.currentTimeMillis() < deadline) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+                boolean reachedEnd = false;
                 for (ConsumerRecord<String, String> record : records) {
                     if (record.offset() >= toOffset) {
-                        return;
+                        reachedEnd = true;
+                        break;
                     }
                     try {
                         ProcessEvent event = ProcessEvent.fromJson(record.value());
@@ -173,6 +172,9 @@ public final class ReplayTool {
                     } catch (Exception e) {
                         LOG.warn("Skipping unparseable record at offset {}: {}", record.offset(), e.getMessage());
                     }
+                }
+                if (reachedEnd) {
+                    break;
                 }
             }
         }
@@ -196,23 +198,20 @@ public final class ReplayTool {
         Properties consumerProps = consumerProperties(bootstrap, "durga-inspect-" + UUID.randomUUID());
 
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps)) {
-            TopicPartition tp = new TopicPartition(dlqTopic, 0);
-            consumer.assign(List.of(tp));
-            consumer.seekToBeginning(List.of(tp));
+            List<TopicPartition> partitions = partitionsForTopic(consumer, dlqTopic);
+            consumer.assign(partitions);
+            consumer.seekToBeginning(partitions);
 
-            long endOffset = consumer.endOffsets(List.of(tp)).get(tp);
+            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
             long deadline = System.currentTimeMillis() + timeoutSeconds * 1000;
             int count = 0;
 
-            while (consumer.position(tp) < endOffset && System.currentTimeMillis() < deadline) {
+            while (hasRemaining(consumer, endOffsets) && System.currentTimeMillis() < deadline) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
                 for (ConsumerRecord<String, String> record : records) {
                     count++;
-                    System.out.printf("[%d] offset=%d key=%s%n  value=%s%n",
-                            count, record.offset(), record.key(), record.value());
-                }
-                if (count > 0 && consumer.position(tp) >= endOffset) {
-                    break;
+                    System.out.printf("[%d] partition=%d offset=%d key=%s%n  value=%s%n",
+                            count, record.partition(), record.offset(), record.key(), record.value());
                 }
             }
             LOG.info("Found {} DLQ records in topic '{}'", count, dlqTopic);
@@ -224,27 +223,61 @@ public final class ReplayTool {
         Properties consumerProps = consumerProperties(bootstrap, "durga-dryrun-" + UUID.randomUUID());
 
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps)) {
-            TopicPartition tp = new TopicPartition(topic, 0);
-            consumer.assign(List.of(tp));
-            consumer.seekToBeginning(List.of(tp));
+            List<TopicPartition> partitions = partitionsForTopic(consumer, topic);
+            consumer.assign(partitions);
+            consumer.seekToBeginning(partitions);
 
-            long endOffset = consumer.endOffsets(List.of(tp)).get(tp);
+            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
             long deadline = System.currentTimeMillis() + timeoutSeconds * 1000;
             int count = 0;
 
-            while (consumer.position(tp) < endOffset && System.currentTimeMillis() < deadline) {
+            while (hasRemaining(consumer, endOffsets) && System.currentTimeMillis() < deadline) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
                 for (ConsumerRecord<String, String> record : records) {
                     count++;
-                    System.out.printf("[%d] topic=%s offset=%d key=%s%n  value=%s%n",
-                            count, topic, record.offset(), record.key(),
+                    System.out.printf("[%d] topic=%s partition=%d offset=%d key=%s%n  value=%s%n",
+                            count, topic, record.partition(), record.offset(), record.key(),
                             truncate(record.value(), 500));
-                }
-                if (count > 0 && consumer.position(tp) >= endOffset) {
-                    break;
                 }
             }
             LOG.info("Found {} records in topic '{}'", count, topic);
+        }
+    }
+
+    private static List<TopicPartition> partitionsForTopic(KafkaConsumer<String, String> consumer, String topic) {
+        List<PartitionInfo> infos = consumer.partitionsFor(topic, Duration.ofSeconds(10));
+        if (infos == null || infos.isEmpty()) {
+            throw new IllegalArgumentException("No partitions found for topic: " + topic);
+        }
+        return infos.stream()
+                .map(info -> new TopicPartition(topic, info.partition()))
+                .toList();
+    }
+
+    private static boolean hasRemaining(KafkaConsumer<String, String> consumer,
+                                        Map<TopicPartition, Long> endOffsets) {
+        for (Map.Entry<TopicPartition, Long> entry : endOffsets.entrySet()) {
+            if (consumer.position(entry.getKey()) < entry.getValue()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static ProcessEvent parseReplayEvent(String value) throws Exception {
+        try {
+            return ProcessEvent.fromJson(value);
+        } catch (IllegalArgumentException directParseFailure) {
+            JsonNode node = MAPPER.readTree(value);
+            JsonNode originalJson = node.get("originalJson");
+            if (originalJson != null && originalJson.isTextual()) {
+                return ProcessEvent.fromJson(originalJson.asText());
+            }
+            JsonNode originalEvent = node.get("originalEvent");
+            if (originalEvent != null && originalEvent.isObject()) {
+                return MAPPER.treeToValue(originalEvent, ProcessEvent.class);
+            }
+            throw directParseFailure;
         }
     }
 

@@ -1428,6 +1428,8 @@ public class BpmnScaffolder {
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "plugins/Plugin.java", "pluginInterfaceClass");
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
+                "plugins/PluginResult.java", "pluginResultClass");
+        writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "plugins/PipelinePlugin.java", "pipelinePluginClass");
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "plugins/PluginExecutionSupport.java", "pluginExecutionSupportClass");

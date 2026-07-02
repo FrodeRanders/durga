@@ -81,6 +81,9 @@ public final class PipelinePlugin {
         record.put("timestamp", System.currentTimeMillis());
         record.put("originalBytes", originalJson != null ? originalJson.getBytes(StandardCharsets.UTF_8).length : 0);
         record.put("originalSha256", sha256(originalJson));
+        if (originalJson != null) {
+            record.put("originalJson", originalJson);
+        }
         return record.toString();
     }
 
