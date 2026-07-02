@@ -549,7 +549,7 @@ public class BpmnScaffolderTest {
         assertTrue(Files.exists(transformFile));
         String content = Files.readString(transformFile);
         assertTrue(content.contains("import org.gautelis.durga.plugins.Plugin"));
-        assertTrue(content.contains("PluginExecutionSupport.execute("));
+        assertTrue(content.contains("plugin.executeWithResult("));
         assertTrue(content.contains("outputPayload"));
         assertTrue(content.contains("mapper.readTree(outputText)"));
         assertTrue(content.contains("outputPayload,"));

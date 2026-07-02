@@ -6,6 +6,7 @@ import org.stringtemplate.v4.STGroupString;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,7 +31,8 @@ final class TaskRoutingGenerator {
             boolean transactions,
             String processId,
             List<TaskSpec> taskSpecs,
-            Set<String> existingSources
+            Set<String> existingSources,
+            Map<String, BpmnScaffolder.TaskLineage> taskLineage
     ) {
         for (TaskSpec task : taskSpecs) {
             String className = BpmnScaffolder.toClassName(task.name)
@@ -43,7 +45,7 @@ final class TaskRoutingGenerator {
             if (task.kind == TaskKind.CUSTOM || task.kind == TaskKind.SCRIPT
                     || task.kind == TaskKind.BUSINESS_RULE) {
                 generateCustomTask(group, javaOutput, outputRoot, generatedFiles,
-                        dryRun, processId, task, className, existingSources);
+                        dryRun, processId, task, className, existingSources, taskLineage);
                 continue;
             }
 
@@ -58,11 +60,38 @@ final class TaskRoutingGenerator {
                 worker.add("pluginConfig", task.pluginConfig != null ? task.pluginConfig : ".");
                 worker.add("pluginImplClass", task.pluginImplClass);
             }
+            addLineageToTemplate(worker, taskLineage, task.name);
             if (!dryRun) {
                 BpmnScaffolder.writeFile(outputFile, worker.render());
             }
             generatedFiles.add(outputRoot.relativize(outputFile).toString());
         }
+    }
+
+    private static void addLineageToTemplate(ST worker, Map<String, BpmnScaffolder.TaskLineage> taskLineage, String taskName) {
+        BpmnScaffolder.TaskLineage lineage = taskLineage.getOrDefault(taskName,
+                new BpmnScaffolder.TaskLineage(null, null, null));
+        worker.add("taskReads", toJavaListExpr(lineage.reads));
+        worker.add("taskWrites", toJavaListExpr(lineage.writes));
+        worker.add("taskStores", toJavaListExpr(lineage.stores));
+        worker.add("hasLineage", !lineage.reads.isEmpty() || !lineage.writes.isEmpty() || !lineage.stores.isEmpty());
+    }
+
+    private static String toJavaListExpr(List<String> items) {
+        if (items == null || items.isEmpty()) {
+            return "java.util.List.of()";
+        }
+        StringBuilder sb = new StringBuilder("java.util.List.of(");
+        for (int i = 0; i < items.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append("\"").append(escapeJava(items.get(i))).append("\"");
+        }
+        sb.append(")");
+        return sb.toString();
+    }
+
+    private static String escapeJava(String s) {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private static void generateCustomTask(
@@ -74,7 +103,8 @@ final class TaskRoutingGenerator {
             String processId,
             TaskSpec task,
             String className,
-            Set<String> existingSources
+            Set<String> existingSources,
+            Map<String, BpmnScaffolder.TaskLineage> taskLineage
     ) {
         String contractSimpleName = task.customContract != null
                 && task.customContract.contains(".")
@@ -111,6 +141,7 @@ final class TaskRoutingGenerator {
             worker.add("pluginConfig", task.pluginConfig != null ? task.pluginConfig : ".");
             worker.add("customImpl", task.customImpl != null ? task.customImpl : "");
             worker.add("customHash", task.customHash != null ? task.customHash : "");
+            addLineageToTemplate(worker, taskLineage, task.name);
             if (!dryRun) {
                 BpmnScaffolder.writeFile(workerFile, worker.render());
             }

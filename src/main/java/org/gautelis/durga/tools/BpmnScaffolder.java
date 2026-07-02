@@ -139,6 +139,7 @@ public class BpmnScaffolder {
         List<DataStoreSpec> dataStoreSpecs = BpmnModelCollector.collectDataStoreSpecs(model);
         List<String> dataStores = dataStoreSpecs.stream().map(spec -> spec.name).toList();
         List<DataAssociationSpec> dataAssociationSpecs = BpmnModelCollector.collectDataAssociationSpecs(model);
+        validateDataObjectSchemas(dataObjectSpecs, outputRoot);
         List<TimerSpec> timerSpecs = BpmnModelCollector.collectTimerSpecs(model, nodes);
         List<String> timers = timerSpecs.stream().map(timer -> timer.name).toList();
         List<BoundaryTimerSpec> boundaryTimerSpecs = BpmnModelCollector.collectBoundaryTimerSpecs(model, nodes);
@@ -240,9 +241,11 @@ public class BpmnScaffolder {
         // and finally scripts/config/readme assets that describe the generated topology.
         generateCoreClasses(group, coreJavaOutput, outputRoot, generatedFiles, parsed.dryRun, parsed, processId);
 
+        Map<String, TaskLineage> taskLineage = buildTaskLineage(taskSpecs, dataAssociationSpecs);
+
         TaskRoutingGenerator.generateTaskHandlers(
                 group, javaOutput, outputRoot, generatedFiles, parsed.dryRun, parsed.transactions,
-                processId, taskSpecs, existingSources
+                processId, taskSpecs, existingSources, taskLineage
         );
 
         generateStarter(group, probesOutput, outputRoot, generatedFiles, parsed.dryRun, processId);
@@ -297,6 +300,7 @@ public class BpmnScaffolder {
         String signalEventPreview = renderSignalEventPreview(group, processId);
         String processEventsWatchPreview = renderProcessEventsWatchPreview(group, processId);
         String taskOutputWatchPreview = renderTaskOutputWatchPreview(group, processId);
+        String replayRunbookPreview = renderReplayRunbookPreview(group, processId, tasks);
         String payloadPreview = GeneratedProjectSupport.renderTaskPayloadsPreview(processId, tasks);
         if (!parsed.dryRun) {
             // application.yml is merged rather than replaced so the generated project can keep
@@ -330,6 +334,23 @@ public class BpmnScaffolder {
                 writeFile(kedaPath, kedaSt.render());
                 generatedFiles.add(outputRoot.relativize(kedaPath).toString());
             }
+
+            ST aclsSt = group.getInstanceOf("aclsScript");
+            aclsSt.add("processId", processId);
+            aclsSt.add("tasks", tasks);
+            aclsSt.add("messageTopics", messageTopics);
+            aclsSt.add("callActivities", callActivities);
+            aclsSt.add("subProcesses", subProcesses);
+            Path aclsPath = outputRoot.resolve("acls.sh");
+            writeFile(aclsPath, aclsSt.render());
+            generatedFiles.add(outputRoot.relativize(aclsPath).toString());
+
+            ST alertsSt = group.getInstanceOf("prometheusAlertsYml");
+            alertsSt.add("processId", processId);
+            alertsSt.add("tasks", tasks);
+            Path alertsPath = outputRoot.resolve("alerts.yml");
+            writeFile(alertsPath, alertsSt.render());
+            generatedFiles.add(outputRoot.relativize(alertsPath).toString());
 
             Path pomPath = outputRoot.resolve("pom.xml");
             writeFile(pomPath, pomPreview);
@@ -378,6 +399,10 @@ public class BpmnScaffolder {
             Path taskOutputWatchPath = outputRoot.resolve("watch-task-output.sh");
             writeFile(taskOutputWatchPath, taskOutputWatchPreview);
             generatedFiles.add(outputRoot.relativize(taskOutputWatchPath).toString());
+
+            Path replayPath = outputRoot.resolve("replay.sh");
+            writeFile(replayPath, replayRunbookPreview);
+            generatedFiles.add(outputRoot.relativize(replayPath).toString());
 
             Path dockerfilePath = outputRoot.resolve("Dockerfile");
             try {
@@ -544,7 +569,7 @@ public class BpmnScaffolder {
         Map<String, Object> summary = GeneratedProjectSupport.buildSummary(
                 processId, tasks, allTimers, messageEvents, messageTopics, signalEvents, signalTopics,
                 boundaryEvents, callActivities, subProcesses, dataObjectSpecs, dataStoreSpecs,
-                dataAssociationSpecs, xors, ands, ors, multiInstanceSpecs, generatedFiles
+                dataAssociationSpecs, xors, ands, ors, multiInstanceSpecs, generatedFiles, taskLineage
         );
         String summaryJson = GeneratedProjectSupport.renderSummaryJson(summary);
 
@@ -554,7 +579,7 @@ public class BpmnScaffolder {
                     outputRoot, processId, tasks, allTimers, messageEvents, messageTopics, signalEvents,
                     signalTopics, boundaryEvents, callActivities, subProcesses, dataObjectSpecs,
                     dataStoreSpecs, dataAssociationSpecs, xors, ands, ors, multiInstanceSpecs,
-                    generatedFiles, payloadPreview
+                    generatedFiles, payloadPreview, taskLineage
             );
             GeneratedProjectSupport.copyBpmnModel(outputRoot, parsed.bpmnPath, generatedFiles);
 
@@ -1344,6 +1369,13 @@ public class BpmnScaffolder {
         return script.render();
     }
 
+    private static String renderReplayRunbookPreview(STGroupString group, String processId, List<String> tasks) {
+        ST script = group.getInstanceOf("replayRunbookScript");
+        script.add("processId", processId);
+        script.add("tasks", tasks);
+        return script.render();
+    }
+
     private static String renderDockerfile(STGroupString group, String processId) {
         ST tmpl = group.getInstanceOf("dockerfileTemplate");
         tmpl.add("className", toClassName(processId));
@@ -1885,5 +1917,76 @@ public class BpmnScaffolder {
             }
         }
         return outputs;
+    }
+
+    static class TaskLineage {
+        final List<String> reads;
+        final List<String> writes;
+        final List<String> stores;
+
+        TaskLineage(List<String> reads, List<String> writes, List<String> stores) {
+            this.reads = reads != null ? reads : List.of();
+            this.writes = writes != null ? writes : List.of();
+            this.stores = stores != null ? stores : List.of();
+        }
+    }
+
+    private static void validateDataObjectSchemas(List<DataObjectSpec> dataObjectSpecs, Path outputRoot) {
+        for (DataObjectSpec spec : dataObjectSpecs) {
+            if (spec.schema == null || spec.schema.isBlank()) {
+                continue;
+            }
+            Path resourcesDir = outputRoot.resolve("src/main/resources");
+            Path schemaPath = SchemaSupport.resolveSchemaRef(spec.schema, resourcesDir);
+            if (schemaPath == null) {
+                LOG.warn("Data object '{}' references schema '{}' which could not be resolved in '{}'",
+                        spec.name, spec.schema, resourcesDir);
+                continue;
+            }
+            List<String> errors = SchemaSupport.validateSchema(schemaPath);
+            if (!errors.isEmpty()) {
+                LOG.warn("Schema validation issues for '{}' ({}): {}", spec.name, schemaPath, errors);
+            } else {
+                LOG.info("Data object '{}' schema validated: {}", spec.name, schemaPath);
+            }
+        }
+    }
+
+    private static Map<String, TaskLineage> buildTaskLineage(
+            List<TaskSpec> taskSpecs,
+            List<DataAssociationSpec> dataAssociationSpecs
+    ) {
+        Map<String, TaskLineage> lineage = new LinkedHashMap<>();
+        Map<String, List<String>> taskReads = new LinkedHashMap<>();
+        Map<String, List<String>> taskWrites = new LinkedHashMap<>();
+        Map<String, List<String>> taskStores = new LinkedHashMap<>();
+
+        for (DataAssociationSpec assoc : dataAssociationSpecs) {
+            String taskName = assoc.taskName;
+            if (taskName == null) {
+                continue;
+            }
+            if ("input".equals(assoc.direction)) {
+                taskReads.computeIfAbsent(taskName, k -> new ArrayList<>())
+                        .addAll(assoc.sources);
+            } else {
+                taskWrites.computeIfAbsent(taskName, k -> new ArrayList<>())
+                        .addAll(assoc.sources);
+                if (assoc.target != null && !assoc.target.isBlank()) {
+                    taskStores.computeIfAbsent(taskName, k -> new ArrayList<>())
+                            .add(assoc.target);
+                }
+            }
+        }
+
+        for (TaskSpec task : taskSpecs) {
+            String name = task.name;
+            lineage.put(name, new TaskLineage(
+                    taskReads.getOrDefault(name, List.of()),
+                    taskWrites.getOrDefault(name, List.of()),
+                    taskStores.getOrDefault(name, List.of())
+            ));
+        }
+        return lineage;
     }
 }

@@ -22,16 +22,21 @@ public final class PluginExecutionSupport {
         String mode = options.getOrDefault("handleMode", options.getOrDefault("dataHandleMode", "payload"));
         String pluginConfig = options.getOrDefault("pluginConfig", config);
         if (!"materialize".equalsIgnoreCase(mode)) {
-            return new Result(plugin.execute(payload, pluginConfig), payload, false);
+            PluginResult pluginResult = plugin.executeWithResult(payload, pluginConfig);
+            return new Result(pluginResult.output(), payload, false, pluginResult.idempotencyKey(),
+                    pluginResult.errorStrategy(), pluginResult.metadata());
         }
 
         Handle inputHandle = findHandle(payload, ObjectStoreSupport.handleField(options));
         if (inputHandle == null) {
-            return new Result(plugin.execute(payload, pluginConfig), payload, false);
+            PluginResult pluginResult = plugin.executeWithResult(payload, pluginConfig);
+            return new Result(pluginResult.output(), payload, false, pluginResult.idempotencyKey(),
+                    pluginResult.errorStrategy(), pluginResult.metadata());
         }
 
         byte[] rawInput = ObjectStoreSupport.read(inputHandle.uri());
-        byte[] rawOutput = plugin.execute(rawInput, pluginConfig);
+        PluginResult pluginResult = plugin.executeWithResult(rawInput, pluginConfig);
+        byte[] rawOutput = pluginResult.output();
         if (rawOutput == null) {
             rawOutput = rawInput;
         }
@@ -68,7 +73,8 @@ public final class PluginExecutionSupport {
         if (Boolean.parseBoolean(options.getOrDefault("includeFormat", "true"))) {
             output.set("format", FormatDetector.toJson(detection));
         }
-        return new Result(output.toString().getBytes(StandardCharsets.UTF_8), rawInput, true);
+        return new Result(output.toString().getBytes(StandardCharsets.UTF_8), rawInput, true,
+                pluginResult.idempotencyKey(), pluginResult.errorStrategy(), pluginResult.metadata());
     }
 
     static Handle findHandle(byte[] payload, String handleField) throws Exception {
@@ -88,7 +94,10 @@ public final class PluginExecutionSupport {
         return new Handle(name, uri, mediaType, schema);
     }
 
-    public record Result(byte[] output, byte[] pluginInput, boolean materializedHandle) {
+    public record Result(byte[] output, byte[] pluginInput, boolean materializedHandle,
+                         String idempotencyKey,
+                         PluginResult.ErrorStrategy errorStrategy,
+                         java.util.Map<String, Object> metadata) {
     }
 
     record Handle(String name, String uri, String mediaType, String schema) {

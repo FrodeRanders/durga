@@ -480,6 +480,105 @@ java -cp "$JAR" org.gautelis.durga.generated.probes.%starterClass%TaskOutputWatc
   "$BOOTSTRAP" "$TASK_ID" "$INSTANCE_ID" "$MAX_RECORDS" "$TIMEOUT_SECONDS"
 >>
 
+replayRunbookScript(processId, tasks) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+DURGA_JAR=${DURGA_JAR:-durga.jar}
+COMMAND=${1:-help}
+
+if [[ ! -f "$DURGA_JAR" ]]; then
+  echo "Set DURGA_JAR to the path of the durga shaded jar"
+  echo "Example: DURGA_JAR=../durga/target/durga-0.1.0-beta.1.jar ./replay.sh <command>"
+  exit 1
+fi
+
+REPLAY_CMD="java -cp $DURGA_JAR org.gautelis.durga.tools.ReplayTool"
+
+case "$COMMAND" in
+  inspect-dlq)
+    shift
+    TASK=${1:-}
+    if [[ -z "$TASK" ]]; then
+      echo "Usage: $0 inspect-dlq <task-id>"
+      echo "Available DLQ topics:"
+      %tasks:{t|echo "  %processId%_%t%_dlq"\n}%
+      exit 1
+    fi
+    DLQ_TOPIC="%processId%_${TASK}_dlq"
+    $REPLAY_CMD inspect-dlq "$DLQ_TOPIC" --bootstrap "$BOOTSTRAP"
+    ;;
+
+  replay-dlq)
+    shift
+    TASK=${1:-}
+    DRY_RUN=${2:-}
+    if [[ -z "$TASK" ]]; then
+      echo "Usage: $0 replay-dlq <task-id> [--dry-run]"
+      echo "Available DLQ topics:"
+      %tasks:{t|echo "  %processId%_%t%_dlq"\n}%
+      exit 1
+    fi
+    DLQ_TOPIC="%processId%_${TASK}_dlq"
+    if [[ "$DRY_RUN" == "--dry-run" ]]; then
+      $REPLAY_CMD replay-dlq "$DLQ_TOPIC" --dry-run --bootstrap "$BOOTSTRAP"
+    else
+      echo "Replaying from $DLQ_TOPIC ..."
+      $REPLAY_CMD replay-dlq "$DLQ_TOPIC" --bootstrap "$BOOTSTRAP"
+    fi
+    ;;
+
+  replay-offset)
+    TOPIC=${2:-}
+    PARTITION=${3:-0}
+    FROM_OFFSET=${4:-}
+    TO_OFFSET=${5:-}
+    if [[ -z "$TOPIC" || -z "$FROM_OFFSET" || -z "$TO_OFFSET" ]]; then
+      echo "Usage: $0 replay-offset <topic> <partition> <from-offset> <to-offset>"
+      exit 1
+    fi
+    $REPLAY_CMD replay-offset "$TOPIC" "$PARTITION" "$FROM_OFFSET" "$TO_OFFSET" --bootstrap "$BOOTSTRAP"
+    ;;
+
+  help)
+    echo "Replay Runbook for process: %processId%"
+    echo ""
+    echo "Inspecting DLQ records for a failed task:"
+    echo "  ./replay.sh inspect-dlq <task-id>"
+    echo ""
+    echo "Previewing a DLQ replay (dry-run):"
+    echo "  ./replay.sh replay-dlq <task-id> --dry-run"
+    echo ""
+    echo "Executing a DLQ replay:"
+    echo "  ./replay.sh replay-dlq <task-id>"
+    echo ""
+    echo "Replaying from an offset range:"
+    echo "  ./replay.sh replay-offset <topic> 0 <from> <to>"
+    echo ""
+    echo "Available tasks:"
+    %tasks:{t|echo "  %t%"\n}%
+    ;;
+
+  *)
+    echo "Replay Runbook for process: %processId%"
+    echo ""
+    echo "Commands:"
+    echo "  inspect-dlq     <task-id>             List DLQ records for inspection"
+    echo "  replay-dlq      <task-id> [--dry-run] Replay from a task's DLQ"
+    echo "  replay-offset   <topic> <part> <from> <to>  Replay from offset range"
+    echo ""
+    echo "Examples:"
+    %tasks:{t|echo "  ./replay.sh inspect-dlq %t%"\n}%
+    echo ""
+    echo "  ./replay.sh replay-dlq %tasks.first% --dry-run"
+    echo "  ./replay.sh replay-dlq %tasks.first%"
+    echo ""
+    echo "Set DURGA_JAR to point at the Durga shaded jar before running."
+    ;;
+esac
+>>
+
 demoScenarioRunnerClass(packageName, className, processId, firstTask, lastTask, eventsTopic) ::= <<
 package %packageName%;
 
@@ -3424,4 +3523,89 @@ spec:
                 - "pipeline.jar"
             initialDelaySeconds: 10
             periodSeconds: 15
+>>
+
+aclsScript(processId, tasks, messageTopics, callActivities, subProcesses) ::= <<
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
+ADMIN=${ADMIN:-admin-client}
+
+echo "Applying Kafka ACLs for process %processId% ..."
+
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Read --topic process-events --command-config $ADMIN
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Read --topic process-events-monitor --command-config $ADMIN
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Write --topic process-events --command-config $ADMIN
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Write --topic vannak-metadata-events --command-config $ADMIN
+%tasks:{t|
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Read --topic %processId%_%t%_input --command-config $ADMIN
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Write --topic %processId%_%t%_output --command-config $ADMIN
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Write --topic %processId%_%t%_dlq --command-config $ADMIN
+}%
+%messageTopics:{t|
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Read --topic %t% --command-config $ADMIN
+}%
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-starter --operation Write --topic %processId%_start --command-config $ADMIN
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:durga-operator --operation Read --topic %processId% --resource-pattern-type prefixed --command-config $ADMIN
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:durga-operator --operation Read --topic %processId%_ --resource-pattern-type prefixed --command-config $ADMIN
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:durga-monitoring --operation Read --topic process-events --command-config $ADMIN
+
+echo "Done."
+>>
+
+prometheusAlertsYml(processId, tasks) ::= <<
+groups:
+  - name: "durga-%processId%"
+    rules:
+      - alert: "%processId%_dlq_depth"
+        expr: sum(kafka_server_BrokerTopicMetrics_Count{name="TotalProduceRequestsPerSec",topic=~"%processId%_.*_dlq"}) > 0
+        for: 10m
+        labels:
+          severity: warning
+          process: "%processId%"
+        annotations:
+          summary: "DLQ topic has new messages for process %processId%"
+          description: "The dead-letter queue for process %processId% has received messages. Run ./replay.sh inspect-dlq to investigate."
+          runbook: "Use DURGA_JAR=path/to/durga.jar ./replay.sh replay-dlq <task-id> --dry-run to preview, then without --dry-run to replay."
+
+      - alert: "%processId%_stuck_instance"
+        expr: sum(durga_process_state{process="%processId%",state="STARTED"}) > 0
+        for: 1h
+        labels:
+          severity: warning
+          process: "%processId%"
+        annotations:
+          summary: "Process instance stuck in STARTED state for over 1 hour"
+          description: "Instance {{ $labels.instance }} is stuck. Check worker logs and DLQ topics."
+
+      - alert: "%processId%_high_latency"
+        expr: histogram_quantile(0.95, durga_activity_latency_seconds{process="%processId%"}) > 300
+        for: 15m
+        labels:
+          severity: warning
+          process: "%processId%"
+        annotations:
+          summary: "P95 activity latency exceeds 5 minutes"
+          description: "Activity {{ $labels.activity }} in process %processId% has high latency. Check worker scaling and Kafka consumer lag."
+
+      - alert: "%processId%_consumer_lag"
+        expr: sum(kafka_consumer_fetch_manager_records_lag{client_id=~"%processId%-.*"}) > 10000
+        for: 15m
+        labels:
+          severity: warning
+          process: "%processId%"
+        annotations:
+          summary: "Consumer lag exceeds 10,000 records"
+          description: "Worker {{ $labels.client_id }} is falling behind. Consider scaling up or investigating processing time."
+
+      - alert: "%processId%_worker_down"
+        expr: up{job="%processId%-worker"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          process: "%processId%"
+        annotations:
+          summary: "Worker instance is down"
+          description: "Worker {{ $labels.instance }} has been unreachable for 5 minutes."
 >>

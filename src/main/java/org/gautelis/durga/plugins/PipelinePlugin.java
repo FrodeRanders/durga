@@ -142,7 +142,7 @@ public final class PipelinePlugin {
         return message.length() <= 512 ? message : message.substring(0, 512);
     }
 
-    private static String sha256(String value) {
+    public static String sha256(String value) {
         if (value == null) {
             return "";
         }

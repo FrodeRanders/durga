@@ -4,9 +4,14 @@ connectSourceConfig(processId, sourceTopics) ::= <<
   "config": {
     "connector.class": "<fill in connector class>",
     "tasks.max": "1",
-    "topics": "%sourceTopics%"
+    "topics": "%sourceTopics%",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "errors.tolerance": "none",
+    "errors.log.enable": true,
+    "errors.log.include.messages": true
   },
-  "_comment": "Fill in connector.class and provider-specific config (connection.url, table.whitelist, etc.). The topics field lists the Kafka topics this source writes to."
+  "_comment": "Fill in connector.class and provider-specific config. Set key.converter/value.converter for your data format (Avro/Protobuf/JSON)."
 }
 >>
 
@@ -16,9 +21,17 @@ connectSinkConfig(processId, sinkTopics) ::= <<
   "config": {
     "connector.class": "<fill in connector class>",
     "tasks.max": "1",
-    "topics": "%sinkTopics%"
+    "topics": "%sinkTopics%",
+    "topics.regex": "",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "errors.tolerance": "none",
+    "errors.log.enable": true,
+    "errors.log.include.messages": true,
+    "errors.deadletterqueue.topic.name": "%processId%-connect-dlq",
+    "errors.deadletterqueue.context.headers.enable": true
   },
-  "_comment": "Fill in connector.class and provider-specific config (connection.url, s3.bucket.name, etc.). The topics field lists the Kafka topics this sink reads from."
+  "_comment": "Fill in connector.class and provider-specific config. Set key.converter/value.converter for your data format."
 }
 >>
 
@@ -29,6 +42,12 @@ dataStoreConnectConfig(spec) ::= <<
     "connector.class": "%spec.connectorClass%",
     "tasks.max": "1",
     "topics": "%spec.topics%",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "errors.tolerance": "all",
+    "errors.log.enable": true,
+    "errors.log.include.messages": true,
+    "errors.deadletterqueue.topic.name": "%spec.name%-dlq",
     "durga.data.store": "%spec.storeName%",
     "durga.data.store.kind": "%spec.kind%",
     "durga.data.store.uri": "%spec.uri%"

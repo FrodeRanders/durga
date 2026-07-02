@@ -1,7 +1,7 @@
 group scaffold;
 delimiters "%", "%"
 
-workerClass(packageName, className, processId, taskId, taskType) ::= <<
+workerClass(packageName, className, processId, taskId, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
 package %packageName%;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -26,6 +26,10 @@ public class %className% {
     @Inject
     @Channel("%processId%_%taskId%_output")
     Emitter<String> outputEmitter;
+
+    @Inject
+    @Channel("vannak-metadata-events")
+    Emitter<String> vannakMetadataEmitter;
 
     @Inject
     ScopeCancellationRegistry cancellationRegistry;
@@ -60,12 +64,24 @@ public class %className% {
 
         outputEmitter.send(outputEvent.toJson());
         processEventsEmitter.send(outputEvent.toJson());
+        %if(hasLineage)%
+        vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
+                inputEvent,
+                "%taskId%",
+                "builtin:%taskId%",
+                "%taskType%",
+                msg.getPayload(),
+                outputPayload,
+                %taskReads%,
+                %taskWrites%,
+                %taskStores%).toJson());
+        %endif%
         return msg.ack();
     }
 }
 >>
 
-transactionalWorkerClass(packageName, className, processId, taskId, taskType) ::= <<
+transactionalWorkerClass(packageName, className, processId, taskId, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
 package %packageName%;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -163,7 +179,7 @@ public class %className% {
 }
 >>
 
-userTaskHandlerClass(packageName, className, processId, taskId, taskType) ::= <<
+userTaskHandlerClass(packageName, className, processId, taskId, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
 package %packageName%;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -220,7 +236,7 @@ public class %className% {
 }
 >>
 
-manualTaskHandlerClass(packageName, className, processId, taskId, taskType) ::= <<
+manualTaskHandlerClass(packageName, className, processId, taskId, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
 package %packageName%;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -277,7 +293,7 @@ public class %className% {
 }
 >>
 
-callActivityTaskStubClass(packageName, className, processId, taskId, taskType) ::= <<
+callActivityTaskStubClass(packageName, className, processId, taskId, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
 package %packageName%;
 
 // Call activities are implemented by the generated *CallActivityService class.
@@ -726,7 +742,7 @@ public class %className% {
 }
 >>
 
-sendTaskClass(packageName, className, processId, taskId, taskType) ::= <<
+sendTaskClass(packageName, className, processId, taskId, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
 package %packageName%;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -795,7 +811,7 @@ public class %className% {
 }
 >>
 
-receiveTaskClass(packageName, className, processId, taskId, taskType) ::= <<
+receiveTaskClass(packageName, className, processId, taskId, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
 package %packageName%;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -1466,7 +1482,7 @@ public interface %className% extends Plugin {
 }
 >>
 
-customDelegatingWorkerClass(packageName, className, contractClassName, processId, taskId, taskType, pluginConfig, customImpl, customHash) ::= <<
+customDelegatingWorkerClass(packageName, className, contractClassName, processId, taskId, taskType, pluginConfig, customImpl, customHash, taskReads, taskWrites, taskStores, hasLineage) ::= <<
 package %packageName%;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -1567,6 +1583,18 @@ public class %className% {
             );
             outputEmitter.send(outputEvent.toJson());
             processEventsEmitter.send(outputEvent.toJson());
+            %if(hasLineage)%
+            vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
+                    inputEvent,
+                    "%taskId%",
+                    "custom:%taskId%",
+                    "%pluginConfig%",
+                    payload,
+                    outputPayload,
+                    %taskReads%,
+                    %taskWrites%,
+                    %taskStores%).toJson());
+            %else%
             vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
                     inputEvent,
                     "%taskId%",
@@ -1575,6 +1603,7 @@ public class %className% {
                     payload,
                     outputPayload
             ).toJson());
+            %endif%
         } catch (Exception e) {
             String error = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
                     msg.getPayload(), "custom:%taskId%", e.getMessage());
@@ -1601,7 +1630,7 @@ public class %className% {
 }
 >>
 
-pluginExecutorClass(packageName, className, processId, taskId, taskType, pluginRef, pluginConfig, pluginImplClass) ::= <<
+pluginExecutorClass(packageName, className, processId, taskId, taskType, pluginRef, pluginConfig, pluginImplClass, taskReads, taskWrites, taskStores, hasLineage) ::= <<
 package %packageName%;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -1613,6 +1642,7 @@ import org.eclipse.microprofile.reactive.messaging.Message;
 import org.gautelis.durga.ProcessEvent;
 import org.gautelis.durga.ScopeCancellationRegistry;
 import org.gautelis.durga.plugins.Plugin;
+import org.gautelis.durga.plugins.PluginResult;
 import %pluginImplClass%;
 import java.util.concurrent.CompletionStage;
 
@@ -1649,11 +1679,20 @@ public class %className% {
             String payload = inputEvent.payload() != null
                     ? new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
                     : "{}";
-            org.gautelis.durga.plugins.PluginExecutionSupport.Result pluginResult =
-                    org.gautelis.durga.plugins.PluginExecutionSupport.execute(
-                            plugin,
-                            payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                            "%pluginConfig%");
+            PluginResult pluginResult = plugin.executeWithResult(
+                    payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    "%pluginConfig%");
+            if (pluginResult.errorStrategy() == PluginResult.ErrorStrategy.SKIP) {
+                return msg.ack();
+            }
+            if (pluginResult.errorStrategy() == PluginResult.ErrorStrategy.DLQ) {
+                String dlqRecord = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
+                        msg.getPayload(), "%pluginRef%",
+                        pluginResult.sideEffectDescription() != null
+                                ? pluginResult.sideEffectDescription() : "Plugin routed to DLQ");
+                dlqEmitter.send(dlqRecord);
+                return msg.ack();
+            }
             byte[] output = pluginResult.output();
             java.util.Map<String, Object> outputPayload = inputEvent.payload();
             if (output != null) {
@@ -1687,6 +1726,18 @@ public class %className% {
             );
             outputEmitter.send(outputEvent.toJson());
             processEventsEmitter.send(outputEvent.toJson());
+            %if(hasLineage)%
+            vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
+                    inputEvent,
+                    "%taskId%",
+                    "%pluginRef%",
+                    "%pluginConfig%",
+                    payload,
+                    outputPayload,
+                    %taskReads%,
+                    %taskWrites%,
+                    %taskStores%).toJson());
+            %else%
             vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
                     inputEvent,
                     "%taskId%",
@@ -1695,6 +1746,7 @@ public class %className% {
                     payload,
                     outputPayload
             ).toJson());
+            %endif%
         } catch (Exception e) {
             String error = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
                     msg.getPayload(), "%pluginRef%", e.getMessage());

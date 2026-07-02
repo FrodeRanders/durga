@@ -15,6 +15,9 @@ public final class VannakMetadata {
     private VannakMetadata() {
     }
 
+    /**
+     * Creates a data-individual metadata event for a plugin execution.
+     */
     public static DataIndividualMetadataEvent pluginEvent(
             ProcessEvent inputEvent,
             String activityId,
@@ -22,6 +25,29 @@ public final class VannakMetadata {
             String pluginConfig,
             String inputPayloadJson,
             Map<String, Object> outputPayload
+    ) {
+        return pluginEvent(inputEvent, activityId, pluginId, pluginConfig,
+                inputPayloadJson, outputPayload, null, null, null);
+    }
+
+    /**
+     * Creates a data-individual metadata event for a plugin execution, with
+     * explicit data asset lineage (reads/writes/stores) from BPMN data associations.
+     *
+     * @param reads  logical data assets consumed by this task
+     * @param writes logical data assets produced by this task
+     * @param stores physical data stores written to by this task
+     */
+    public static DataIndividualMetadataEvent pluginEvent(
+            ProcessEvent inputEvent,
+            String activityId,
+            String pluginId,
+            String pluginConfig,
+            String inputPayloadJson,
+            Map<String, Object> outputPayload,
+            java.util.List<String> reads,
+            java.util.List<String> writes,
+            java.util.List<String> stores
     ) {
         String dataIndividualId = dataIndividualId(inputEvent, outputPayload);
         Map<String, Object> passive = new LinkedHashMap<>();
@@ -41,6 +67,15 @@ public final class VannakMetadata {
             active.put("durga:outputFields", outputPayload.keySet().stream().sorted().toList());
             copyNested(outputPayload, active, "format", "durga:format");
             copyNested(outputPayload, active, "dataHandle", "durga:dataHandle");
+        }
+        if (reads != null && !reads.isEmpty()) {
+            active.put("durga:reads", reads);
+        }
+        if (writes != null && !writes.isEmpty()) {
+            active.put("durga:writes", writes);
+        }
+        if (stores != null && !stores.isEmpty()) {
+            active.put("durga:stores", stores);
         }
 
         String sourcePayloadRef = sourcePayloadRef(outputPayload);

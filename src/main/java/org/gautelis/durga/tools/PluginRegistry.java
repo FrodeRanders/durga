@@ -152,6 +152,51 @@ final class PluginRegistry {
             desc.implementation.className = (String) impl.get("class");
         }
 
+        Map<String, Object> input = (Map<String, Object>) descMap.get("input");
+        if (input != null) {
+            desc.input = new PluginDescriptor.PluginInputSchema();
+            desc.input.schema = (Map<String, Object>) input.get("schema");
+            desc.input.mediaType = (String) input.get("mediaType");
+        }
+
+        Map<String, Object> output = (Map<String, Object>) descMap.get("output");
+        if (output != null) {
+            desc.output = new PluginDescriptor.PluginOutputSchema();
+            desc.output.schema = (Map<String, Object>) output.get("schema");
+            desc.output.mediaType = (String) output.get("mediaType");
+        }
+
+        Map<String, Object> metadata = (Map<String, Object>) descMap.get("metadata");
+        if (metadata != null) {
+            desc.metadata = new PluginDescriptor.PluginMetadata();
+            desc.metadata.inputMediaTypes = (List<String>) metadata.get("inputMediaTypes");
+            desc.metadata.outputMediaTypes = (List<String>) metadata.get("outputMediaTypes");
+            desc.metadata.sideEffects = (String) metadata.get("sideEffects");
+            desc.metadata.idempotencyStrategy = (String) metadata.get("idempotencyStrategy");
+        }
+
+        Map<String, Object> config = (Map<String, Object>) descMap.get("config");
+        if (config != null) {
+            desc.config = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> entry : config.entrySet()) {
+                PluginDescriptor.PluginConfigField field = new PluginDescriptor.PluginConfigField();
+                Object rawValue = entry.getValue();
+                if (rawValue instanceof Map<?, ?> fieldDef) {
+                    field.type = (String) fieldDef.get("type");
+                    field.required = Boolean.TRUE.equals(fieldDef.get("required"));
+                    field.description = (String) fieldDef.get("description");
+                    field.defaultValue = fieldDef.get("defaultValue") != null
+                            ? String.valueOf(fieldDef.get("defaultValue")) : null;
+                    @SuppressWarnings("unchecked")
+                    List<String> values = (List<String>) fieldDef.get("values");
+                    field.values = values;
+                } else {
+                    field.description = String.valueOf(rawValue);
+                }
+                desc.config.put(entry.getKey(), field);
+            }
+        }
+
         if (!desc.isAllowed()) {
             System.err.println("Warning: plugin '" + desc.id + "' has status '" + desc.status
                     + "' and will not be available for generation");

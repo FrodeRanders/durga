@@ -2,6 +2,7 @@ package org.gautelis.durga;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.Instant;
 import java.util.Map;
@@ -137,5 +138,50 @@ public record ProcessEvent(
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("Failed to parse ProcessEvent", e);
         }
+    }
+
+    /**
+     * Checks whether this event carries replay markers in its payload.
+     */
+    @JsonIgnore
+    public boolean isReplay() {
+        return payload != null && (payload.containsKey("_replayReason") || payload.containsKey("_replaySource"));
+    }
+
+    /**
+     * Returns the replay reason if present, or null.
+     */
+    @JsonIgnore
+    public String replayReason() {
+        Object value = payload != null ? payload.get("_replayReason") : null;
+        return value != null ? String.valueOf(value) : null;
+    }
+
+    /**
+     * Creates a copy of this event with replay markers in the payload.
+     */
+    public ProcessEvent withReplay(String reason, String source) {
+        Map<String, Object> enrichedPayload = new java.util.LinkedHashMap<>();
+        if (payload != null) {
+            enrichedPayload.putAll(payload);
+        }
+        enrichedPayload.put("_replayReason", reason);
+        enrichedPayload.put("_replaySource", source);
+        return new ProcessEvent(
+                processInstanceId, processId, activityId, tokenId, correlationId,
+                enrichedPayload, status, error, eventType, processVersion, businessKey,
+                timestamp
+        );
+    }
+
+    /**
+     * Creates a copy of this event with a new process instance identifier, for replay isolation.
+     */
+    public ProcessEvent withInstanceId(String newInstanceId) {
+        return new ProcessEvent(
+                newInstanceId, processId, activityId, tokenId, correlationId,
+                payload, status, error, eventType, processVersion, businessKey,
+                timestamp
+        );
     }
 }

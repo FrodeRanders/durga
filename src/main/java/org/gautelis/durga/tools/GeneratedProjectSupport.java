@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -199,7 +200,8 @@ final class GeneratedProjectSupport {
             List<NodeInfo> ands,
             List<NodeInfo> ors,
             List<MultiInstanceSpec> multiInstanceSpecs,
-            List<String> generatedFiles
+            List<String> generatedFiles,
+            Map<String, BpmnScaffolder.TaskLineage> taskLineage
     ) {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("processId", processId);
@@ -215,6 +217,18 @@ final class GeneratedProjectSupport {
         summary.put("dataObjects", dataObjects.stream().map(GeneratedProjectSupport::dataObjectSummary).toList());
         summary.put("dataStores", dataStores.stream().map(GeneratedProjectSupport::dataStoreSummary).toList());
         summary.put("dataAssociations", dataAssociations.stream().map(GeneratedProjectSupport::dataAssociationSummary).toList());
+        if (taskLineage != null && !taskLineage.isEmpty()) {
+            List<Map<String, Object>> lineageEntries = new ArrayList<>();
+            for (Map.Entry<String, BpmnScaffolder.TaskLineage> entry : taskLineage.entrySet()) {
+                Map<String, Object> entryMap = new LinkedHashMap<>();
+                entryMap.put("task", entry.getKey());
+                entryMap.put("reads", entry.getValue().reads);
+                entryMap.put("writes", entry.getValue().writes);
+                entryMap.put("stores", entry.getValue().stores);
+                lineageEntries.add(entryMap);
+            }
+            summary.put("taskLineage", lineageEntries);
+        }
         summary.put("xorGateways", xors.stream().map(info -> info.name).toList());
         summary.put("orGateways", ors.stream().map(info -> info.name).toList());
         summary.put("andGateways", ands.stream().map(info -> info.name).toList());
@@ -297,7 +311,8 @@ final class GeneratedProjectSupport {
             List<NodeInfo> ors,
             List<MultiInstanceSpec> multiInstanceSpecs,
             List<String> generatedFiles,
-            String payloadPreview
+            String payloadPreview,
+            Map<String, BpmnScaffolder.TaskLineage> taskLineage
     ) {
         Path readmePath = outputRoot.resolve("README.md");
         StringBuilder builder = new StringBuilder();
@@ -305,7 +320,20 @@ final class GeneratedProjectSupport {
         builder.append("Process: `").append(processId).append("`\n\n");
         builder.append("## Tasks\n");
         for (String task : tasks) {
-            builder.append("- ").append(task).append("\n");
+            builder.append("- `").append(task).append("`");
+            BpmnScaffolder.TaskLineage lineage = taskLineage != null ? taskLineage.get(task) : null;
+            if (lineage != null && (!lineage.reads.isEmpty() || !lineage.writes.isEmpty() || !lineage.stores.isEmpty())) {
+                if (!lineage.reads.isEmpty()) {
+                    builder.append(" reads=").append(lineage.reads);
+                }
+                if (!lineage.writes.isEmpty()) {
+                    builder.append(" writes=").append(lineage.writes);
+                }
+                if (!lineage.stores.isEmpty()) {
+                    builder.append(" stores=").append(lineage.stores);
+                }
+            }
+            builder.append("\n");
         }
         if (!timers.isEmpty()) {
             builder.append("\n## Timers\n");
@@ -465,6 +493,14 @@ final class GeneratedProjectSupport {
         builder.append("./watch-process-events.sh <instance-id>\n");
         builder.append("./watch-task-output.sh ").append(tasks.isEmpty() ? "task_id" : tasks.getFirst()).append("\n");
         builder.append("./watch-task-output.sh ").append(tasks.isEmpty() ? "task_id" : tasks.getFirst()).append(" <instance-id>\n");
+        builder.append("```\n");
+        builder.append("\n## Replay Runbook\n");
+        builder.append("Use `replay.sh` to inspect and replay failed records from dead-letter queues or topic offset ranges.\n\n");
+        builder.append("```\n");
+        builder.append("DURGA_JAR=../durga/target/durga-0.1.0-beta.1.jar ./replay.sh\n");
+        builder.append("./replay.sh inspect-dlq ").append(tasks.isEmpty() ? "task_id" : tasks.getFirst()).append("\n");
+        builder.append("./replay.sh replay-dlq ").append(tasks.isEmpty() ? "task_id" : tasks.getFirst()).append(" --dry-run\n");
+        builder.append("./replay.sh replay-dlq ").append(tasks.isEmpty() ? "task_id" : tasks.getFirst()).append("\n");
         builder.append("```\n");
         builder.append("\n## Example Task Payloads\n");
         builder.append("The generator also writes `task-payloads.json` with sample business-shaped input data per task.\n\n");

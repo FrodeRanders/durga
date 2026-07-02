@@ -1,6 +1,9 @@
 package org.gautelis.durga.plugins;
 
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 /**
  * Contract for data pipeline plugins.
@@ -8,11 +11,16 @@ import java.nio.charset.StandardCharsets;
  * Plugins receive a raw payload and a configuration string, and return a
  * transformed payload. If the transformation fails, they throw.
  * <p>
- * The generated worker always calls {@link #execute(byte[], String)}.
+ * The generated worker always calls {@link #executeWithResult(byte[], String)},
+ * which by default wraps the legacy {@link #execute(byte[], String)} with an
+ * idempotency key.
  * <ul>
  * <li><b>Text / JSON plugins</b> — override {@link #execute(String, String)}.
  *     The default {@code byte[]} overload handles UTF-8 conversion.</li>
  * <li><b>Binary plugins</b> — override {@link #execute(byte[], String)} directly.</li>
+ * <li><b>Idempotency-aware plugins</b> — override
+ *     {@link #executeWithResult(byte[], String)} to return structured
+ *     {@link PluginResult} instances with idempotency keys and error strategies.</li>
  * </ul>
  */
 public interface Plugin {
@@ -49,6 +57,54 @@ public interface Plugin {
     default String execute(String payload, String config) throws Exception {
         throw new UnsupportedOperationException(
                 "Plugin does not support text payloads — override execute(byte[], String) instead");
+    }
+
+    /**
+     * Structured execution that returns a {@link PluginResult} with idempotency
+     * key and optional metadata. The generated worker calls this method.
+     * <p>
+     * The default implementation delegates to {@link #execute(byte[], String)}
+     * and wraps the result with a content-based idempotency key.
+     * <p>
+     * Override this method directly if your plugin needs to:
+     * <ul>
+     * <li>Declare an explicit idempotency strategy</li>
+     * <li>Return side-effect metadata</li>
+     * <li>Signal a non-exceptional error strategy (DLQ, skip)</li>
+     * </ul>
+     *
+     * @param payload raw input bytes
+     * @param config  plugin configuration string
+     * @return structured plugin result
+     * @throws Exception if processing fails and the error strategy is FAIL
+     */
+    default PluginResult executeWithResult(byte[] payload, String config) throws Exception {
+        byte[] output = execute(payload, config);
+        String idempotencyKey = idempotencyKey(payload, config);
+        return PluginResult.success(output, idempotencyKey);
+    }
+
+    /**
+     * Generates a content-based idempotency key from the input payload and config.
+     * <p>
+     * Override this method if your plugin needs a specific key strategy
+     * (e.g. extracting a business key from the payload instead of hashing bytes).
+     *
+     * @param payload raw input bytes
+     * @param config  plugin configuration string
+     * @return an idempotency key string
+     */
+    default String idempotencyKey(byte[] payload, String config) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(payload != null ? payload : new byte[0]);
+            if (config != null) {
+                digest.update(config.getBytes(StandardCharsets.UTF_8));
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
     }
 
     static String toString(byte[] data) {
