@@ -22,9 +22,12 @@ Plugins are defined by YAML descriptors under \filepath{plugins/} and indexed by
 
 \subsection{Governed categories}
 
-Each plugin category enforces a contract: topic naming, lifecycle events, and error
-channel conventions. The scaffolder validates that generated executors follow the
-category contract.
+Each plugin category has an intended contract for topic naming, lifecycle events,
+and error channel conventions. These are category semantics --- the generic plugin
+executor currently emits \texttt{ACTIVITY\_COMPLETED} on success and
+\texttt{PROCESS\_FAILED} on exceptions regardless of plugin category; category-specific
+events (such as \texttt{GATEWAY\_TAKEN} for route or \texttt{ACTIVITY\_ESCALATED}
+for validate) are not yet enforced at runtime.
 
 \begin{longtable}{|>{\raggedright\arraybackslash}p{0.22\textwidth}|>{\raggedright\arraybackslash}p{0.70\textwidth}|}
 \hline
@@ -43,8 +46,11 @@ category contract.
 
 \subsection{Plugin interface}
 
-All plugins implement \filepath{org.gautelis.durga.plugins.Plugin}, which provides
-two \texttt{default} methods:
+All 16 processing plugins implement \filepath{org.gautelis.durga.plugins.Plugin},
+which provides two \texttt{default} methods. The two connect catalog descriptors
+(\texttt{kafka-connect-source} and \texttt{kafka-connect-sink}) are code-generation
+descriptors that reference the scaffolder, not runtime \texttt{Plugin}
+implementations.
 
 \begin{quote}
 \shellcmd{byte[] execute(byte[] payload, String config) throws Exception}
@@ -83,7 +89,9 @@ emit a Vannak-compatible \texttt{DataIndividualMetadataEvent} to the
 
 \subsection{Plugin catalog}
 
-The repository ships with 18 plugins organized by category. Stable plugins are
+The repository ships with 18 catalog descriptors organized by category
+(16 processing plugins implementing \texttt{Plugin} plus 2 connect code-generation
+descriptors). Stable plugins are
 fully supported; experimental plugins generate with a warning.
 
 \subsubsection{Transform plugins (9)}

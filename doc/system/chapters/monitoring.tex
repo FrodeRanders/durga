@@ -3,11 +3,13 @@
 
 \subsection{Canonical process-events topic}
 
-Durga emits normalized lifecycle events on the shared topic \texttt{process-events}. Generated
-workers, gateways, subprocess handlers, boundary handlers and helper publishers all emit
-events describing process progress, waiting states, completion, failure, escalation and
-cancellation. Each process uses a dedicated topic \texttt{process-events-\{processId\}}
-so that process definitions are isolated at the transport level.
+Durga emits normalized lifecycle events on the logical channel \texttt{process-events}.
+Generated workers, gateways, subprocess handlers, boundary handlers and helper publishers
+all emit events describing process progress, waiting states, completion, failure,
+escalation and cancellation. The default physical topic is
+\texttt{process-events-\{processId\}} so that each process definition is isolated at the
+transport level. The monitoring topology subscribes to \texttt{process-events-.*} to
+consume events from all processes.
 
 This separates execution transport from queryable state. Execution topics remain useful for
 routing, but the monitoring model depends on projections built from explicit lifecycle events.
@@ -59,7 +61,7 @@ The main entry point is \texttt{org.gautelis.durga.monitoring.ProcessMonitoringA
 
 The monitoring service exposes endpoints for health, process discovery, instance
 lookup, counts, latency, stuck instances, diagram serving, and a dashboard.
-All paths are served under the \texttt{/api/} prefix by the Quarkus REST container.
+All monitoring paths are served under the \texttt{/api/} prefix; a root \texttt{/health} endpoint is also available.
 
 The local development loop is:
 \begin{enumerate}

@@ -18,7 +18,7 @@ described in the deployment, supervision and configuration chapters.
 \item core runtime contracts are unit-tested,
 \item monitoring topology with global-table query model,
 \item interrupting boundary cancellation via in-memory registry,
-\item GitHub Actions CI on push/PR (JDK 21 plus monitoring UI test/build gate),
+\item GitHub Actions CI on push/PR (JDK 25 plus monitoring UI test/build gate),
 \item \texttt{SendTask}, \texttt{ReceiveTask}, \texttt{ScriptTask}, \texttt{BusinessRuleTask} generate dedicated handlers,
 \item inclusive gateway (OR) split/join,
 \item multi-instance loop characteristics detected and reported,
@@ -34,7 +34,7 @@ described in the deployment, supervision and configuration chapters.
       from plugin and custom workers,
 \item \texttt{--connect} can generate data-store-specific Kafka Connect
       skeletons for BPMN data-store edges,
-\item 18 data pipeline plugins (9 transform, 1 validate, 1 enrich, 1 route, 1 aggregate, 1 inspect, 2 store, 2 connect) with interface-based dispatch,
+\item 18 data pipeline catalog descriptors (16 processing plugins plus 2 connect generator descriptors) with interface-based dispatch,
 \item recursive descent expression evaluator for XOR and OR gateway conditions (\texttt{==}, \texttt{!=}, \texttt{>}, \texttt{<}, \texttt{>=}, \texttt{<=}, \texttt{\&\&}, \texttt{||}, \texttt{!}, parentheses, nested field access),
 \item custom activity round-trip: contract interface generation, delegating workers with CDI injection, model enrichment utility.
 \end{itemize}
