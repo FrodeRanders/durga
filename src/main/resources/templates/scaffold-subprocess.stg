@@ -41,7 +41,8 @@ public class %className% {
 }%
                 "%subProcessId%"
         ));
-        processEventsEmitter.send(new ProcessEvent(
+        java.util.List<java.util.concurrent.CompletableFuture<Void>\> sends = new java.util.ArrayList<>();
+        sends.add(processEventsEmitter.send(new ProcessEvent(
                 inputEvent.processInstanceId(),
                 inputEvent.processId(),
                 "%subProcessId%",
@@ -54,7 +55,7 @@ public class %className% {
                 inputEvent.processVersion(),
                 inputEvent.businessKey(),
                 Instant.now().toString()
-        ).toJson());
+        ).toJson()).toCompletableFuture());
 
 %entryOutputs:{o|
         ProcessEvent %o.taskId%Event = new ProcessEvent(
@@ -71,10 +72,12 @@ public class %className% {
                 inputEvent.businessKey(),
                 Instant.now().toString()
         );
-        %o.emitter%.send(%o.taskId%Event.toJson());
-        processEventsEmitter.send(%o.taskId%Event.toJson());
+        sends.add(%o.emitter%.send(%o.taskId%Event.toJson()).toCompletableFuture());
+        sends.add(processEventsEmitter.send(%o.taskId%Event.toJson()).toCompletableFuture());
 }%
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture
+                .allOf(sends.toArray(new java.util.concurrent.CompletableFuture[0]))
+                .thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -112,6 +115,7 @@ public class %className% {
     @Incoming("%triggerTopic%")
     public CompletionStage<Void> onTrigger(Message<String> msg) {
         ProcessEvent triggerEvent = ProcessEvent.fromJson(msg.getPayload());
+        java.util.List<java.util.concurrent.CompletableFuture<Void>\> sends = new java.util.ArrayList<>();
 %if(interrupting)%
         cancellationRegistry.cancelScope(triggerEvent.processInstanceId(), java.util.List.of(
 %cancellationScopeActivityIds:{id|                "%id%",
@@ -119,7 +123,7 @@ public class %className% {
                 "%subProcessId%"
         ));
 %cancellationScopeActivityIds:{id|
-        processEventsEmitter.send(new ProcessEvent(
+        sends.add(processEventsEmitter.send(new ProcessEvent(
                 triggerEvent.processInstanceId(),
                 triggerEvent.processId(),
                 "%id%",
@@ -132,7 +136,7 @@ public class %className% {
                 triggerEvent.processVersion(),
                 triggerEvent.businessKey(),
                 Instant.now().toString()
-        ).toJson());
+        ).toJson()).toCompletableFuture());
 }%
 %endif%
         cancellationRegistry.clearScope(triggerEvent.processInstanceId(), java.util.List.of(
@@ -140,7 +144,7 @@ public class %className% {
 }%
                 "%subProcessId%"
         ));
-        processEventsEmitter.send(new ProcessEvent(
+        sends.add(processEventsEmitter.send(new ProcessEvent(
                 triggerEvent.processInstanceId(),
                 triggerEvent.processId(),
                 "%subProcessId%",
@@ -153,7 +157,7 @@ public class %className% {
                 triggerEvent.processVersion(),
                 triggerEvent.businessKey(),
                 Instant.now().toString()
-        ).toJson());
+        ).toJson()).toCompletableFuture());
 
 %entryOutputs:{o|
         ProcessEvent %o.taskId%Event = new ProcessEvent(
@@ -170,10 +174,12 @@ public class %className% {
                 triggerEvent.businessKey(),
                 Instant.now().toString()
         );
-        %o.emitter%.send(%o.taskId%Event.toJson());
-        processEventsEmitter.send(%o.taskId%Event.toJson());
+        sends.add(%o.emitter%.send(%o.taskId%Event.toJson()).toCompletableFuture());
+        sends.add(processEventsEmitter.send(%o.taskId%Event.toJson()).toCompletableFuture());
 }%
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture
+                .allOf(sends.toArray(new java.util.concurrent.CompletableFuture[0]))
+                .thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -287,7 +293,8 @@ public class %className% {
 }%
                 "%subProcessId%"
         ));
-        processEventsEmitter.send(new ProcessEvent(
+        java.util.List<java.util.concurrent.CompletableFuture<Void>\> sends = new java.util.ArrayList<>();
+        sends.add(processEventsEmitter.send(new ProcessEvent(
                 triggerEvent.processInstanceId(),
                 triggerEvent.processId(),
                 "%subProcessId%",
@@ -300,7 +307,7 @@ public class %className% {
                 triggerEvent.processVersion(),
                 triggerEvent.businessKey(),
                 Instant.now().toString()
-        ).toJson());
+        ).toJson()).toCompletableFuture());
 
 %entryOutputs:{o|
         ProcessEvent %o.taskId%Event = new ProcessEvent(
@@ -392,6 +399,7 @@ public class %className% {
         if (!matchesTrigger(triggerEvent)) {
             return msg.ack();
         }
+        java.util.List<java.util.concurrent.CompletableFuture<Void>\> sends = new java.util.ArrayList<>();
 %if(interrupting)%
         cancellationRegistry.cancelScope(triggerEvent.processInstanceId(), java.util.List.of(
 %cancellationScopeActivityIds:{id|                "%id%",
@@ -399,7 +407,7 @@ public class %className% {
                 "%subProcessId%"
         ));
 %cancellationScopeActivityIds:{id|
-        processEventsEmitter.send(new ProcessEvent(
+        sends.add(processEventsEmitter.send(new ProcessEvent(
                 triggerEvent.processInstanceId(),
                 triggerEvent.processId(),
                 "%id%",
@@ -412,7 +420,7 @@ public class %className% {
                 triggerEvent.processVersion(),
                 triggerEvent.businessKey(),
                 Instant.now().toString()
-        ).toJson());
+        ).toJson()).toCompletableFuture());
 }%
 %endif%
         cancellationRegistry.clearScope(triggerEvent.processInstanceId(), java.util.List.of(
@@ -420,7 +428,7 @@ public class %className% {
 }%
                 "%subProcessId%"
         ));
-        processEventsEmitter.send(new ProcessEvent(
+        sends.add(processEventsEmitter.send(new ProcessEvent(
                 triggerEvent.processInstanceId(),
                 triggerEvent.processId(),
                 "%subProcessId%",
@@ -433,7 +441,7 @@ public class %className% {
                 triggerEvent.processVersion(),
                 triggerEvent.businessKey(),
                 Instant.now().toString()
-        ).toJson());
+        ).toJson()).toCompletableFuture());
 
 %entryOutputs:{o|
         ProcessEvent %o.taskId%Event = new ProcessEvent(
@@ -450,10 +458,12 @@ public class %className% {
                 triggerEvent.businessKey(),
                 Instant.now().toString()
         );
-        %o.emitter%.send(%o.taskId%Event.toJson());
-        processEventsEmitter.send(%o.taskId%Event.toJson());
+        sends.add(%o.emitter%.send(%o.taskId%Event.toJson()).toCompletableFuture());
+        sends.add(processEventsEmitter.send(%o.taskId%Event.toJson()).toCompletableFuture());
 }%
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture
+                .allOf(sends.toArray(new java.util.concurrent.CompletableFuture[0]))
+                .thenCompose(ignored -> msg.ack());
     }
 
     private boolean matchesTrigger(ProcessEvent event) {
@@ -545,9 +555,10 @@ public class %className% {
                 event.businessKey(),
                 Instant.now().toString()
         );
-        completionEmitter.send(completedScopeEvent.toJson());
-        processEventsEmitter.send(completedScopeEvent.toJson());
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture.allOf(
+                completionEmitter.send(completedScopeEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(completedScopeEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
     }
 
 %incomingMethodsBlock%

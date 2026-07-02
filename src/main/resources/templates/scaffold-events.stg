@@ -279,9 +279,10 @@ public class %className% {
                 event.businessKey(),
                 Instant.now().toString()
         );
-        outputEmitter.send(nextEvent.toJson());
-        processEventsEmitter.send(nextEvent.toJson());
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(nextEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(nextEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -386,9 +387,10 @@ public class %className% {
                 event.businessKey(),
                 Instant.now().toString()
         );
-        outputEmitter.send(nextEvent.toJson());
-        processEventsEmitter.send(nextEvent.toJson());
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(nextEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(nextEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -652,9 +654,10 @@ public class %className% {
                 waiting.businessKey(),
                 null
         );
-        outputEmitter.send(nextEvent.toJson());
-        processEventsEmitter.send(nextEvent.toJson());
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(nextEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(nextEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -872,9 +875,10 @@ public class %className% {
                 waiting.businessKey(),
                 null
         );
-        outputEmitter.send(nextEvent.toJson());
-        processEventsEmitter.send(nextEvent.toJson());
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(nextEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(nextEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -1049,9 +1053,10 @@ public class %className% {
                 inputEvent.businessKey(),
                 Instant.now().toString()
         );
-        processEventsEmitter.send(entered.toJson());
-        requestEmitter.send(entered.toJson());
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture.allOf(
+                processEventsEmitter.send(entered.toJson()).toCompletableFuture(),
+                requestEmitter.send(entered.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
     }
 
     @Incoming("%replyChannel%")
@@ -1125,9 +1130,10 @@ public class %className% {
                 waiting.businessKey(),
                 Instant.now().toString()
         );
-        nextEmitter.send(nextEvent.toJson());
-        processEventsEmitter.send(nextEvent.toJson());
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture.allOf(
+                nextEmitter.send(nextEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(nextEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
     }
 }
 >>

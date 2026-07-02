@@ -154,7 +154,7 @@ public class ProcessMonitoringResource {
                 for (ActivityLatencySummary s : summaryList) {
                     String labels = String.format(
                             "process_id=\"%s\",activity_id=\"%s\"",
-                            s.processId(), s.activityId());
+                            prometheusLabelValue(s.processId()), prometheusLabelValue(s.activityId()));
                     sb.append(String.format(
                             "durga_activity_latency_ms{pct=\"50\",%s} %d\n", labels, s.p50DurationMs()));
                     sb.append(String.format(
@@ -231,5 +231,22 @@ public class ProcessMonitoringResource {
 
     static Map<String, String> healthPayload(ProcessMonitoringApp.MonitoringState state) {
         return Map.of("streamsState", state.streams().state().name());
+    }
+
+    static String prometheusLabelValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        StringBuilder escaped = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '\\' -> escaped.append("\\\\");
+                case '"' -> escaped.append("\\\"");
+                case '\n' -> escaped.append("\\n");
+                default -> escaped.append(c);
+            }
+        }
+        return escaped.toString();
     }
 }

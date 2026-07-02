@@ -92,7 +92,11 @@ public final class ProcessMonitoringTopology {
             events = builder.stream(topics.eventsTopic(),
                     Consumed.with(Serdes.String(), processEventSerde));
         }
-        events = events.filter((key, event) -> key != null && event != null);
+        events = events
+                .filter((key, event) -> event != null)
+                .selectKey((key, event) -> key != null && !key.isBlank()
+                        ? key : event.processInstanceId())
+                .filter((key, event) -> key != null && !key.isBlank());
 
         KTable<String, ProcessStateView> stateByInstance = events
                 .groupByKey(Grouped.with(Serdes.String(), processEventSerde))

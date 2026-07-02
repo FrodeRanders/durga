@@ -1788,8 +1788,9 @@ public class BpmnScaffolder {
                 continue;
             }
             String block = "        if (" + conditionExpr + ") {\n"
-                    + "            " + output.emitter + ".send(msg.getPayload());\n"
-                    + "            processEventsEmitter.send(new ProcessEvent(\n"
+                    + "            return java.util.concurrent.CompletableFuture.allOf(\n"
+                    + "                    " + output.emitter + ".send(msg.getPayload()).toCompletableFuture(),\n"
+                    + "                    processEventsEmitter.send(new ProcessEvent(\n"
                     + "                    inputEvent.processInstanceId(),\n"
                     + "                    inputEvent.processId(),\n"
                     + "                    \"" + output.taskId + "\",\n"
@@ -1802,8 +1803,8 @@ public class BpmnScaffolder {
                     + "                    inputEvent.processVersion(),\n"
                     + "                    inputEvent.businessKey(),\n"
                     + "                    null\n"
-                    + "            ).toJson());\n"
-                    + "            return msg.ack();\n"
+                    + "            ).toJson()).toCompletableFuture()\n"
+                    + "            ).thenCompose(ignored -> msg.ack());\n"
                     + "        }\n";
             updated.add(new OutputSpec(output.emitter, output.channel, output.taskId, output.nodeType, output.condition,
                     output.isDefault, block));

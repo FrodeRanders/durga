@@ -49,12 +49,16 @@ final class TaskRoutingGenerator {
                 continue;
             }
 
-            ST worker = group.getInstanceOf(BpmnScaffolder.templateForTask(task.kind, transactions));
+            String templateName = BpmnScaffolder.templateForTask(task.kind, transactions);
+            ST worker = group.getInstanceOf(templateName);
             worker.add("packageName", BpmnScaffolder.generatedPackage);
             worker.add("className", className);
             worker.add("processId", processId);
             worker.add("taskId", task.name);
             worker.add("taskType", task.kind.bpmnType);
+            if ("transactionalWorkerClass".equals(templateName)) {
+                worker.add("eventsTopic", BpmnScaffolder.eventsTopic);
+            }
             if (task.pluginRef != null) {
                 worker.add("pluginRef", task.pluginRef);
                 worker.add("pluginConfig", task.pluginConfig != null ? task.pluginConfig : ".");

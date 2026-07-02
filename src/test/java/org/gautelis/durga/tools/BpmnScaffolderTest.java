@@ -69,6 +69,36 @@ public class BpmnScaffolderTest {
     }
 
     @Test
+    public void transactionWorkersUseConfiguredEventsTopic() throws Exception {
+        System.out.println("TC: transactional workers use configured process event topic");
+        Path outputDir = Files.createTempDirectory("durga-transactions-topic-");
+
+        BpmnScaffolder.main(new String[]{
+                Path.of("src/test/resources/bpmn/invoice_receipt.bpmn").toAbsolutePath().toString(),
+                "--out",
+                outputDir.toAbsolutePath().toString(),
+                "--transactions",
+                "--event-topic",
+                "custom-process-events"
+        });
+
+        String generated = Files.walk(outputDir.resolve("src/main/java"))
+                .filter(path -> path.getFileName().toString().endsWith(".java"))
+                .map(path -> {
+                    try {
+                        return Files.readString(path);
+                    } catch (Exception e) {
+                        throw new IllegalStateException(e);
+                    }
+                })
+                .filter(content -> content.contains("processEventsTopic"))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(generated.contains("String processEventsTopic = \"custom-process-events\";"));
+        assertFalse(generated.contains("String processEventsTopic = \"process-events\";"));
+    }
+
+    @Test
     public void dryRunIncludesBoundaryEscalationArtifacts() throws Exception {
         System.out.println("TC: dry-run generates boundary escalation service and publisher");
         String output = runDryRun("src/test/resources/bpmn/invoice_review_escalation.bpmn");

@@ -189,6 +189,26 @@ public class MonitoringTopologyIntegrationTest extends KafkaIntegrationTestBase 
         assertEquals("active", found.get().lifecycleState());
     }
 
+    @Test
+    public void shouldMaterializeProcessStateFromUnkeyedLifecycleEvents() {
+        System.out.println("TC: materializes process state from unkeyed lifecycle event values");
+
+        String instanceId = "pi-unkeyed-1";
+        ProcessEvent event = new ProcessEvent(
+                instanceId, "unkeyed_proc", "start", "token", "corr",
+                Map.of(), ProcessEvent.Status.STARTED, null,
+                ProcessEvent.EventType.PROCESS_STARTED, "v1", "BK", "2026-04-03T08:00:00Z"
+        );
+        producer.send(new ProducerRecord<>(TOPICS.eventsTopic(), null, event.toJson()));
+        producer.flush();
+
+        waitForCondition(() -> queryService.findInstance(instanceId).isPresent(), DEFAULT_TIMEOUT);
+
+        ProcessStateView state = queryService.findInstance(instanceId).orElseThrow();
+        assertEquals("unkeyed_proc", state.processId());
+        assertEquals(instanceId, state.processInstanceId());
+    }
+
     private void produceEvent(String instanceId, String processId, String activityId,
                                ProcessEvent.EventType eventType, String timestamp) {
         ProcessEvent event = new ProcessEvent(

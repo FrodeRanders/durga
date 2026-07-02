@@ -62,10 +62,11 @@ public class %className% {
                 null
         );
 
-        outputEmitter.send(outputEvent.toJson());
-        processEventsEmitter.send(outputEvent.toJson());
         %if(hasLineage)%
-        vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
                 inputEvent,
                 "%taskId%",
                 "builtin:%taskId%",
@@ -74,14 +75,19 @@ public class %className% {
                 outputPayload,
                 %taskReads%,
                 %taskWrites%,
-                %taskStores%).toJson());
+                %taskStores%).toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
+        %else%
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
         %endif%
-        return msg.ack();
     }
 }
 >>
 
-transactionalWorkerClass(packageName, className, processId, taskId, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
+transactionalWorkerClass(packageName, className, processId, taskId, taskType, taskReads, taskWrites, taskStores, hasLineage, eventsTopic) ::= <<
 package %packageName%;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -126,7 +132,7 @@ public class %className% {
 
         String inputTopic = "%processId%_%taskId%_input";
         String outputTopic = "%processId%_%taskId%_output";
-        String processEventsTopic = "process-events";
+        String processEventsTopic = "%eventsTopic%";
 
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
              KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps)) {
@@ -217,7 +223,7 @@ public class %className% {
         waitingPayload.put("taskType", "%taskType%");
         waitingPayload.put("waitingForCompletion", true);
 
-        processEventsEmitter.send(new ProcessEvent(
+        return processEventsEmitter.send(new ProcessEvent(
                 inputEvent.processInstanceId(),
                 inputEvent.processId(),
                 "%taskId%",
@@ -230,8 +236,7 @@ public class %className% {
                 inputEvent.processVersion(),
                 inputEvent.businessKey(),
                 inputEvent.timestamp()
-        ).toJson());
-        return msg.ack();
+        ).toJson()).thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -274,7 +279,7 @@ public class %className% {
         waitingPayload.put("taskType", "%taskType%");
         waitingPayload.put("waitingForCompletion", true);
 
-        processEventsEmitter.send(new ProcessEvent(
+        return processEventsEmitter.send(new ProcessEvent(
                 inputEvent.processInstanceId(),
                 inputEvent.processId(),
                 "%taskId%",
@@ -287,8 +292,7 @@ public class %className% {
                 inputEvent.processVersion(),
                 inputEvent.businessKey(),
                 inputEvent.timestamp()
-        ).toJson());
-        return msg.ack();
+        ).toJson()).thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -608,10 +612,11 @@ public class %className% {
     @Incoming("%inputChannel%")
     public CompletionStage<Void> split(Message<String> msg) {
         ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
+        java.util.List<java.util.concurrent.CompletableFuture<Void>\> sends = new java.util.ArrayList<>();
 %outputs:{o|
         if (!cancellationRegistry.isCancelled(event.processInstanceId(), "%o.taskId%")) {
-            %o.emitter%.send(msg.getPayload());
-            processEventsEmitter.send(new ProcessEvent(
+            sends.add(%o.emitter%.send(msg.getPayload()).toCompletableFuture());
+            sends.add(processEventsEmitter.send(new ProcessEvent(
                     event.processInstanceId(),
                     event.processId(),
                     "%o.taskId%",
@@ -624,10 +629,12 @@ public class %className% {
                     event.processVersion(),
                     event.businessKey(),
                     null
-            ).toJson());
+            ).toJson()).toCompletableFuture());
         \}
 }%
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture
+                .allOf(sends.toArray(new java.util.concurrent.CompletableFuture[0]))
+                .thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -715,8 +722,9 @@ public class %className% {
                     event.businessKey(),
                     null
             );
-            outputEmitter.send(nextEvent.toJson());
-            processEventsEmitter.send(new ProcessEvent(
+            return java.util.concurrent.CompletableFuture.allOf(
+                    outputEmitter.send(nextEvent.toJson()).toCompletableFuture(),
+                    processEventsEmitter.send(new ProcessEvent(
                     nextEvent.processInstanceId(),
                     nextEvent.processId(),
                     nextEvent.activityId(),
@@ -729,7 +737,8 @@ public class %className% {
                     nextEvent.processVersion(),
                     nextEvent.businessKey(),
                     nextEvent.timestamp()
-            ).toJson());
+            ).toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
         }
         return msg.ack();
     }
@@ -802,10 +811,11 @@ public class %className% {
                 null
         );
 
-        sendEmitter.send(outputEvent.toJson());
-        outputEmitter.send(outputEvent.toJson());
-        processEventsEmitter.send(outputEvent.toJson());
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture.allOf(
+                sendEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -867,9 +877,10 @@ public class %className% {
                 null
         );
 
-        outputEmitter.send(outputEvent.toJson());
-        processEventsEmitter.send(outputEvent.toJson());
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -935,9 +946,10 @@ public class %className% {
                 null
         );
 
-        outputEmitter.send(outputEvent.toJson());
-        processEventsEmitter.send(outputEvent.toJson());
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -1003,9 +1015,10 @@ public class %className% {
                 null
         );
 
-        outputEmitter.send(outputEvent.toJson());
-        processEventsEmitter.send(outputEvent.toJson());
-        return msg.ack();
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -1330,8 +1343,9 @@ public class %className% {
                 event.businessKey(),
                 null
         );
-        outputEmitter.send(nextEvent.toJson());
-        processEventsEmitter.send(new ProcessEvent(
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(nextEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(new ProcessEvent(
                 nextEvent.processInstanceId(),
                 nextEvent.processId(),
                 nextEvent.activityId(),
@@ -1344,8 +1358,8 @@ public class %className% {
                 nextEvent.processVersion(),
                 nextEvent.businessKey(),
                 nextEvent.timestamp()
-        ).toJson());
-        return msg.ack();
+        ).toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
     }
 }
 >>
@@ -1537,8 +1551,7 @@ public class %className% {
             String error = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
                     msg.getPayload(), "custom:%taskId%",
                     "No implementation injected for contract %contractClassName%");
-            dlqEmitter.send(error);
-            return msg.ack();
+            return dlqEmitter.send(error).thenCompose(ignored -> msg.ack());
         }
         try {
             String payload = inputEvent.payload() != null
@@ -1557,8 +1570,7 @@ public class %className% {
                         msg.getPayload(), "custom:%taskId%",
                         pluginResult.sideEffectDescription() != null
                                 ? pluginResult.sideEffectDescription() : "Plugin routed to DLQ");
-                dlqEmitter.send(dlqRecord);
-                return msg.ack();
+                return dlqEmitter.send(dlqRecord).thenCompose(ignored -> msg.ack());
             }
             if (pluginResult.errorStrategy() == org.gautelis.durga.plugins.PluginResult.ErrorStrategy.FAIL) {
                 throw new IllegalStateException(pluginResult.sideEffectDescription() != null
@@ -1595,10 +1607,11 @@ public class %className% {
                     inputEvent.businessKey(),
                     null
             );
-            outputEmitter.send(outputEvent.toJson());
-            processEventsEmitter.send(outputEvent.toJson());
             %if(hasLineage)%
-            vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
+            return java.util.concurrent.CompletableFuture.allOf(
+                    outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                    processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                    vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
                     inputEvent,
                     "%taskId%",
                     "custom:%taskId%",
@@ -1607,22 +1620,20 @@ public class %className% {
                     outputPayload,
                     %taskReads%,
                     %taskWrites%,
-                    %taskStores%).toJson());
+                    %taskStores%).toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
             %else%
-            vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
-                    inputEvent,
-                    "%taskId%",
-                    "custom:%taskId%",
-                    "%pluginConfig%",
-                    payload,
-                    outputPayload
-            ).toJson());
+            return java.util.concurrent.CompletableFuture.allOf(
+                    outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                    processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
             %endif%
         } catch (Exception e) {
             String error = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
                     msg.getPayload(), "custom:%taskId%", e.getMessage());
-            dlqEmitter.send(error);
-            processEventsEmitter.send(new ProcessEvent(
+            return java.util.concurrent.CompletableFuture.allOf(
+                    dlqEmitter.send(error).toCompletableFuture(),
+                    processEventsEmitter.send(new ProcessEvent(
                     inputEvent.processInstanceId(),
                     inputEvent.processId(),
                     "%taskId%",
@@ -1637,9 +1648,9 @@ public class %className% {
                     inputEvent.processVersion(),
                     inputEvent.businessKey(),
                     null
-            ).toJson());
+            ).toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
         }
-        return msg.ack();
     }
 }
 >>
@@ -1704,8 +1715,7 @@ public class %className% {
                         msg.getPayload(), "%pluginRef%",
                         pluginResult.sideEffectDescription() != null
                                 ? pluginResult.sideEffectDescription() : "Plugin routed to DLQ");
-                dlqEmitter.send(dlqRecord);
-                return msg.ack();
+                return dlqEmitter.send(dlqRecord).thenCompose(ignored -> msg.ack());
             }
             if (pluginResult.errorStrategy() == PluginResult.ErrorStrategy.FAIL) {
                 throw new IllegalStateException(pluginResult.sideEffectDescription() != null
@@ -1742,10 +1752,11 @@ public class %className% {
                     inputEvent.businessKey(),
                     null
             );
-            outputEmitter.send(outputEvent.toJson());
-            processEventsEmitter.send(outputEvent.toJson());
             %if(hasLineage)%
-            vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
+            return java.util.concurrent.CompletableFuture.allOf(
+                    outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                    processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                    vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
                     inputEvent,
                     "%taskId%",
                     "%pluginRef%",
@@ -1754,22 +1765,20 @@ public class %className% {
                     outputPayload,
                     %taskReads%,
                     %taskWrites%,
-                    %taskStores%).toJson());
+                    %taskStores%).toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
             %else%
-            vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
-                    inputEvent,
-                    "%taskId%",
-                    "%pluginRef%",
-                    "%pluginConfig%",
-                    payload,
-                    outputPayload
-            ).toJson());
+            return java.util.concurrent.CompletableFuture.allOf(
+                    outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                    processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
             %endif%
         } catch (Exception e) {
             String error = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
                     msg.getPayload(), "%pluginRef%", e.getMessage());
-            dlqEmitter.send(error);
-            processEventsEmitter.send(new ProcessEvent(
+            return java.util.concurrent.CompletableFuture.allOf(
+                    dlqEmitter.send(error).toCompletableFuture(),
+                    processEventsEmitter.send(new ProcessEvent(
                     inputEvent.processInstanceId(),
                     inputEvent.processId(),
                     "%taskId%",
@@ -1784,9 +1793,9 @@ public class %className% {
                     inputEvent.processVersion(),
                     inputEvent.businessKey(),
                     null
-            ).toJson());
+            ).toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
         }
-        return msg.ack();
     }
 }
 >>
