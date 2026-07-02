@@ -76,7 +76,16 @@ Large pipeline payloads should travel by reference. A `ProcessEvent.payload()` c
 }
 ```
 
-This keeps process events small and makes Durga useful for pipeline management: it can track where assets live, which task produced them, which task consumed them, and which schema/version they used.
+This keeps process events small and makes Durga useful for pipeline management:
+Kafka carries lifecycle/control events and small metadata, while large datasets
+travel by reference through `DataHandle`.
+
+Durga includes experimental support for this pattern:
+
+- `object-store-collector` writes the current payload to a local file-backed object store and forwards a `DataHandle`-style JSON reference.
+- `object-store-extractor` resolves a `DataHandle`-style JSON reference and emits the referenced bytes.
+- Generated plugin and custom workers can use `handleMode=manual` to operate on the handle JSON itself, or `handleMode=materialize` to load referenced bytes, run the plugin, write the output back to object storage, and forward a new handle.
+- Successful plugin and custom worker executions emit a Vannak-compatible `DataIndividualMetadataEvent` to `vannak-metadata-events`, including process/activity context, payload size/checksum facts, plugin metadata, and handle/format metadata when present.
 
 ## BPMN Extension Properties
 
@@ -100,10 +109,14 @@ The scaffolder should:
 3. Document assets, stores, and task read/write associations in the generated README.
 4. Generate a runtime `DataHandle` contract.
 5. Generate Kafka Connect skeletons from data stores when `--connect` is used.
-6. Later generate schema stubs and typed task contracts from data objects.
-7. Later generate richer store/client adapters for cases that do not fit Kafka Connect.
+6. Generate Vannak metadata event support for plugin and custom workers.
+7. Later generate schema stubs and typed task contracts from data objects.
+8. Later generate richer store/client adapters for cases that do not fit Kafka Connect or the local-file object-store plugins.
 
-The first implementation slices are metadata/runtime contract support and optional Kafka Connect skeletons for data-store edges. They deliberately do not change worker routing or turn data objects into topics.
+The first implementation slices are metadata/runtime contract support, optional
+Kafka Connect skeletons for data-store edges, local-file object-store
+collector/extractor plugins, handle-aware plugin execution, and Vannak companion
+metadata events. They deliberately do not turn BPMN data objects into topics.
 
 ## Kafka Connect
 
@@ -140,7 +153,9 @@ The connector config still needs real deployment-specific settings: credentials,
 
 ## Data Plane Direction
 
-The long-term Durga data plane should be adapter-based:
+Durga currently has local-file-backed object-store plugins and generated
+handle-aware execution support. The longer-term data plane should be
+adapter-based:
 
 ```java
 interface DataStoreClient {
@@ -153,7 +168,10 @@ Concrete adapters can then support S3, PostgreSQL, Neo4j, local files, and other
 
 ## Lineage
 
-Task completion events should eventually include data lineage:
+Durga now emits Vannak-compatible companion metadata events from generated plugin
+and custom workers. The next step is to bind BPMN data associations more tightly
+to those events, so task completions and metadata streams can include data
+lineage such as:
 
 ```json
 {

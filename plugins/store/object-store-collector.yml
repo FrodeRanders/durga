@@ -1,0 +1,58 @@
+id: object-store-collector
+name: Object Store Collector
+version: 1.0.0
+category: store
+status: experimental
+description: >
+  Writes the incoming Kafka payload to an object-store location and emits a
+  DataHandle-style JSON reference. The current implementation supports local
+  file-backed object stores through path or file:// store URIs.
+
+input:
+  schema:
+    type: string
+    description: Raw payload bytes to externalize from Kafka
+
+output:
+  schema:
+    type: object
+    description: Object handle and optional format metadata
+
+config:
+  store:
+    type: string
+    required: false
+    default: "${java.io.tmpdir}/durga-object-store"
+    description: Local root path or file:// URI for stored objects
+  prefix:
+    type: string
+    required: false
+    default: objects
+    description: Relative object prefix under the store root
+  asset:
+    type: string
+    required: false
+    default: payload
+    description: Logical asset name to put in the emitted handle
+  handleField:
+    type: string
+    required: false
+    default: dataHandle
+    description: Output field that receives the DataHandle object
+  schema:
+    type: string
+    required: false
+    description: Optional schema reference to put in the emitted handle
+  includeFormat:
+    type: boolean
+    required: false
+    default: "true"
+    description: Include format-detector metadata next to the emitted handle
+  includeOriginal:
+    type: boolean
+    required: false
+    default: "false"
+    description: Include original payload as a UTF-8 string in the output
+
+implementation:
+  class: org.gautelis.durga.plugins.ObjectStoreCollector

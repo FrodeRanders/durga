@@ -50,6 +50,17 @@ media type, schema identifier, row count, checksum, or partition metadata. This
 keeps lifecycle events small while preserving enough information for monitoring
 and lineage.
 
+Durga now includes experimental store plugins for this pattern. The
+\texttt{object-store-collector} writes the current payload to a local file-backed
+object store and forwards a \texttt{DataHandle}-style reference. The
+\texttt{object-store-extractor} resolves that reference and emits the referenced
+bytes to the next topic. Generated plugin and custom workers can also use
+\texttt{handleMode=manual} to pass handles through as plugin payloads, or
+\texttt{handleMode=materialize} to load the referenced bytes, run the plugin, and
+write the modified result back to the object store as a new handle. The current
+implementation is local-file backed; S3, GCS, Azure Blob, and other object-store
+adapters remain production hardening work.
+
 \subsection{Extension properties}
 
 Data objects and data stores may use Camunda extension properties for Durga
@@ -66,11 +77,18 @@ For data stores, \texttt{kind} identifies the adapter family. Current examples
 include \texttt{s3}, \texttt{postgresql}, and \texttt{neo4j}. If \texttt{kind}
 is omitted, later tooling may infer it from the URI scheme.
 
-\subsection{Lineage direction}
+\subsection{Lineage and metadata events}
 
-The immediate implementation records data objects, data stores, and task
-associations in generated metadata. The next runtime step is to promote this
-metadata into lineage events, so task completions can report:
+The implementation records data objects, data stores, and task associations in
+generated metadata. Generated plugin and custom workers also emit a
+Vannak-compatible \texttt{DataIndividualMetadataEvent} companion record to the
+\texttt{vannak-metadata-events} Kafka topic after successful execution. That
+event captures process/activity context, payload size and checksums, plugin
+identity/configuration, output fields, and \texttt{DataHandle}/format metadata
+when present.
+
+The remaining direction is to bind BPMN data associations more tightly to those
+events, so task completions can report:
 
 \begin{verbatim}
 read:   [RawCustomerData]

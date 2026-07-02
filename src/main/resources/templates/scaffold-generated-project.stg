@@ -66,6 +66,11 @@ mp:
         topic: "%eventsTopic%"
         value:
           serializer: "org.apache.kafka.common.serialization.StringSerializer"
+      vannak-metadata-events:
+        connector: "smallrye-kafka"
+        topic: "vannak-metadata-events"
+        value:
+          serializer: "org.apache.kafka.common.serialization.StringSerializer"
 %tasks:{t|
       %processId%_%t%_input:
         connector: "smallrye-kafka"
@@ -131,6 +136,7 @@ topics=(
   "%processId%_start"
   "%processId%_state"
   "%eventsTopic%"
+  "vannak-metadata-events"
 %timers:{t|
   "%processId%_%t%_input"
 }%
@@ -1090,6 +1096,9 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.gautelis.durga.ProcessEvent;
 
 import java.time.Instant;
+import java.math.BigInteger;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
@@ -2352,13 +2361,314 @@ public abstract class PipelinePlugin implements Plugin {
 }
 >>
 
+pluginExecutionSupportClass() ::= <<
+package org.gautelis.durga.plugins;
+
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
+
+public final class PluginExecutionSupport {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final String DEFAULT_ROOT = System.getProperty("java.io.tmpdir") + "/durga-object-store";
+
+    private PluginExecutionSupport() {
+    }
+
+    public static Result execute(Plugin plugin, byte[] payload, String config) throws Exception {
+        Map<String, String> options = parseConfig(config);
+        String mode = options.getOrDefault("handleMode", options.getOrDefault("dataHandleMode", "payload"));
+        String pluginConfig = options.getOrDefault("pluginConfig", config);
+        if (!"materialize".equalsIgnoreCase(mode)) {
+            return new Result(plugin.execute(payload, pluginConfig), payload, false);
+        }
+
+        Handle inputHandle = findHandle(payload, handleField(options));
+        if (inputHandle == null) {
+            return new Result(plugin.execute(payload, pluginConfig), payload, false);
+        }
+
+        byte[] rawInput = read(inputHandle.uri());
+        byte[] rawOutput = plugin.execute(rawInput, pluginConfig);
+        if (rawOutput == null) {
+            rawOutput = rawInput;
+        }
+
+        StoredObject stored = store(rawOutput, options);
+        Detection detection = detect(rawOutput);
+        String assetName = options.getOrDefault("asset", inputHandle.name() != null ? inputHandle.name() : "payload");
+        String schema = options.getOrDefault("schema", inputHandle.schema());
+
+        ObjectNode metadata = MAPPER.createObjectNode();
+        metadata.put("bytes", stored.bytes());
+        metadata.put("sha256", stored.sha256());
+        metadata.put("createdAt", stored.createdAt());
+        metadata.put("format", detection.format());
+        metadata.put("datatype", detection.datatype());
+        metadata.put("encoding", detection.encoding());
+        if (inputHandle.uri() != null) {
+            metadata.put("sourceUri", inputHandle.uri());
+        }
+
+        ObjectNode handle = MAPPER.createObjectNode();
+        handle.put("name", assetName);
+        handle.put("uri", stored.uri());
+        handle.put("mediaType", detection.mediaType());
+        if (schema != null && !schema.isBlank()) {
+            handle.put("schema", schema);
+        } else {
+            handle.putNull("schema");
+        }
+        handle.set("metadata", metadata);
+
+        ObjectNode output = MAPPER.createObjectNode();
+        output.set(handleField(options), handle);
+        if (Boolean.parseBoolean(options.getOrDefault("includeFormat", "true"))) {
+            output.set("format", detectionJson(detection));
+        }
+        return new Result(output.toString().getBytes(StandardCharsets.UTF_8), rawInput, true);
+    }
+
+    static Handle findHandle(byte[] payload, String handleField) throws Exception {
+        JsonNode node = MAPPER.readTree(Plugin.toString(payload));
+        JsonNode handle = fieldAt(node, handleField);
+        if (handle == null && node.has("uri")) {
+            handle = node;
+        }
+        if (handle == null || !handle.isObject() || handle.get("uri") == null) {
+            return null;
+        }
+        String name = handle.get("name") != null ? handle.get("name").asText() : null;
+        String uri = handle.get("uri").asText();
+        String mediaType = handle.get("mediaType") != null ? handle.get("mediaType").asText() : null;
+        String schema = handle.get("schema") != null && !handle.get("schema").isNull()
+                ? handle.get("schema").asText() : null;
+        return new Handle(name, uri, mediaType, schema);
+    }
+
+    private static JsonNode fieldAt(JsonNode node, String path) {
+        JsonNode current = node;
+        for (String segment : path.split("\\\\.")) {
+            if (current == null || !current.isObject()) {
+                return null;
+            }
+            current = current.get(segment);
+        }
+        return current;
+    }
+
+    private static Map<String, String> parseConfig(String config) {
+        Map<String, String> values = new LinkedHashMap<>();
+        if (config == null || config.isBlank()) {
+            return values;
+        }
+        for (String part : config.split(";")) {
+            int eq = part.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            String key = part.substring(0, eq).trim();
+            String value = part.substring(eq + 1).trim();
+            if (!key.isEmpty()) {
+                values.put(key, value);
+            }
+        }
+        return values;
+    }
+
+    private static String handleField(Map<String, String> config) {
+        return firstNonBlank(config.get("handleField"), config.get("field"), "dataHandle");
+    }
+
+    private static StoredObject store(byte[] payload, Map<String, String> config) throws IOException {
+        Path root = rootPath(config);
+        String prefix = sanitizePrefix(config.getOrDefault("prefix", "objects"));
+        String extension = extension(config.get("extension"), payload);
+        String id = UUID.randomUUID().toString();
+        Path dir = root.resolve(prefix).normalize();
+        Files.createDirectories(dir);
+        Path target = dir.resolve(id + extension).normalize();
+        if (!target.startsWith(root.normalize())) {
+            throw new IllegalArgumentException("Object target escapes configured root");
+        }
+        Files.write(target, payload);
+        return new StoredObject(id, target.toUri().toString(), payload.length, sha256(payload), Instant.now().toString());
+    }
+
+    private static Path rootPath(Map<String, String> config) {
+        String root = firstNonBlank(config.get("store"), config.get("root"), config.get("rootUri"));
+        if (root == null) {
+            root = DEFAULT_ROOT;
+        }
+        if (root.startsWith("file:")) {
+            return Path.of(URI.create(root));
+        }
+        if (root.contains("://")) {
+            throw new IllegalArgumentException("Only local file object stores are supported by this helper");
+        }
+        return Path.of(root);
+    }
+
+    private static byte[] read(String uri) throws IOException {
+        if (uri == null || uri.isBlank()) {
+            throw new IllegalArgumentException("Object handle URI is missing");
+        }
+        if (!uri.startsWith("file:")) {
+            throw new IllegalArgumentException("Only file: object handles are supported by this helper");
+        }
+        try {
+            return Files.readAllBytes(Path.of(new URI(uri)));
+        } catch (URISyntaxException e) {
+            throw new IllegalArgumentException("Invalid object handle URI", e);
+        }
+    }
+
+    private static String extension(String configured, byte[] payload) {
+        if (configured != null && !configured.isBlank()) {
+            return configured.startsWith(".") ? configured : "." + configured;
+        }
+        return switch (detect(payload).mediaType()) {
+            case "application/json" -> ".json";
+            case "text/plain" -> ".txt";
+            case "text/csv" -> ".csv";
+            case "application/xml", "text/xml" -> ".xml";
+            default -> ".bin";
+        };
+    }
+
+    private static Detection detect(byte[] payload) {
+        if (payload == null || payload.length == 0) {
+            return new Detection("empty", "empty", "application/octet-stream", "none", 0, "");
+        }
+        String text = tryText(payload);
+        if (text == null) {
+            return new Detection("binary", "bytes", "application/octet-stream", "binary", payload.length, sha256(payload));
+        }
+        String trimmed = text.stripLeading();
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            try {
+                JsonNode node = MAPPER.readTree(text);
+                return new Detection("json", node.isArray() ? "array" : "object", "application/json", "utf-8", payload.length, sha256(payload));
+            } catch (Exception ignored) {
+            }
+        }
+        if (trimmed.startsWith("<") && trimmed.contains(">")) {
+            return new Detection("xml", "document", "application/xml", "utf-8", payload.length, sha256(payload));
+        }
+        if (looksLikeCsv(text)) {
+            return new Detection("csv", "table", "text/csv", "utf-8", payload.length, sha256(payload));
+        }
+        return new Detection("text", "string", "text/plain", "utf-8", payload.length, sha256(payload));
+    }
+
+    private static ObjectNode detectionJson(Detection detection) {
+        ObjectNode node = MAPPER.createObjectNode();
+        node.put("format", detection.format());
+        node.put("datatype", detection.datatype());
+        node.put("mediaType", detection.mediaType());
+        node.put("encoding", detection.encoding());
+        node.put("bytes", detection.bytes());
+        node.put("sha256", detection.sha256());
+        return node;
+    }
+
+    private static String tryText(byte[] payload) {
+        String text = new String(payload, StandardCharsets.UTF_8);
+        if (text.indexOf('\\uFFFD') >= 0) {
+            return null;
+        }
+        for (byte b : payload) {
+            int c = b & 0xff;
+            if (c == 0 || (c < 0x09) || (c > 0x0d && c < 0x20)) {
+                return null;
+            }
+        }
+        return text;
+    }
+
+    private static boolean looksLikeCsv(String text) {
+        String[] lines = text.split("\\\\R", 4);
+        if (lines.length < 2) {
+            return false;
+        }
+        return commaCount(lines[0]) > 0 && commaCount(lines[0]) == commaCount(lines[1]);
+    }
+
+    private static int commaCount(String value) {
+        int count = 0;
+        for (int i = 0; i < value.length(); i++) {
+            if (value.charAt(i) == ',') {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static String sanitizePrefix(String prefix) {
+        String sanitized = prefix.replace('\\\\', '/')
+                .replaceAll("^/+", "")
+                .replaceAll("\\\\.\\\\.", "")
+                .replaceAll("[^A-Za-z0-9_./-]", "_");
+        return sanitized.isBlank() ? "objects" : sanitized;
+    }
+
+    private static String sha256(byte[] value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
+
+    private static String firstNonBlank(String first, String second, String third) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        if (second != null && !second.isBlank()) {
+            return second;
+        }
+        return third != null && !third.isBlank() ? third : null;
+    }
+
+    public record Result(byte[] output, byte[] pluginInput, boolean materializedHandle) {
+    }
+
+    record Handle(String name, String uri, String mediaType, String schema) {
+    }
+
+    record StoredObject(String id, String uri, long bytes, String sha256, String createdAt) {
+    }
+
+    record Detection(String format, String datatype, String mediaType, String encoding, long bytes, String sha256) {
+    }
+}
+>>
+
 processEventClass() ::= <<
 package org.gautelis.durga;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+import java.math.BigInteger;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public record ProcessEvent(
@@ -2513,6 +2823,309 @@ public record DataHandle(
 ) {
     public DataHandle {
         metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
+    }
+}
+>>
+
+dataIndividualMetadataEventClass() ::= <<
+package org.gautelis.durga;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+
+import java.math.BigInteger;
+import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public record DataIndividualMetadataEvent(
+        String metadataEventId,
+        String dataIndividualId,
+        BigInteger dataIndividualShardId,
+        String tenantId,
+        String environmentId,
+        String pipelineId,
+        String processInstanceId,
+        String activityId,
+        String timestamp,
+        Operation operation,
+        Map<String, Object> passiveMetadata,
+        Map<String, Object> activeMetadata,
+        String sourcePayloadRef,
+        String idempotencyKey
+) {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public enum Operation {
+        CREATED,
+        RECEIVED,
+        TRANSFORMED,
+        MASKED,
+        VALIDATED,
+        ENRICHED,
+        ROUTED,
+        PERSISTED
+    }
+
+    public DataIndividualMetadataEvent {
+        timestamp = timestamp != null ? timestamp : Instant.now().toString();
+        passiveMetadata = immutableNullableMap(passiveMetadata);
+        activeMetadata = immutableNullableMap(activeMetadata);
+        dataIndividualId = dataIndividualId != null ? dataIndividualId : processInstanceId;
+        metadataEventId = metadataEventId != null ? metadataEventId
+                : defaultMetadataEventId(dataIndividualId, processInstanceId, activityId, operation, timestamp);
+        idempotencyKey = idempotencyKey != null ? idempotencyKey
+                : dataIndividualId + ":" + metadataEventId;
+    }
+
+    public String toJson() {
+        try {
+            return MAPPER.writeValueAsString(this);
+        } catch (JacksonException e) {
+            throw new IllegalStateException("Failed to serialize DataIndividualMetadataEvent", e);
+        }
+    }
+
+    public static DataIndividualMetadataEvent fromJson(String json) {
+        try {
+            return MAPPER.readValue(json, DataIndividualMetadataEvent.class);
+        } catch (JacksonException e) {
+            throw new IllegalArgumentException("Failed to parse DataIndividualMetadataEvent", e);
+        }
+    }
+
+    public static BigInteger shardIdFor(String dataIndividualId) {
+        if (dataIndividualId == null) {
+            return BigInteger.ZERO;
+        }
+        long hash = 0xcbf29ce484222325L;
+        for (byte b : dataIndividualId.getBytes(java.nio.charset.StandardCharsets.UTF_8)) {
+            hash ^= Byte.toUnsignedLong(b);
+            hash *= 0x00000100000001b3L;
+        }
+        byte[] bytes = java.nio.ByteBuffer.allocate(Long.BYTES).putLong(hash).array();
+        return new BigInteger(1, bytes);
+    }
+
+    private static String defaultMetadataEventId(
+            String dataIndividualId,
+            String processInstanceId,
+            String activityId,
+            Operation operation,
+            String timestamp
+    ) {
+        String basis = String.join(":",
+                valueOrEmpty(dataIndividualId),
+                valueOrEmpty(processInstanceId),
+                valueOrEmpty(activityId),
+                operation != null ? operation.name() : "",
+                valueOrEmpty(timestamp));
+        return java.util.UUID.nameUUIDFromBytes(basis.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+    }
+
+    private static String valueOrEmpty(String value) {
+        return value != null ? value : "";
+    }
+
+    private static Map<String, Object> immutableNullableMap(Map<String, Object> value) {
+        if (value == null || value.isEmpty()) {
+            return Map.of();
+        }
+        return Collections.unmodifiableMap(new LinkedHashMap<>(value));
+    }
+}
+>>
+
+vannakMetadataClass() ::= <<
+package org.gautelis.durga;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public final class VannakMetadata {
+    private VannakMetadata() {
+    }
+
+    public static DataIndividualMetadataEvent pluginEvent(
+            ProcessEvent inputEvent,
+            String activityId,
+            String pluginId,
+            String pluginConfig,
+            String inputPayloadJson,
+            Map<String, Object> outputPayload
+    ) {
+        String dataIndividualId = dataIndividualId(inputEvent, outputPayload);
+        Map<String, Object> passive = new LinkedHashMap<>();
+        passive.put("durga:processId", inputEvent.processId());
+        passive.put("durga:processInstanceId", inputEvent.processInstanceId());
+        passive.put("durga:activityId", activityId);
+        passive.put("durga:businessKey", inputEvent.businessKey());
+        passive.put("durga:correlationId", inputEvent.correlationId());
+        passive.put("durga:inputBytes", inputPayloadJson != null
+                ? inputPayloadJson.getBytes(StandardCharsets.UTF_8).length : 0);
+        passive.put("durga:inputSha256", sha256(inputPayloadJson));
+
+        Map<String, Object> active = new LinkedHashMap<>();
+        active.put("durga:plugin", pluginId);
+        active.put("durga:pluginConfig", pluginConfig);
+        if (outputPayload != null) {
+            active.put("durga:outputFields", outputPayload.keySet().stream().sorted().toList());
+            copyNested(outputPayload, active, "format", "durga:format");
+            copyNested(outputPayload, active, "dataHandle", "durga:dataHandle");
+        }
+
+        String sourcePayloadRef = sourcePayloadRef(outputPayload);
+        String now = Instant.now().toString();
+        String metadataEventId = stableEventId(dataIndividualId, inputEvent.processInstanceId(),
+                activityId, pluginId, now);
+        return new DataIndividualMetadataEvent(
+                metadataEventId,
+                dataIndividualId,
+                DataIndividualMetadataEvent.shardIdFor(dataIndividualId),
+                tenantId(inputEvent),
+                environmentId(inputEvent),
+                inputEvent.processId(),
+                inputEvent.processInstanceId(),
+                activityId,
+                now,
+                operationFor(pluginId),
+                passive,
+                active,
+                sourcePayloadRef,
+                dataIndividualId + ":" + metadataEventId
+        );
+    }
+
+    private static DataIndividualMetadataEvent.Operation operationFor(String pluginId) {
+        if (pluginId == null) {
+            return DataIndividualMetadataEvent.Operation.TRANSFORMED;
+        }
+        if (pluginId.contains("mask")) {
+            return DataIndividualMetadataEvent.Operation.MASKED;
+        }
+        if (pluginId.contains("validator") || pluginId.contains("validate")) {
+            return DataIndividualMetadataEvent.Operation.VALIDATED;
+        }
+        if (pluginId.contains("enrich")) {
+            return DataIndividualMetadataEvent.Operation.ENRICHED;
+        }
+        if (pluginId.contains("router") || pluginId.contains("route")) {
+            return DataIndividualMetadataEvent.Operation.ROUTED;
+        }
+        if (pluginId.contains("collector") || pluginId.contains("extractor")) {
+            return DataIndividualMetadataEvent.Operation.PERSISTED;
+        }
+        return DataIndividualMetadataEvent.Operation.TRANSFORMED;
+    }
+
+    private static String dataIndividualId(ProcessEvent inputEvent, Map<String, Object> outputPayload) {
+        Object explicit = firstNonNull(
+                nested(outputPayload, "dataIndividualId"),
+                nested(outputPayload, "data_individual_id"),
+                nested(outputPayload, "id"),
+                nested(inputEvent.payload(), "dataIndividualId"),
+                nested(inputEvent.payload(), "data_individual_id"),
+                nested(inputEvent.payload(), "id"),
+                inputEvent.businessKey(),
+                inputEvent.correlationId(),
+                inputEvent.processInstanceId());
+        if (explicit instanceof Map<?, ?> map && map.get("uri") != null) {
+            return String.valueOf(map.get("uri"));
+        }
+        return String.valueOf(explicit);
+    }
+
+    private static String tenantId(ProcessEvent inputEvent) {
+        Object tenant = nested(inputEvent.payload(), "tenantId");
+        return tenant != null ? String.valueOf(tenant) : "default";
+    }
+
+    private static String environmentId(ProcessEvent inputEvent) {
+        Object environment = nested(inputEvent.payload(), "environmentId");
+        return environment != null ? String.valueOf(environment) : "default";
+    }
+
+    private static Object nested(Map<String, Object> map, String path) {
+        if (map == null || path == null) {
+            return null;
+        }
+        Object current = map;
+        for (String segment : path.split("\\\\.")) {
+            if (current instanceof Map<?, ?> nestedMap) {
+                current = nestedMap.get(segment);
+            } else {
+                return null;
+            }
+        }
+        return current;
+    }
+
+    private static Object firstNonNull(Object... values) {
+        for (Object value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static void copyNested(
+            Map<String, Object> source,
+            Map<String, Object> target,
+            String sourceField,
+            String targetField
+    ) {
+        Object value = source.get(sourceField);
+        if (value != null) {
+            target.put(targetField, value);
+        }
+    }
+
+    private static String sourcePayloadRef(Map<String, Object> outputPayload) {
+        Object handle = nested(outputPayload, "dataHandle");
+        if (handle instanceof Map<?, ?> map && map.get("uri") != null) {
+            return String.valueOf(map.get("uri"));
+        }
+        Object payloadRef = nested(outputPayload, "payloadRef");
+        return payloadRef != null ? String.valueOf(payloadRef) : null;
+    }
+
+    private static String stableEventId(
+            String dataIndividualId,
+            String processInstanceId,
+            String activityId,
+            String pluginId,
+            String timestamp
+    ) {
+        String basis = String.join(":",
+                valueOrEmpty(dataIndividualId),
+                valueOrEmpty(processInstanceId),
+                valueOrEmpty(activityId),
+                valueOrEmpty(pluginId),
+                valueOrEmpty(timestamp));
+        return java.util.UUID.nameUUIDFromBytes(basis.getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    private static String sha256(String value) {
+        if (value == null) {
+            return "";
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
+
+    private static String valueOrEmpty(String value) {
+        return value != null ? value : "";
     }
 }
 >>

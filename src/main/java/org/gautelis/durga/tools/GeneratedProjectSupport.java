@@ -67,6 +67,11 @@ final class GeneratedProjectSupport {
                 BpmnScaffolder.eventsTopic,
                 "org.apache.kafka.common.serialization.StringSerializer"
         ));
+        outgoing.putIfAbsent("vannak-metadata-events", channelConfig(
+                "smallrye-kafka",
+                "vannak-metadata-events",
+                "org.apache.kafka.common.serialization.StringSerializer"
+        ));
 
         for (String task : tasks) {
             String incomingKey = processId + "_" + task + "_input";

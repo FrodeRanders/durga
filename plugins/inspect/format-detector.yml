@@ -1,0 +1,33 @@
+id: format-detector
+name: Format Detector
+version: 1.0.0
+category: inspect
+status: stable
+description: >
+  Detects coarse payload format, datatype, MIME type, encoding, byte count,
+  and SHA-256 hash for data currently carried in the Kafka message.
+
+input:
+  schema:
+    type: string
+    description: Raw payload bytes, usually JSON or text
+
+output:
+  schema:
+    type: object
+    description: Detection metadata under a configurable field
+
+config:
+  field:
+    type: string
+    required: false
+    default: format
+    description: Output field that receives detection metadata
+  includePayload:
+    type: boolean
+    required: false
+    default: "false"
+    description: Include the original payload as a UTF-8 string in the output
+
+implementation:
+  class: org.gautelis.durga.plugins.FormatDetector

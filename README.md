@@ -55,6 +55,9 @@ Output lands in `generated/` by default:
 - `topics.sh` and `summary.json`
 - `task-payloads.json` with sample input payloads
 - `pom.xml` and `README.md` for the generated project
+- runtime contracts for `DataHandle`, handle-aware plugin execution, and
+  Vannak-compatible `DataIndividualMetadataEvent` records on
+  `vannak-metadata-events`
 - Helper scripts: `demo-scenario.sh`, `send-task-input.sh`, `complete-task.sh`,
   `fail-task.sh`, `escalate-task.sh`, `complete-call-activity.sh`,
   `send-message-event.sh`, `send-signal-event.sh`, `watch-process-events.sh`,

@@ -13,7 +13,7 @@ Plugins are defined by YAML descriptors under \filepath{plugins/} and indexed by
 \begin{itemize}
 \item \texttt{id} --- unique plugin identifier (used in \texttt{camunda:plugin}),
 \item \texttt{name} / \texttt{version} --- human-readable identifier,
-\item \texttt{category} --- governed taxonomy (transform, validate, enrich, route, aggregate, connect),
+\item \texttt{category} --- governed taxonomy (transform, validate, enrich, route, aggregate, inspect, store, connect),
 \item \texttt{status} --- lifecycle state (experimental, stable, deprecated, retired),
 \item \texttt{implementation} --- Java class implementing
 \filepath{org.gautelis.durga.plugins.Plugin},
@@ -35,6 +35,8 @@ category contract.
 \textbf{enrich} & Input$\to$enriched output, may block on external lookup \\
 \textbf{route} & Input$\to$N downstream channels, GATEWAY\_TAKEN lifecycle \\
 \textbf{aggregate} & Windowed counting, ACTIVITY\_ENTERED on window start \\
+\textbf{inspect} & Payload inspection and metadata extraction without changing the data-plane artifact \\
+\textbf{store} & Payload externalization and retrieval through \texttt{DataHandle} references \\
 \textbf{connect} & Kafka Connect source/sink configuration generation \\
 \hline
 \end{longtable}
@@ -55,17 +57,33 @@ override the \texttt{String} variant instead, with UTF-8 conversion handled by
 the \texttt{byte[]} default. Binary plugins override the \texttt{byte[]} variant
 directly. Only one of the two needs to be overridden.
 
-Generated executor classes instantiate the plugin at field level and call
-\texttt{plugin.execute(payload, config)} for each message. The config string
-comes from the BPMN \texttt{camunda:pluginConfig} property.
+Generated executor classes instantiate the plugin at field level and delegate
+through \texttt{PluginExecutionSupport.execute(...)} for each message. The config
+string comes from the BPMN \texttt{camunda:pluginConfig} property.
+Default execution is unchanged: the current \texttt{ProcessEvent.payload} JSON is
+passed to the plugin. Handle-aware execution can also be requested:
+
+\begin{itemize}
+\item \texttt{handleMode=manual} passes the \texttt{DataHandle} JSON to the plugin
+      so the plugin can operate on the handle itself.
+\item \texttt{handleMode=materialize} reads the bytes referenced by
+      \texttt{dataHandle.uri}, passes those bytes to the plugin, writes plugin
+      output back to the configured object store, and forwards a new
+      \texttt{DataHandle}.
+\item \texttt{pluginConfig=...} supplies the plugin's own configuration when the
+      outer config string is used for handle-control options.
+\end{itemize}
+
 The returned bytes are decoded as UTF-8. JSON object results replace the
 \texttt{ProcessEvent.payload}. JSON scalar, JSON array, and non-JSON text results
 are wrapped as \texttt{\{ "\_value": ... \}}. A \texttt{null} result means the
-incoming payload is forwarded unchanged.
+incoming payload is forwarded unchanged. Generated plugin and custom workers also
+emit a Vannak-compatible \texttt{DataIndividualMetadataEvent} to the
+\texttt{vannak-metadata-events} topic after successful execution.
 
 \subsection{Plugin catalog}
 
-The repository ships with 15 plugins organized by category. Stable plugins are
+The repository ships with 18 plugins organized by category. Stable plugins are
 fully supported; experimental plugins generate with a warning.
 
 \subsubsection{Transform plugins (9)}
@@ -106,6 +124,19 @@ fully supported; experimental plugins generate with a warning.
 \item[Window Counter] Counts messages within a tumbling time window and emits a summary record on window close. Optional group-by field. Status: experimental.
 \end{description}
 
+\subsubsection{Inspect plugins (1)}
+
+\begin{description}
+\item[Format Detector] Detects MIME type, textual/binary shape, JSON object/array/scalar form, byte count, and checksums. Status: experimental.
+\end{description}
+
+\subsubsection{Store plugins (2)}
+
+\begin{description}
+\item[Object Store Collector] Writes the current payload to a local file-backed object store and emits a \texttt{DataHandle}-style JSON reference. Status: experimental.
+\item[Object Store Extractor] Resolves a \texttt{DataHandle}-style object reference and emits the referenced bytes. Status: experimental.
+\end{description}
+
 \subsubsection{Connect plugins (2)}
 
 \begin{description}
@@ -140,9 +171,11 @@ template. The executor:
 
 \begin{itemize}
 \item imports the plugin implementation class and the \texttt{Plugin} interface,
+\item imports \texttt{PluginExecutionSupport} for handle-aware execution,
 \item instantiates the plugin as a private field,
-\item delegates each incoming message to \texttt{plugin.execute()},
+\item delegates each incoming message to \texttt{PluginExecutionSupport.execute(...)},
 \item emits \texttt{ACTIVITY\_COMPLETED} on success,
+\item emits a companion \texttt{DataIndividualMetadataEvent} to \texttt{vannak-metadata-events} on success,
 \item routes failures to a dead-letter topic (\texttt{\%task\%\_dlq}) with structured error records,
 \item respects \texttt{ScopeCancellationRegistry} for interrupting boundary support.
 \end{itemize}
@@ -167,7 +200,7 @@ Instead of generating a self-contained worker, the scaffolder produces:
 
 \begin{enumerate}
 \item A \textbf{contract interface} (\texttt{CustomTransformContract}) extending \texttt{Plugin} --- this defines the API between generated and hand-written code.
-\item A \textbf{delegating worker} (\texttt{CustomTransformWorkerService}) that injects the contract via CDI (\texttt{@Inject}) and delegates each message to \texttt{implementation.execute()}. The worker includes a null guard that routes to the dead-letter queue if no implementation is present.
+\item A \textbf{delegating worker} (\texttt{CustomTransformWorkerService}) that injects the contract via CDI (\texttt{@Inject}) and delegates each message through \texttt{PluginExecutionSupport.execute(...)}. The worker includes a null guard that routes to the dead-letter queue if no implementation is present.
 \end{enumerate}
 
 The developer writes an implementation class (\texttt{CustomTransformImpl implements CustomTransformContract}) in a standard Java source file. It is compiled and tested with the rest of the project. The generated contract and worker are not modified by hand.

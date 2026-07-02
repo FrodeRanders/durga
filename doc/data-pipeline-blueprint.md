@@ -219,7 +219,8 @@ Task detection
 ### 5.2 Plugin executor template (`pluginExecutorClass`)
 
 Generated executors use the `Plugin` interface. The template instantiates the
-plugin class at field level and delegates every message to `plugin.execute()`:
+plugin class at field level and delegates every message through
+`PluginExecutionSupport.execute(...)`:
 
 ```java
 @ApplicationScoped
@@ -229,7 +230,10 @@ public class TransformDataPluginExecutor {
     @Incoming("%inputChannel%")
     public CompletionStage<Void> handle(Message<String> msg) {
         // Extract business payload from ProcessEvent, pass as bytes
-        byte[] output = plugin.execute(payload.getBytes(StandardCharsets.UTF_8), "%config%");
+        byte[] output = PluginExecutionSupport.execute(
+            plugin,
+            payload.getBytes(StandardCharsets.UTF_8),
+            "%config%");
         // parse output into ProcessEvent payload, emit ACTIVITY_COMPLETED, handle DLQ
     }
 }
@@ -241,6 +245,30 @@ Plugin output is interpreted as UTF-8. If it is a JSON object, its fields become
 the next `ProcessEvent.payload`. If it is a JSON scalar, array, or non-JSON text,
 the generated worker wraps it as `{ "_value": ... }`. A `null` plugin result keeps
 the incoming payload unchanged.
+
+Generated plugin and custom-activity workers also emit a Vannak-compatible
+`DataIndividualMetadataEvent` companion record to the `vannak-metadata-events`
+Kafka topic after successful execution. The event includes process/activity
+context, a deterministic `DataIndividualShardId` hash, passive metadata such as
+input size and checksum, active metadata such as plugin id/config and output
+fields, and `DataHandle`/format metadata when present in the plugin output.
+This gives Vannak an item-level provenance stream without overloading Durga's
+canonical lifecycle `ProcessEvent`.
+
+Plugin execution is handle-aware but remains backward compatible:
+
+- Default behavior is unchanged: the generated worker passes the current
+  `ProcessEvent.payload` JSON bytes to `plugin.execute(...)`.
+- `handleMode=manual` treats the `DataHandle` JSON as the plugin payload, so a
+  plugin can operate on the handle/reference itself.
+- `handleMode=materialize` makes the generated worker read the referenced bytes
+  from `dataHandle.uri`, pass those raw bytes to the plugin, write the plugin
+  output back to the configured object store, and replace the outgoing payload
+  with a new `DataHandle` plus optional format metadata.
+
+For materialized handle execution, use `pluginConfig=...` when the plugin needs
+a configuration string distinct from Durga's handle-control options, for example
+`handleMode=materialize;store=/tmp/durga-object-store;pluginConfig=.`.
 
 ---
 
@@ -287,7 +315,20 @@ except where noted.
 |--------|--------|-------------|
 | `window-counter` | `window=60;groupBy=status` | Counts messages within a tumbling time window and emits a summary record on window close. Optional group-by field. Status: experimental. |
 
-### 6.6 Connect plugins
+### 6.6 Inspect plugins
+
+| Plugin | Config | Description |
+|--------|--------|-------------|
+| `format-detector` | `field=format;includePayload=false` | Detects coarse payload format, datatype, MIME type, encoding, byte count, and SHA-256 hash for data currently carried in the Kafka message. |
+
+### 6.7 Store plugins
+
+| Plugin | Config | Description |
+|--------|--------|-------------|
+| `object-store-collector` | `store=/tmp/durga-object-store;prefix=orders;asset=RawOrders` | Writes the incoming payload to a local file-backed object store and emits a `DataHandle`-style JSON reference. Also emits format metadata by default. Status: experimental. |
+| `object-store-extractor` | `handleField=dataHandle` | Reads a `DataHandle`-style object reference, loads the referenced bytes from the object store, and emits those bytes to the next topic. Status: experimental. |
+
+### 6.8 Connect plugins
 
 | Plugin | Config | Description |
 |--------|--------|-------------|

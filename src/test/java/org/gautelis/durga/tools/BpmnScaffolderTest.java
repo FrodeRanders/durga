@@ -549,10 +549,20 @@ public class BpmnScaffolderTest {
         assertTrue(Files.exists(transformFile));
         String content = Files.readString(transformFile);
         assertTrue(content.contains("import org.gautelis.durga.plugins.Plugin"));
-        assertTrue(content.contains("plugin.execute("));
+        assertTrue(content.contains("PluginExecutionSupport.execute("));
         assertTrue(content.contains("outputPayload"));
         assertTrue(content.contains("mapper.readTree(outputText)"));
         assertTrue(content.contains("outputPayload,"));
+        assertTrue(content.contains("@Channel(\"vannak-metadata-events\")"));
+        assertTrue(content.contains("VannakMetadata.pluginEvent("));
+
+        assertTrue(Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/DataIndividualMetadataEvent.java")));
+        assertTrue(Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/VannakMetadata.java")));
+
+        String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
+        assertTrue(applicationYaml.contains("vannak-metadata-events"));
     }
 
     @Test

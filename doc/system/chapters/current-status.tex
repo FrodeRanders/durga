@@ -26,9 +26,15 @@ described in the deployment, supervision and configuration chapters.
       pipeline metadata,
 \item generated \texttt{DataHandle} runtime contract for carrying large data
       references through process payloads,
+\item experimental object-store collector/extractor plugins for turning payload
+      bytes into \texttt{DataHandle} references and resolving them again,
+\item handle-aware plugin execution modes for manual handle processing and
+      materialized object-store processing,
+\item generated Vannak-compatible \texttt{DataIndividualMetadataEvent} emission
+      from plugin and custom workers,
 \item \texttt{--connect} can generate data-store-specific Kafka Connect
       skeletons for BPMN data-store edges,
-\item 15 data pipeline plugins (9 transform, 1 validate, 1 enrich, 1 route, 1 aggregate, 2 connect) with interface-based dispatch,
+\item 18 data pipeline plugins (9 transform, 1 validate, 1 enrich, 1 route, 1 aggregate, 1 inspect, 2 store, 2 connect) with interface-based dispatch,
 \item recursive descent expression evaluator for XOR and OR gateway conditions (\texttt{==}, \texttt{!=}, \texttt{>}, \texttt{<}, \texttt{>=}, \texttt{<=}, \texttt{\&\&}, \texttt{||}, \texttt{!}, parentheses, nested field access),
 \item custom activity round-trip: contract interface generation, delegating workers with CDI injection, model enrichment utility.
 \end{itemize}

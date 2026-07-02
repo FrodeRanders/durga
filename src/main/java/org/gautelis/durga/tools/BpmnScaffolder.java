@@ -1384,6 +1384,10 @@ public class BpmnScaffolder {
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "DataHandle.java", "dataHandleClass");
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
+                "DataIndividualMetadataEvent.java", "dataIndividualMetadataEventClass");
+        writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
+                "VannakMetadata.java", "vannakMetadataClass");
+        writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "ProcessStateStore.java", "processStateStoreClass");
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "ScopeCancellationRegistry.java", "scopeCancellationRegistryClass");
@@ -1393,6 +1397,8 @@ public class BpmnScaffolder {
                 "plugins/Plugin.java", "pluginInterfaceClass");
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "plugins/PipelinePlugin.java", "pipelinePluginClass");
+        writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
+                "plugins/PluginExecutionSupport.java", "pluginExecutionSupportClass");
 
         // Model registration bean — publishes BPMN to process-models topic on startup
         {

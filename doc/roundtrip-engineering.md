@@ -198,8 +198,8 @@ public class TransformDataWorker {
     @Incoming("pipeline_transform_data_input")
     public CompletionStage<Void> handle(Message<String> msg) {
         // ... boilerplate, cancellation check, DLQ ...
-        byte[] output = implementation.execute(payload, config);
-        // ... emit output, process-events ...
+        byte[] output = PluginExecutionSupport.execute(implementation, payload, config);
+        // ... emit output, process-events, Vannak metadata event ...
     }
 }
 ```
@@ -208,6 +208,13 @@ The generated worker parses custom activity output the same way as registered
 plugin output. Returned JSON objects become the next event payload. JSON scalars,
 arrays, and non-JSON text are wrapped under `{ "_value": ... }`. Returning `null`
 leaves the incoming payload unchanged.
+
+Custom workers and registered plugin workers share the same handle-aware
+execution path. `handleMode=manual` passes `DataHandle` JSON to the implementation;
+`handleMode=materialize` reads the referenced object-store bytes, runs the
+implementation, writes the output back to the store, and forwards a new handle.
+On successful execution, generated workers also emit a
+`DataIndividualMetadataEvent` to `vannak-metadata-events`.
 
 The developer writes:
 

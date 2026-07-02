@@ -53,7 +53,7 @@ implementation blueprint. There is one artefact. When someone asks "what
 does our pipeline look like?", you open the diagram. When the pipeline
 needs to change, you edit the diagram and regenerate. The generated code
 is standard Quarkus + Kafka — you can inspect it, version it, and
-customise it if needed, but for the 15 plugin-driven operations you
+customise it if needed, but for the 18 plugin-driven operations you
 never touch it. For operations that no plugin covers, custom activities
 generate a contract interface — you implement it in a normal Java file,
 and a build-time utility writes the implementation metadata back into the
@@ -79,7 +79,7 @@ The practical path:
    load.
 5. Cut over when confident. Retire the Airflow DAG.
 
-The 15 built-in plugins mean most transformation logic doesn't need new
+The 18 built-in plugins mean most transformation logic doesn't need new
 code. If you _do_ need custom logic, you implement the `Plugin` interface
 (override `String execute(String payload, String config)` for text data,
 or `byte[] execute(byte[] payload, String config)` for binary) and
@@ -122,7 +122,7 @@ Four escape hatches, in order of preference:
 **Use a plugin.** If you need a transform, filter, enrichment, or
 validation step, implement the `Plugin` interface. Override
 `String execute(String payload, String config)` for text/JSON data
-(or `byte[] execute(byte[], String)` for binary). The 15 built-in
+(or `byte[] execute(byte[], String)` for binary). The 18 built-in
 plugins show the pattern. Your plugin appears in the registry and can
 be referenced from any BPMN diagram by name. No generated code changes.
 
@@ -155,7 +155,7 @@ Camunda Modeler and regenerate.
 Durga is at v0.1.0. It compiles 24 BPMN test fixtures covering the
 full BPMN execution subset (tasks, gateways, timers, boundary events,
 subprocesses, call activities, message/signal events, and data pipeline
-plugins). The non-Docker verification suite currently runs 219 tests,
+plugins). The non-Docker verification suite currently runs 237 tests,
 including compilation checks that
 verifies generated projects actually compile against their dependencies.
 The generated projects run on Quarkus + Kafka.
@@ -188,7 +188,7 @@ one sprint.
 | **Audit** | Metadata database (mutable) | Immutable per-pipeline event topic (`process-events-{id}`) |
 | **Custom code** | Write a Python operator | Implement a generated contract interface in Java; build-time enrichment writes metadata back into the BPMN model for regeneration safety |
 | **Multi-pipeline isolation** | Shared scheduler database | Each pipeline gets its own event topic by default (`process-events-{id}`); override with `--event-topic` to share |
-| **Pre-built operations** | Provider packages (HTTP, S3, etc.) | 15 governed plugins in a versioned YAML registry, referenced by name from BPMN |
+| **Pre-built operations** | Provider packages (HTTP, S3, etc.) | 18 governed plugins in a versioned YAML registry, referenced by name from BPMN |
 
 The bet is this: **for event-driven pipelines, compiling a model into a
 distributed runtime produces simpler, more observable, more scalable

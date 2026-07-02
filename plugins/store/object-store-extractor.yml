@@ -1,0 +1,29 @@
+id: object-store-extractor
+name: Object Store Extractor
+version: 1.0.0
+category: store
+status: experimental
+description: >
+  Reads a DataHandle-style object reference from the incoming payload, loads
+  the referenced bytes from object storage, and emits those bytes as the next
+  topic payload. The current implementation supports file:// object handles.
+
+input:
+  schema:
+    type: object
+    description: JSON payload containing a handle object with a uri field
+
+output:
+  schema:
+    type: string
+    description: Bytes loaded from object storage
+
+config:
+  handleField:
+    type: string
+    required: false
+    default: dataHandle
+    description: Input field that contains the object handle
+
+implementation:
+  class: org.gautelis.durga.plugins.ObjectStoreExtractor

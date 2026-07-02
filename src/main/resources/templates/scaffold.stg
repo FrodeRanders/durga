@@ -1503,6 +1503,10 @@ public class %className% {
     Emitter<String> dlqEmitter;
 
     @Inject
+    @Channel("vannak-metadata-events")
+    Emitter<String> vannakMetadataEmitter;
+
+    @Inject
     ScopeCancellationRegistry cancellationRegistry;
 
     @Inject
@@ -1525,9 +1529,12 @@ public class %className% {
             String payload = inputEvent.payload() != null
                     ? new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
                     : "{}";
-            byte[] output = implementation.execute(
-                    payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                    "%pluginConfig%");
+            org.gautelis.durga.plugins.PluginExecutionSupport.Result pluginResult =
+                    org.gautelis.durga.plugins.PluginExecutionSupport.execute(
+                            implementation,
+                            payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                            "%pluginConfig%");
+            byte[] output = pluginResult.output();
             java.util.Map<String, Object> outputPayload = inputEvent.payload();
             if (output != null) {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -1560,6 +1567,14 @@ public class %className% {
             );
             outputEmitter.send(outputEvent.toJson());
             processEventsEmitter.send(outputEvent.toJson());
+            vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
+                    inputEvent,
+                    "%taskId%",
+                    "custom:%taskId%",
+                    "%pluginConfig%",
+                    payload,
+                    outputPayload
+            ).toJson());
         } catch (Exception e) {
             String error = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
                     msg.getPayload(), "custom:%taskId%", e.getMessage());
@@ -1616,6 +1631,10 @@ public class %className% {
     Emitter<String> dlqEmitter;
 
     @Inject
+    @Channel("vannak-metadata-events")
+    Emitter<String> vannakMetadataEmitter;
+
+    @Inject
     ScopeCancellationRegistry cancellationRegistry;
 
     private final Plugin plugin = new %pluginImplClass%();
@@ -1630,9 +1649,12 @@ public class %className% {
             String payload = inputEvent.payload() != null
                     ? new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
                     : "{}";
-            byte[] output = plugin.execute(
-                    payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                    "%pluginConfig%");
+            org.gautelis.durga.plugins.PluginExecutionSupport.Result pluginResult =
+                    org.gautelis.durga.plugins.PluginExecutionSupport.execute(
+                            plugin,
+                            payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                            "%pluginConfig%");
+            byte[] output = pluginResult.output();
             java.util.Map<String, Object> outputPayload = inputEvent.payload();
             if (output != null) {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -1665,6 +1687,14 @@ public class %className% {
             );
             outputEmitter.send(outputEvent.toJson());
             processEventsEmitter.send(outputEvent.toJson());
+            vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
+                    inputEvent,
+                    "%taskId%",
+                    "%pluginRef%",
+                    "%pluginConfig%",
+                    payload,
+                    outputPayload
+            ).toJson());
         } catch (Exception e) {
             String error = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
                     msg.getPayload(), "%pluginRef%", e.getMessage());

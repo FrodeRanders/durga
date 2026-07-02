@@ -35,6 +35,18 @@ plugins:
     version: 1.0.0
     category: transform
     path: transform/timestamp-normalize.yml
+  - id: format-detector
+    version: 1.0.0
+    category: inspect
+    path: inspect/format-detector.yml
+  - id: object-store-collector
+    version: 1.0.0
+    category: store
+    path: store/object-store-collector.yml
+  - id: object-store-extractor
+    version: 1.0.0
+    category: store
+    path: store/object-store-extractor.yml
   - id: json-schema-validator
     version: 1.0.0
     category: validate
