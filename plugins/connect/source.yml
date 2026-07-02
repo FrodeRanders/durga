@@ -1,3 +1,6 @@
+# Kafka Connect source connector code-generation descriptor.
+# This is not a runtime Plugin implementation - it defines how the scaffolder
+# generates connect/source JSON config files via BpmnScaffolder.
 id: kafka-connect-source
 name: Kafka Connect Source
 version: 1.0.0

@@ -201,7 +201,7 @@ class BpmnModelCollector {
         PluginDescriptor desc = registry.get(pluginId);
         String name = normalize(nameOrId(task.getName(), task.getId()));
         return new TaskSpec(task.getId(), name, TaskKind.PLUGIN, pluginId, pluginConfig,
-                desc.implementation.className);
+                desc.implementation.className, desc.category);
     }
 
     static TaskSpec resolveCustomTask(ServiceTask task) {
@@ -235,7 +235,7 @@ class BpmnModelCollector {
         String contractName = parseContractName(pluginConfig, task);
         String name = normalize(nameOrId(task.getName(), task.getId()));
         return new TaskSpec(task.getId(), name, TaskKind.CUSTOM, pluginId, pluginConfig,
-                null, contractName, customImpl, customSource, customHash);
+                null, null, contractName, customImpl, customSource, customHash);
     }
 
     static String parseContractName(String pluginConfig, ServiceTask task) {

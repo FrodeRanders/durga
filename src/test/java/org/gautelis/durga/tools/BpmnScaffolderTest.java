@@ -707,6 +707,14 @@ public class BpmnScaffolderTest {
         String xorContent = Files.readString(xorFile);
         assertTrue("XOR missing amount > 1000 condition",
                 xorContent.contains("amount > 1000") || xorContent.contains("> 1000"));
+
+        Path validateHighValueFile = outputDir.resolve(
+                "src/main/java/org/example/generated/ValidateHighValuePluginExecutor.java");
+        assertTrue(Files.exists(validateHighValueFile));
+        String validateHighValueContent = Files.readString(validateHighValueFile);
+        assertTrue("validate executor missing ACTIVITY_ESCALATED", validateHighValueContent.contains("ProcessEvent.EventType.ACTIVITY_ESCALATED"));
+        assertTrue("validate executor missing ESCALATED status", validateHighValueContent.contains("ProcessEvent.Status.ESCALATED"));
+        assertTrue("validate executor missing VALIDATION_FAILED error code", validateHighValueContent.contains("VALIDATION_FAILED"));
     }
 
     @Test
@@ -725,6 +733,14 @@ public class BpmnScaffolderTest {
                 "src/main/java/org/example/generated/FlattenForIndexPluginExecutor.java")));
         assertTrue(Files.exists(outputDir.resolve(
                 "src/main/java/org/example/generated/MaskIpAddressPluginExecutor.java")));
+
+        Path validateFile = outputDir.resolve(
+                "src/main/java/org/example/generated/ValidateLogRecordPluginExecutor.java");
+        assertTrue(Files.exists(validateFile));
+        String validateContent = Files.readString(validateFile);
+        assertTrue("validate executor missing ACTIVITY_ESCALATED", validateContent.contains("ProcessEvent.EventType.ACTIVITY_ESCALATED"));
+        assertTrue("validate executor missing ESCALATED status", validateContent.contains("ProcessEvent.Status.ESCALATED"));
+        assertTrue("validate executor missing VALIDATION_FAILED error code", validateContent.contains("VALIDATION_FAILED"));
     }
 
     @Test

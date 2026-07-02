@@ -39,26 +39,32 @@ final class TaskSpec {
     final String pluginRef;
     final String pluginConfig;
     final String pluginImplClass;
+    final String pluginCategory;
     final String customContract;
     final String customImpl;
     final String customSource;
     final String customHash;
 
     TaskSpec(String id, String name, TaskKind kind) {
-        this(id, name, kind, null, null, null, null, null, null, null);
+        this(id, name, kind, null, null, null, null, null, null, null, null);
     }
 
     TaskSpec(String id, String name, TaskKind kind, String pluginRef, String pluginConfig) {
-        this(id, name, kind, pluginRef, pluginConfig, null, null, null, null, null);
+        this(id, name, kind, pluginRef, pluginConfig, null, null, null, null, null, null);
     }
 
     TaskSpec(String id, String name, TaskKind kind, String pluginRef, String pluginConfig,
              String pluginImplClass) {
-        this(id, name, kind, pluginRef, pluginConfig, pluginImplClass, null, null, null, null);
+        this(id, name, kind, pluginRef, pluginConfig, pluginImplClass, null, null, null, null, null);
     }
 
     TaskSpec(String id, String name, TaskKind kind, String pluginRef, String pluginConfig,
-             String pluginImplClass, String customContract, String customImpl,
+             String pluginImplClass, String pluginCategory) {
+        this(id, name, kind, pluginRef, pluginConfig, pluginImplClass, pluginCategory, null, null, null, null);
+    }
+
+    TaskSpec(String id, String name, TaskKind kind, String pluginRef, String pluginConfig,
+             String pluginImplClass, String pluginCategory, String customContract, String customImpl,
              String customSource, String customHash) {
         this.id = id;
         this.name = name;
@@ -66,6 +72,7 @@ final class TaskSpec {
         this.pluginRef = pluginRef;
         this.pluginConfig = pluginConfig;
         this.pluginImplClass = pluginImplClass;
+        this.pluginCategory = pluginCategory;
         this.customContract = customContract;
         this.customImpl = customImpl;
         this.customSource = customSource;

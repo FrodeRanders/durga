@@ -1,3 +1,6 @@
+# Kafka Connect sink connector code-generation descriptor.
+# This is not a runtime Plugin implementation - it defines how the scaffolder
+# generates connect/sink JSON config files via BpmnScaffolder.
 id: kafka-connect-sink
 name: Kafka Connect Sink
 version: 1.0.0

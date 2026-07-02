@@ -63,6 +63,11 @@ final class TaskRoutingGenerator {
                 worker.add("pluginRef", task.pluginRef);
                 worker.add("pluginConfig", task.pluginConfig != null ? task.pluginConfig : ".");
                 worker.add("pluginImplClass", task.pluginImplClass);
+                String cat = task.pluginCategory != null ? task.pluginCategory : "";
+                worker.add("category", cat);
+                worker.add("isRoute", "route".equals(cat));
+                worker.add("isValidate", "validate".equals(cat));
+                worker.add("isAggregate", "aggregate".equals(cat));
             }
             addLineageToTemplate(worker, taskLineage, task.name);
             if (!dryRun) {

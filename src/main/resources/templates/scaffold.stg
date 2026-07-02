@@ -1655,7 +1655,7 @@ public class %className% {
 }
 >>
 
-pluginExecutorClass(packageName, className, processId, taskId, taskType, pluginRef, pluginConfig, pluginImplClass, taskReads, taskWrites, taskStores, hasLineage) ::= <<
+pluginExecutorClass(packageName, className, processId, taskId, taskType, pluginRef, pluginConfig, pluginImplClass, category, taskReads, taskWrites, taskStores, hasLineage, isRoute, isValidate, isAggregate) ::= <<
 package %packageName%;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -1722,7 +1722,23 @@ public class %className% {
                         ? pluginResult.sideEffectDescription() : "Plugin requested failure");
             }
             byte[] output = pluginResult.output();
-            java.util.Map<String, Object> outputPayload = inputEvent.payload();
+            %if(isAggregate)%if (output == null) {
+                return processEventsEmitter.send(new ProcessEvent(
+                        inputEvent.processInstanceId(),
+                        inputEvent.processId(),
+                        "%taskId%",
+                        inputEvent.tokenId(),
+                        inputEvent.correlationId(),
+                        inputEvent.payload(),
+                        ProcessEvent.Status.STARTED,
+                        null,
+                        ProcessEvent.EventType.ACTIVITY_ENTERED,
+                        inputEvent.processVersion(),
+                        inputEvent.businessKey(),
+                        null
+                ).toJson()).thenCompose(ignored -> msg.ack());
+            }
+            %endif%java.util.Map<String, Object> outputPayload = inputEvent.payload();
             if (output != null) {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 String outputText = new String(output, java.nio.charset.StandardCharsets.UTF_8);
@@ -1747,7 +1763,9 @@ public class %className% {
                     outputPayload,
                     ProcessEvent.Status.COMPLETED,
                     null,
-                    ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                    %if(isRoute)%ProcessEvent.EventType.GATEWAY_TAKEN,
+                    %else%ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                    %endif%
                     inputEvent.processVersion(),
                     inputEvent.businessKey(),
                     null
@@ -1776,6 +1794,27 @@ public class %className% {
         } catch (Exception e) {
             String error = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
                     msg.getPayload(), "%pluginRef%", e.getMessage());
+            %if(isValidate)%
+            return java.util.concurrent.CompletableFuture.allOf(
+                    dlqEmitter.send(error).toCompletableFuture(),
+                    processEventsEmitter.send(new ProcessEvent(
+                    inputEvent.processInstanceId(),
+                    inputEvent.processId(),
+                    "%taskId%",
+                    inputEvent.tokenId(),
+                    inputEvent.correlationId(),
+                    java.util.Map.of("_payloadRedacted", true),
+                    ProcessEvent.Status.ESCALATED,
+                    new ProcessEvent.ErrorInfo(
+                            org.gautelis.durga.plugins.PipelinePlugin.sanitizeErrorMessage(e.getMessage()),
+                            "VALIDATION_FAILED"),
+                    ProcessEvent.EventType.ACTIVITY_ESCALATED,
+                    inputEvent.processVersion(),
+                    inputEvent.businessKey(),
+                    null
+            ).toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
+            %else%
             return java.util.concurrent.CompletableFuture.allOf(
                     dlqEmitter.send(error).toCompletableFuture(),
                     processEventsEmitter.send(new ProcessEvent(
@@ -1795,6 +1834,7 @@ public class %className% {
                     null
             ).toJson()).toCompletableFuture()
             ).thenCompose(ignored -> msg.ack());
+            %endif%
         }
     }
 }
