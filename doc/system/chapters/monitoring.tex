@@ -79,3 +79,109 @@ readiness, consumer lag on lifecycle and monitoring topics, stuck-instance
 counts, latency percentiles, DLQ volume and failed lifecycle events. The
 dashboard is an operator view over the Kafka Streams read model, not a
 replacement for Kafka broker, consumer group and infrastructure monitoring.
+
+\subsection{Fault detection}
+
+\label{sec:FaultDetection}
+
+The fault detection topology consumes the same \texttt{process-events-.*}
+stream as the monitoring topology and evaluates each lifecycle event against
+a set of configured \texttt{AlarmConfig} rules. When a rule's criteria are
+met, an \texttt{AlarmEvent} is published to the \texttt{fault-alarms} topic
+for downstream notification, alerting, or dashboard integration.
+
+\subsubsection{Alarm configuration}
+
+Alarms are defined with the following scope and syndrome:
+
+\begin{description}
+\item[Scope] Each config can target a specific process (\texttt{processId}),
+  a specific activity (\texttt{activityId}), both, or neither (all events).
+\item[Event type] Which \texttt{ProcessEvent.EventType} triggers evaluation
+  (e.g. \texttt{PROCESS\_FAILED}, \texttt{ACTIVITY\_ESCALATED}).
+\item[Syndrome] How observed faults are aggregated into an alarm (see below).
+\item[Severity] \texttt{WARN} or \texttt{CRITICAL}.
+\item[Message] A template rendered at alarm time; supports
+  \texttt{\$\{processId\}}, \texttt{\$\{activityId\}},
+  \texttt{\$\{count\}}, and \texttt{\$\{processInstanceId\}}.
+\end{description}
+
+\subsubsection{Syndromes}
+
+\begin{description}
+
+\item[HARD\_ERROR] First occurrence triggers alarm immediately. No
+threshold---every matching event produces an alarm. Suitable for critical
+failures that must never happen (e.g. schema validation failure on a
+compliance-critical field).
+
+\item[COUNTED] Counts occurrences per (config, processId, activityId).
+The alarm fires once when the accumulated count exceeds
+\texttt{threshold}, then suppresses until the count drops back below the
+threshold (re-arm). Suitable for transient errors that become significant
+in volume (e.g. 5 task failures per process).
+
+\item[SLIDING\_WINDOW] Counts occurrences within a sliding time window.
+Old occurrences leak out after \texttt{windowDuration}. The alarm fires
+once when the windowed count exceeds \texttt{threshold}, then suppresses
+until the count drops back below threshold (re-arm). Suitable for
+burst detection (e.g. more than 3 \texttt{PROCESS\_FAILED} events in a
+60-second window).
+
+\end{description}
+
+\subsubsection{Alarm emission}
+
+Triggered alarms are serialized as JSON and published to the
+\texttt{fault-alarms} topic. Each \texttt{AlarmEvent} carries:
+
+\begin{itemize}
+\item \texttt{alarmId} --- unique per firing,
+\item \texttt{configId} --- back-reference to the triggering config,
+\item \texttt{syndrome}, \texttt{severity}, \texttt{message} --- from config,
+\item \texttt{processId}, \texttt{processInstanceId}, \texttt{activityId} --- scope,
+\item \texttt{triggerEventType}, \texttt{triggerTimestamp} --- what fired it,
+\item \texttt{count} --- current accumulated count at firing,
+\item \texttt{threshold} --- config threshold (0 for HARD\_ERROR).
+\end{itemize}
+
+\subsubsection{State stores}
+
+The topology maintains three persistent state stores:
+
+\begin{itemize}
+\item \texttt{fault-counts-store} --- current count per (config, processId, activityId).
+\item \texttt{fault-windows-store} --- list of epoch-millis timestamps per scope (SLIDING\_WINDOW only).
+\item \texttt{fault-last-alarm-store} --- count at which the last alarm fired, used for single-fire suppression.
+\end{itemize}
+
+\subsubsection{Example configuration}
+
+\begin{verbatim}
+AlarmConfig hard = new AlarmConfig("schema-fail-critical", null,
+    "validate_high_value", ProcessEvent.EventType.ACTIVITY_ESCALATED,
+    AlarmSyndrome.HARD_ERROR, 0, null,
+    AlarmSeverity.CRITICAL, "Schema validation escalated");
+
+AlarmConfig counted = new AlarmConfig("proc-fail-warn", "order-proc",
+    null, ProcessEvent.EventType.PROCESS_FAILED,
+    AlarmSyndrome.COUNTED, 5, null,
+    AlarmSeverity.WARN, "${count} failures in ${processId}");
+
+AlarmConfig window = new AlarmConfig("burst-detect", null, null,
+    ProcessEvent.EventType.PROCESS_FAILED,
+    AlarmSyndrome.SLIDING_WINDOW, 3, Duration.ofMinutes(1),
+    AlarmSeverity.CRITICAL, "Burst: ${count} failures in 1 min");
+\end{verbatim}
+
+\subsubsection{Integration with the monitoring server}
+
+The fault detection topology runs alongside the monitoring topology in the
+same Kafka Streams application. Both share the \texttt{process-events-.*}
+subscription. The \texttt{FaultDetectionTopology.buildTopology(\dots)}
+method returns a standalone \texttt{Topology} that can be started in the
+same \texttt{KafkaStreams} instance or in a separate one with its own
+application ID.
+
+Unit tests are in \texttt{FaultDetectionTest} (13 scenarios); see
+Appendix~\ref{sec:IntegrationTestAppendix} for the test catalogue.

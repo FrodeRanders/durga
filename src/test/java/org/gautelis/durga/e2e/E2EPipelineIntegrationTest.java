@@ -259,6 +259,38 @@ public class E2EPipelineIntegrationTest extends KafkaIntegrationTestBase {
         assertTrue("validate duration recorded", state.activityDurationsMs().containsKey("validate_high_value"));
     }
 
+    @Test
+    public void shouldParseAlarmConfigsFromBpmnModel() throws Exception {
+        System.out.println("TC: BPMN model contains alarm configs at process, inherited, and activity levels");
+
+        String bpmnXml = Files.readString(Path.of("src/test/resources/bpmn/e2e_pipeline.bpmn"));
+        List<org.gautelis.durga.monitoring.AlarmConfig> configs =
+                org.gautelis.durga.monitoring.BpmnAlarmConfigParser.parse(bpmnXml);
+
+        assertFalse("expected alarm configs from BPMN", configs.isEmpty());
+
+        // activity-level: validate-escalation on validate_high_value
+        assertTrue("missing activity-level HARD_ERROR alarm",
+                configs.stream().anyMatch(c ->
+                        "e2e_pipeline:validate-escalation".equals(c.id())
+                        && "validate_high_value".equals(c.activityId())
+                        && c.syndrome() == org.gautelis.durga.monitoring.AlarmSyndrome.HARD_ERROR));
+
+        // process-level inherited: *default (COUNTED, threshold=5) for every activity
+        assertTrue("missing inherited COUNTED alarm",
+                configs.stream().anyMatch(c ->
+                        c.id().endsWith(":default")
+                        && c.syndrome() == org.gautelis.durga.monitoring.AlarmSyndrome.COUNTED
+                        && c.threshold() == 5));
+
+        // process-level aggregate: $burst (SLIDING_WINDOW, threshold=3, 60s window)
+        assertTrue("missing aggregate SLIDING_WINDOW alarm",
+                configs.stream().anyMatch(c ->
+                        c.id().endsWith(":burst")
+                        && c.activityId() == null
+                        && c.syndrome() == org.gautelis.durga.monitoring.AlarmSyndrome.SLIDING_WINDOW));
+    }
+
     // ---------- helpers ----------
 
     private void produceEvent(String instanceId, String processId, String activityId,

@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="e2e_pipeline" name="E2E Pipeline" isExecutable="true">
+    <bpmn:extensionElements>
+      <camunda:properties>
+        <camunda:property name="durga:alarm:*default:syndrome" value="COUNTED" />
+        <camunda:property name="durga:alarm:*default:eventType" value="PROCESS_FAILED" />
+        <camunda:property name="durga:alarm:*default:threshold" value="5" />
+        <camunda:property name="durga:alarm:*default:severity" value="WARN" />
+        <camunda:property name="durga:alarm:*default:message" value="${count} failures in ${activityId}" />
+        <camunda:property name="durga:alarm:$burst:syndrome" value="SLIDING_WINDOW" />
+        <camunda:property name="durga:alarm:$burst:eventType" value="PROCESS_FAILED" />
+        <camunda:property name="durga:alarm:$burst:threshold" value="3" />
+        <camunda:property name="durga:alarm:$burst:windowSeconds" value="60" />
+        <camunda:property name="durga:alarm:$burst:severity" value="CRITICAL" />
+        <camunda:property name="durga:alarm:$burst:message" value="Burst: ${count} failures in 60s across ${processId}" />
+      </camunda:properties>
+    </bpmn:extensionElements>
     <bpmn:startEvent id="StartEvent_1" name="Ingest orders">
       <bpmn:outgoing>Flow_to_transform</bpmn:outgoing>
     </bpmn:startEvent>
@@ -54,6 +69,10 @@
         <camunda:properties>
           <camunda:property name="plugin" value="json-schema-validator" />
           <camunda:property name="pluginConfig" value="required=order_id,amount,customer_email" />
+          <camunda:property name="durga:alarm:validate-escalation:syndrome" value="HARD_ERROR" />
+          <camunda:property name="durga:alarm:validate-escalation:eventType" value="ACTIVITY_ESCALATED" />
+          <camunda:property name="durga:alarm:validate-escalation:severity" value="CRITICAL" />
+          <camunda:property name="durga:alarm:validate-escalation:message" value="Validation escalated in ${activityId} for ${processId}" />
         </camunda:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_enrich_to_validate</bpmn:incoming>

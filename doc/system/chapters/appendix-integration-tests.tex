@@ -2,7 +2,9 @@
 \section{Integration test catalogue}
 \label{sec:IntegrationTestAppendix}
 
-This appendix documents every Docker-backed integration test in the project.
+This appendix documents every test suite in the project that exercises
+behaviour against a live Kafka broker (Docker-backed integration tests)
+plus the fault detection unit test suite for completeness.
 All tests extend \texttt{KafkaIntegrationTestBase}, which uses Testcontainers
 to spin up a real Kafka broker (Confluent CP 7.8.0 in KRaft mode) per test
 class. Each test class creates its own topics with randomised suffixes to
@@ -275,9 +277,84 @@ the monitoring engine --- end to end, against a live Kafka broker.
 
 % ===========================================================================
 
+\subsection{FaultDetectionTest (unit)}
+\label{it:faultDetection}
+
+\textbf{Purpose:} Unit-test the fault detection algorithm across all three
+syndromes without requiring a Kafka broker. The test uses in-memory
+\texttt{MapKVStore} adapters that implement the \texttt{KeyValueStore}
+interface.
+
+\textbf{Class:} \texttt{FaultDetectionTest} (13 scenarios, no Docker required).
+
+\textbf{Scenarios (13):}
+
+\begin{description}
+
+\item[shouldFireHardErrorOnFirstOccurrence] Config with scope
+(\texttt{processId="order-proc"}, \texttt{activityId="validate\_order"}),
+\texttt{HARD\_ERROR} syndrome, \texttt{CRITICAL} severity. Asserts alarm
+fires with correct message rendering, scope fields, and count=1.
+
+\item[shouldFireHardErrorRepeatedly] Wildcard-scoped config (both
+\texttt{processId} and \texttt{activityId} null) fires on every matching
+\texttt{PROCESS\_FAILED} event regardless of process or activity.
+
+\item[shouldNotFireHardErrorForNonMatchingEventType] Config targeting
+\texttt{ACTIVITY\_ESCALATED} ignores a \texttt{PROCESS\_FAILED} event.
+
+\item[shouldMatchByProcessOnly] Config scoped to \texttt{"order-proc"}
+fires for events in that process, ignores events in \texttt{"other-proc"}.
+
+\item[shouldMatchByActivityOnly] Config scoped to
+\texttt{"validate\_order"} fires for that activity in any process, ignores
+other activities.
+
+\item[shouldCountAndFireWhenThresholdExceeded] \texttt{COUNTED} syndrome
+with threshold=3. First three events increment count silently; fourth
+crosses threshold and fires alarm; fifth is suppressed (single-fire).
+
+\item[shouldReArmAfterCountDropsBelowThreshold] After an alarm fires,
+manually resets count below threshold and clears the alarm marker. The
+next event that crosses threshold fires a new alarm.
+
+\item[shouldFireWhenWindowCountExceedsThreshold] \texttt{SLIDING\_WINDOW}
+with threshold=2 and 60-second window. First three events accumulate;
+third crosses threshold and fires; fourth suppressed (single-fire).
+
+\item[shouldPruneOldTimestampsInWindow] With a 100-ms window, inserts
+four events, waits 150 ms, then adds a fifth. The four old timestamps
+are pruned; only the one new event remains in the window, so no alarm
+fires.
+
+\item[shouldHandleMultipleConfigs] A \texttt{HARD\_ERROR} and a
+\texttt{COUNTED} config both match the same event. The hard-error
+fires immediately; the counted config correctly matches the event's
+scope and type.
+
+\item[shouldHandleEscalatedEvents] Config targeting
+\texttt{ACTIVITY\_ESCALATED} fires on an escalated event with correct
+syndrome and config ID.
+
+\item[shouldRejectSlidingWindowWithoutDuration] Constructor validation
+rejects a \texttt{SLIDING\_WINDOW} config with \texttt{null}
+\texttt{windowDuration}.
+
+\item[shouldRejectCountedWithoutThreshold] Constructor validation
+rejects a \texttt{COUNTED} config with \texttt{threshold=0}.
+
+\end{description}
+
+\textbf{Why it matters:} The fault detection algorithm is the core
+intelligence that distinguishes between hard errors, counted thresholds,
+and time-windowed bursts. Getting the de-duplication and re-arm logic
+wrong would cause either alarm floods or silent failures.
+
+% ===========================================================================
+
 \subsection{Infrastructure}
 
-All five suites share a common base class:
+All six suites share a common base class for Docker-backed tests:
 
 \textbf{KafkaIntegrationTestBase} (\filepath{src/test/java/org/gautelis/}
 \filepath{durga/KafkaIntegrationTestBase.java}) uses the Testcontainers
