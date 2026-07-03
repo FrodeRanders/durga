@@ -56,7 +56,7 @@ public class E2ETestDataLoader {
                     break;
                 case "--count":
                     maxCount = Long.parseLong(args[++i]);
-                    continuous = false;
+                    continuous = maxCount < 0;
                     break;
                 case "--interval-ms":
                     intervalMs = Long.parseLong(args[++i]);

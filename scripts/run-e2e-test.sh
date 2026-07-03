@@ -182,12 +182,15 @@ cmd_feed() {
 
     log "Starting data feed — $mode"
     echo ""
-    java -cp "$MONITOR_JAR" \
-        "$TEST_DATA_LOADER" \
-        --bootstrap-servers "$REDPANDA_BOOTSTRAP" \
-        --topic e2e_pipeline_start \
-        --count "$count" \
+    local feed_args=(
+        --bootstrap-servers "$REDPANDA_BOOTSTRAP"
+        --topic e2e_pipeline_start
         --interval-ms "$interval"
+    )
+    if [ "$count" != "-1" ]; then
+        feed_args+=(--count "$count")
+    fi
+    java -cp "$MONITOR_JAR" "$TEST_DATA_LOADER" "${feed_args[@]}"
 }
 
 cmd_test_run() {
@@ -215,14 +218,20 @@ cmd_test_run() {
     echo ""
     cd "$PROJECT_DIR"
 
-    log "Starting data feed — continuous (Ctrl-C to stop)"
+    local mode="continuous (Ctrl-C to stop)"
+    [ "$feed_count" != "-1" ] && mode="bounded: $feed_count records"
+
+    log "Starting data feed — $mode"
     echo ""
-    java -cp "$MONITOR_JAR" \
-        "$TEST_DATA_LOADER" \
-        --bootstrap-servers "$REDPANDA_BOOTSTRAP" \
-        --topic e2e_pipeline_start \
-        --count "$feed_count" \
+    local feed_args=(
+        --bootstrap-servers "$REDPANDA_BOOTSTRAP"
+        --topic e2e_pipeline_start
         --interval-ms "$feed_interval"
+    )
+    if [ "$feed_count" != "-1" ]; then
+        feed_args+=(--count "$feed_count")
+    fi
+    java -cp "$MONITOR_JAR" "$TEST_DATA_LOADER" "${feed_args[@]}"
 }
 
 cmd_stop() {
