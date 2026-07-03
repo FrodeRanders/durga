@@ -99,7 +99,7 @@ def add_bpmnedges(filepath):
 
 
 def main():
-    base = sys.argv[1] if len(sys.argv) > 1 else 'src/test/resources/bpmn'
+    base = sys.argv[1] if len(sys.argv) > 1 else 'durga-tools/src/test/resources/bpmn'
     files = sorted(f for f in os.listdir(base) if f.startswith('invoice_') and f.endswith('.bpmn'))
     if not files:
         print(f"No invoice_*.bpmn files found in {base}")

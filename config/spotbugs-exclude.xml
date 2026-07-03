@@ -66,6 +66,10 @@
         <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
     </Match>
     <Match>
+        <Class name="org.gautelis.durga.tools.PluginDescriptor$PluginMetadata"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <Match>
         <Class name="org.gautelis.durga.tools.PluginDescriptor$PluginConfigField"/>
         <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
     </Match>

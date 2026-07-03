@@ -1,0 +1,7 @@
+---
+# Monitoring runtime defaults.
+# Demo runners and generated projects carry their own application.yml.
+
+kafka:
+  bootstrap:
+    servers: localhost:9094

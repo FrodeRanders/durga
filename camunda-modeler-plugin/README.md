@@ -25,7 +25,9 @@ npm install
 npm run build
 ```
 
-This generates `dist/client.js` and bundles the plugin catalog from `../plugins/*.yml`.
+This generates `dist/client.js` and bundles the plugin catalog from the repository-level
+`../plugins/*.yml` descriptors. To use a different descriptor directory, set
+`DURGA_PLUGIN_CATALOG_DIR=/path/to/plugins` before running the build.
 
 ### Install into Camunda Modeler
 
@@ -104,10 +106,13 @@ camunda-modeler-plugin/
 ├── client/
 │   ├── index.js                    # Client-side registration
 │   └── DurgaPropertiesProvider.js  # Properties panel groups + widget logic
-├── generate-catalog.js             # Build-time catalog generator (reads ../plugins/*.yml)
+├── generate-catalog.js             # Build-time catalog generator (reads ../plugins/*.yml or DURGA_PLUGIN_CATALOG_DIR)
 ├── dist/                           # Build output
 │   ├── client.js                   # Bundled plugin (webpack)
 │   └── plugin-catalog.json         # Generated catalog with widget schemas
 ├── package.json
 └── webpack.config.js
 ```
+
+`generate-catalog.js` does not modify `plugins/catalog.yml`; it reads descriptor YAML and writes
+`dist/plugin-catalog.json` for the Camunda Modeler UI.

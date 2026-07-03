@@ -6,16 +6,23 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_FILE="$PROJECT_DIR/setup/e2e/docker-compose.yml"
 
 REDPANDA_BOOTSTRAP="localhost:9094"
-LIFECYCLE_FEED="org.gautelis.durga.demo.ContinuousFeedPublisher"
-MODEL_PUBLISHER="org.gautelis.durga.demo.BpmnModelPublisher"
-E2E_PROCESS_ID="e2e-pipeline"
-E2E_BPMN_PATH="$PROJECT_DIR/src/test/resources/bpmn/e2e_pipeline.bpmn"
-BPMN_DIR="$PROJECT_DIR/src/test/resources/bpmn"
+SCAFFOLDER="org.gautelis.durga.tools.BpmnScaffolder"
+FEED_PUBLISHER="org.gautelis.durga.demo.E2EFeedPublisher"
+E2E_BPMN_PATH="$PROJECT_DIR/durga-tools/src/test/resources/bpmn/e2e_pipeline.bpmn"
+E2E_PROCESS_ID=$(grep -o 'bpmn:process[^>]*id="[^"]*"' "$E2E_BPMN_PATH" | grep -o 'id="[^"]*"' | head -1 | cut -d'"' -f2)
+if [ -z "$E2E_PROCESS_ID" ]; then
+    E2E_PROCESS_ID="e2e_pipeline"
+    warn "Could not extract process ID from $E2E_BPMN_PATH, defaulting to $E2E_PROCESS_ID"
+fi
 INFRA_LOCK="$PROJECT_DIR/.e2e-infra-running"
 MONITOR_PORT=8081
-MONITOR_JAR="$PROJECT_DIR/target/durga-0.1.0-beta.1-runner.jar"
+MONITOR_JAR="$PROJECT_DIR/durga-monitor/target/durga-monitor-0.1.0-beta.1-runner.jar"
+TOOLS_JAR="$PROJECT_DIR/durga-tools/target/durga-tools-0.1.0-beta.1.jar"
 MONITOR_LOG="$PROJECT_DIR/target/monitor.log"
 MONITOR_PID_FILE="$PROJECT_DIR/target/monitor.pid"
+GEN_DIR="$PROJECT_DIR/target/e2e-gen"
+GEN_PID_FILE="$PROJECT_DIR/target/pipeline.pid"
+GEN_LOG="$PROJECT_DIR/target/pipeline.log"
 MONITOR_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-state"
 FAULT_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-fault-state"
 ALARM_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-alarm-state"
@@ -35,20 +42,20 @@ Usage: run-e2e-test.sh <command> [options]
 
 Commands:
   test       Run E2E integration tests (self-contained, uses Testcontainers)
-  feed       Start data feed + monitoring server (auto-starts infra)
-  test-run   Run tests, then start feed + monitoring server (Ctrl-C to stop)
-  stop       Stop infrastructure and monitoring server
+  feed       Full e2e: infra + monitor + scaffold + build + pipeline + data feed
+  test-run   Run tests, then full e2e pipeline (Ctrl-C to stop)
+  stop       Stop infrastructure, pipeline, and monitoring server
 
 Feed options (with 'feed' or 'test-run'):
   --count N       Publish exactly N records then exit (default: continuous)
-  --interval-ms   Batch interval in ms (default: 100)
+  --interval-ms   Interval in ms between records (default: 100)
 
 Examples:
   ./run-e2e-test.sh test              # Run all integration tests
-  ./run-e2e-test.sh feed              # Infra + monitor + continuous feed
-  ./run-e2e-test.sh feed --count 200  # Infra + monitor + 200 records
-  ./run-e2e-test.sh test-run          # Test + monitor + continuous feed
-  ./run-e2e-test.sh stop              # Tear down everything
+  ./run-e2e-test.sh feed              # Full e2e pipeline + monitoring (continuous)
+  ./run-e2e-test.sh feed --count 200  # Bounded: 200 orders through the pipeline
+  ./run-e2e-test.sh test-run          # Test + full e2e pipeline
+  ./run-e2e-test.sh stop              # Tear down
 EOF
 }
 
@@ -78,8 +85,9 @@ start_infra() {
     until curl -s http://localhost:8083/connectors >/dev/null 2>&1; do sleep 2; done
     log "Kafka Connect ready"
 
+    log "Creating topics..."
     docker exec durga-redpanda rpk topic create \
-        e2e_pipeline_start process-events-e2e-pipeline vannak-metadata-events process-models 2>/dev/null || true
+        e2e_pipeline_start process-events-e2e_pipeline vannak-metadata-events process-models 2>/dev/null || true
 
     touch "$INFRA_LOCK"
     log "Infrastructure ready."
@@ -94,29 +102,31 @@ stop_infra() {
     fi
 }
 
-# ------- internal: monitoring server -------
+# ------- internal: build -------
 
-build_monitor() {
-    if [ -f "$MONITOR_JAR" ] && [ -z "$(find "$PROJECT_DIR/src/main" "$PROJECT_DIR/monitoring-ui" "$PROJECT_DIR/pom.xml" -newer "$MONITOR_JAR" -print -quit 2>/dev/null)" ]; then
+build_all() {
+    if [ -f "$TOOLS_JAR" ] && [ -f "$MONITOR_JAR" ] \
+       && [ -z "$(find "$PROJECT_DIR/durga-runtime/src" "$PROJECT_DIR/durga-tools/src" "$PROJECT_DIR/durga-monitor/src" "$PROJECT_DIR/monitoring-ui" -newer "$TOOLS_JAR" -print -quit 2>/dev/null)" ]; then
         return
     fi
-    log "Building monitoring server (Quarkus uber-JAR)..."
+    log "Building durga modules..."
     cd "$PROJECT_DIR"
-    mvn -q package -Pmonitoring -DskipTests
-    if [ ! -f "$MONITOR_JAR" ]; then
-        err "Monitoring JAR not found at $MONITOR_JAR. Build may have failed."
+    mvn -q install -DskipTests -pl durga-runtime,durga-tools
+    mvn -q package -DskipTests -pl durga-monitor
+    if [ ! -f "$TOOLS_JAR" ] || [ ! -f "$MONITOR_JAR" ]; then
+        err "Build failed. Check output above."
         exit 1
     fi
-    log "Monitoring server built."
+    log "Build complete."
 }
+
+# ------- internal: monitoring server -------
 
 start_monitor() {
     if [ -f "$MONITOR_PID_FILE" ] && kill -0 "$(cat "$MONITOR_PID_FILE")" 2>/dev/null; then
         log "Monitoring server already running (pid $(cat "$MONITOR_PID_FILE"))."
         return
     fi
-
-    build_monitor
 
     rm -rf "$MONITOR_STATE_DIR" "$FAULT_STATE_DIR" "$ALARM_STATE_DIR"
 
@@ -135,25 +145,13 @@ start_monitor() {
     while [ $(date +%s) -lt $deadline ]; do
         if curl -s "http://localhost:$MONITOR_PORT/health" | grep -q RUNNING; then
             log "Monitoring server ready: http://localhost:$MONITOR_PORT"
-            log "  Dashboard: http://localhost:$MONITOR_PORT/"
-            log "  Health:    curl http://localhost:$MONITOR_PORT/health"
-            log "  Metrics:   curl http://localhost:$MONITOR_PORT/api/metrics"
             return
         fi
         sleep 1
     done
-    err "Monitoring server failed to start within 60s. Check $MONITOR_LOG"
+    err "Monitoring server failed to start within 60s."
     stop_monitor
     exit 1
-}
-
-register_e2e_model() {
-    log "Registering BPMN model for $E2E_PROCESS_ID..."
-    java -cp "$MONITOR_JAR" \
-        "$MODEL_PUBLISHER" \
-        "$REDPANDA_BOOTSTRAP" \
-        "$E2E_PROCESS_ID" \
-        "$E2E_BPMN_PATH"
 }
 
 stop_monitor() {
@@ -162,17 +160,95 @@ stop_monitor() {
         if kill -0 "$pid" 2>/dev/null; then
             log "Stopping monitoring server (pid $pid)..."
             kill "$pid" 2>/dev/null || true
-            sleep 1
+            sleep 2
             kill -9 "$pid" 2>/dev/null || true
         fi
         rm -f "$MONITOR_PID_FILE"
     fi
 }
 
+# ------- internal: generated pipeline -------
+
+scaffold_and_build_pipeline() {
+    log "Scaffolding $E2E_PROCESS_ID..."
+    rm -rf "$GEN_DIR"
+    java -cp "$TOOLS_JAR" "$SCAFFOLDER" "$E2E_BPMN_PATH" "$GEN_DIR"
+    log "Scaffolding complete."
+
+    # Remove generated runtime classes that are provided by durga-runtime.
+    # The scaffolder generates these for standalone use; when durga-runtime is
+    # a dependency, they cause duplicate-class / version-skew errors.
+    # We keep ModelEnricher (in tools/) because it's needed at build time
+    # and ModelRegistration (runtime bean, process-specific).
+    local core_dir="$GEN_DIR/src/main/java/org/gautelis/durga"
+    if [ -d "$core_dir" ]; then
+        for f in ProcessEvent ProcessState ProcessStateStore ScopeCancellationRegistry VannakMetadata DataHandle DataIndividualMetadataEvent; do
+            rm -f "$core_dir/${f}.java"
+        done
+        rm -rf "$core_dir/plugins"
+    fi
+
+    log "Building generated pipeline..."
+    cd "$GEN_DIR"
+    mvn -q package -DskipTests
+    local jar=$(echo "$GEN_DIR"/target/*-runner.jar)
+    if [ ! -f "$jar" ]; then
+        err "Pipeline runner JAR not found."
+        exit 1
+    fi
+    log "Pipeline built: $jar"
+}
+
+start_pipeline() {
+    if [ -f "$GEN_PID_FILE" ] && kill -0 "$(cat "$GEN_PID_FILE")" 2>/dev/null; then
+        log "Pipeline already running (pid $(cat "$GEN_PID_FILE"))."
+        return
+    fi
+
+    local jar=$(echo "$GEN_DIR"/target/*-runner.jar)
+    if [ ! -f "$jar" ]; then
+        scaffold_and_build_pipeline
+        jar=$(echo "$GEN_DIR"/target/*-runner.jar)
+    fi
+
+    log "Starting generated pipeline..."
+    java -Dkafka.bootstrap.servers="$REDPANDA_BOOTSTRAP" \
+         -Dquarkus.http.port=0 \
+         -jar "$jar" \
+         > "$GEN_LOG" 2>&1 &
+    echo $! > "$GEN_PID_FILE"
+
+    log "Waiting for pipeline to boot..."
+    local deadline=$(($(date +%s) + 60))
+    while [ $(date +%s) -lt $deadline ]; do
+        if grep -q "started in" "$GEN_LOG" 2>/dev/null; then
+            log "Pipeline booted."
+            sleep 2
+            log "Pipeline ready (pid $(cat "$GEN_PID_FILE"))."
+            return
+        fi
+        sleep 2
+    done
+    warn "Pipeline did not finish booting within 60s."
+}
+
+stop_pipeline() {
+    if [ -f "$GEN_PID_FILE" ]; then
+        local pid=$(cat "$GEN_PID_FILE")
+        if kill -0 "$pid" 2>/dev/null; then
+            log "Stopping pipeline (pid $pid)..."
+            kill "$pid" 2>/dev/null || true
+            sleep 2
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+        rm -f "$GEN_PID_FILE"
+    fi
+}
+
 # ------- commands -------
 
 cmd_test() {
-    log "Running E2E integration tests (Testcontainers, requires Docker)..."
+    log "Running E2E integration tests (Testcontainers)..."
     cd "$PROJECT_DIR"
     mvn -q compile
     mvn test -Dtest='*IntegrationTest' -Ddurga.it.timeout.seconds=120 -DfailIfNoTests=false
@@ -191,25 +267,31 @@ cmd_feed() {
         esac
     done
 
-    trap 'stop_monitor; stop_infra' EXIT INT TERM
+    trap 'stop_pipeline; stop_monitor; stop_infra' EXIT INT TERM
     start_infra
+    build_all
+    scaffold_and_build_pipeline
     start_monitor
-    register_e2e_model
+    start_pipeline
+
+    start_pipeline
     echo ""
 
     cd "$PROJECT_DIR"
 
     local mode="continuous (Ctrl-C to stop)"
-    [ "$count" != "-1" ] && mode="bounded: $count records"
+    [ "$count" != "-1" ] && mode="bounded: $count records (interval=${interval}ms)"
 
     log "Starting data feed — $mode"
+    log "Pipeline processes orders through: transform_order -> coerce_types -> [XOR route_by_amount] -> ..."
     echo ""
-    local feed_args=("$REDPANDA_BOOTSTRAP" "$E2E_PROCESS_ID" "$interval" "$BPMN_DIR")
+
+    local feed_args=("$REDPANDA_BOOTSTRAP" "$E2E_PROCESS_ID" "$interval")
     if [ "$count" != "-1" ]; then
         feed_args+=("$count")
     fi
     java -Djava.util.logging.manager=org.jboss.logmanager.LogManager \
-        -cp "$MONITOR_JAR" "$LIFECYCLE_FEED" "${feed_args[@]}"
+        -cp "$TOOLS_JAR" "$FEED_PUBLISHER" "${feed_args[@]}"
 }
 
 cmd_test_run() {
@@ -224,34 +306,43 @@ cmd_test_run() {
         esac
     done
 
-    trap 'stop_monitor; stop_infra' EXIT INT TERM
+    trap 'stop_pipeline; stop_monitor; stop_infra' EXIT INT TERM
     start_infra
 
     cmd_test
     echo ""
-    warn "Tests passed. Starting monitoring server and data feed."
+    warn "Tests passed. Starting pipeline + monitoring + data feed."
     warn "Press Ctrl-C to stop and clean up."
     echo ""
 
+    build_all
+    scaffold_and_build_pipeline
     start_monitor
-    register_e2e_model
+    start_pipeline
+
+    log "Registering BPMN model..."
+    tr -d '\n' < "$E2E_BPMN_PATH" | docker exec -i durga-redpanda rpk topic produce process-models --key "$E2E_PROCESS_ID" 2>/dev/null
+    sleep 2
+
     echo ""
     cd "$PROJECT_DIR"
 
     local mode="continuous (Ctrl-C to stop)"
-    [ "$feed_count" != "-1" ] && mode="bounded: $feed_count records"
+    [ "$feed_count" != "-1" ] && mode="bounded: $feed_count records (interval=${feed_interval}ms)"
 
     log "Starting data feed — $mode"
     echo ""
-    local feed_args=("$REDPANDA_BOOTSTRAP" "$E2E_PROCESS_ID" "$feed_interval" "$BPMN_DIR")
+
+    local feed_args=("$REDPANDA_BOOTSTRAP" "$E2E_PROCESS_ID" "$feed_interval")
     if [ "$feed_count" != "-1" ]; then
         feed_args+=("$feed_count")
     fi
     java -Djava.util.logging.manager=org.jboss.logmanager.LogManager \
-        -cp "$MONITOR_JAR" "$LIFECYCLE_FEED" "${feed_args[@]}"
+        -cp "$TOOLS_JAR" "$FEED_PUBLISHER" "${feed_args[@]}"
 }
 
 cmd_stop() {
+    stop_pipeline
     stop_monitor
     stop_infra
 }

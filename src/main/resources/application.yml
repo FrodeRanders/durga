@@ -1,8 +1,0 @@
----
-# Repository-level runtime defaults.
-# Monitoring app and demo runners read kafka.bootstrap.servers from the system property,
-# falling back to localhost:9094. Generated projects carry their own application.yml.
-
-kafka:
-  bootstrap:
-    servers: localhost:9094

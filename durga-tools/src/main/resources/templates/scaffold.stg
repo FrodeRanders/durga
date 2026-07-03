@@ -1,0 +1,1841 @@
+group scaffold;
+delimiters "%", "%"
+
+workerClass(packageName, className, processId, taskId, inputChannel, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%processId%_%taskId%_out")
+    Emitter<String> outputEmitter;
+
+    @Inject
+    @Channel("vannak-metadata-events")
+    Emitter<String> vannakMetadataEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Incoming("%processId%_%taskId%_in")
+    public CompletionStage<Void> handle(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+        Map<String, Object> outputPayload = new HashMap<>();
+        if (inputEvent.payload() != null) {
+            outputPayload.putAll(inputEvent.payload());
+        }
+        outputPayload.put("worker", "%taskId%");
+        outputPayload.put("taskType", "%taskType%");
+
+        ProcessEvent outputEvent = new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%taskId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                outputPayload,
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        );
+
+        %if(hasLineage)%
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
+                inputEvent,
+                "%taskId%",
+                "builtin:%taskId%",
+                "%taskType%",
+                msg.getPayload(),
+                outputPayload,
+                %taskReads%,
+                %taskWrites%,
+                %taskStores%).toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
+        %else%
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
+        %endif%
+    }
+}
+>>
+
+transactionalWorkerClass(packageName, className, processId, taskId, inputChannel, taskType, taskReads, taskWrites, taskStores, hasLineage, eventsTopic) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.gautelis.durga.ProcessEvent;
+
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+
+public class %className% {
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
+        String groupId = args.length > 1 ? args[1] : "%processId%_%taskId%_group";
+        long timeoutSeconds = args.length > 2 ? Long.parseLong(args[2]) : 60;
+
+        Properties consumerProps = new Properties();
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "%processId%_%taskId%_" + UUID.randomUUID());
+
+        String inputTopic = "%inputChannel%";
+        String outputTopic = "%processId%_%taskId%_output";
+        String processEventsTopic = "%eventsTopic%";
+
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
+             KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps)) {
+            producer.initTransactions();
+            consumer.subscribe(java.util.Collections.singletonList(inputTopic));
+
+            long deadlineMs = System.currentTimeMillis() + (timeoutSeconds * 1000);
+            while (System.currentTimeMillis() < deadlineMs) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
+                if (records.isEmpty()) {
+                    continue;
+                }
+                for (ConsumerRecord<String, String> record : records) {
+                    producer.beginTransaction();
+                    ProcessEvent inputEvent = ProcessEvent.fromJson(record.value());
+                    Map<String, Object> payload = new HashMap<>();
+                    if (inputEvent.payload() != null) {
+                        payload.putAll(inputEvent.payload());
+                    }
+                    payload.put("worker", "%taskId%");
+                    payload.put("taskType", "%taskType%");
+                    ProcessEvent outputEvent = new ProcessEvent(
+                            inputEvent.processInstanceId(),
+                            inputEvent.processId(),
+                            "%taskId%",
+                            inputEvent.tokenId(),
+                            inputEvent.correlationId(),
+                            payload,
+                            ProcessEvent.Status.COMPLETED,
+                            null,
+                            ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                            inputEvent.processVersion(),
+                            inputEvent.businessKey(),
+                            null
+                    );
+                    producer.send(new ProducerRecord<>(outputTopic, record.key(), outputEvent.toJson()));
+                    producer.send(new ProducerRecord<>(processEventsTopic, record.key(), outputEvent.toJson()));
+                    producer.sendOffsetsToTransaction(
+                            java.util.Collections.singletonMap(
+                                    new TopicPartition(record.topic(), record.partition()),
+                                    new OffsetAndMetadata(record.offset() + 1)
+                            ),
+                            consumer.groupMetadata()
+                    );
+                    producer.commitTransaction();
+                }
+            }
+        }
+    }
+}
+>>
+
+userTaskHandlerClass(packageName, className, processId, taskId, inputChannel, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Incoming("%processId%_%taskId%_in")
+    public CompletionStage<Void> handle(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+        Map<String, Object> waitingPayload = new HashMap<>();
+        if (inputEvent.payload() != null) {
+            waitingPayload.putAll(inputEvent.payload());
+        }
+        waitingPayload.put("taskType", "%taskType%");
+        waitingPayload.put("waitingForCompletion", true);
+
+        return processEventsEmitter.send(new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%taskId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                waitingPayload,
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                inputEvent.timestamp()
+        ).toJson()).thenCompose(ignored -> msg.ack());
+    }
+}
+>>
+
+manualTaskHandlerClass(packageName, className, processId, taskId, inputChannel, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Incoming("%processId%_%taskId%_in")
+    public CompletionStage<Void> handle(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+        Map<String, Object> waitingPayload = new HashMap<>();
+        if (inputEvent.payload() != null) {
+            waitingPayload.putAll(inputEvent.payload());
+        }
+        waitingPayload.put("taskType", "%taskType%");
+        waitingPayload.put("waitingForCompletion", true);
+
+        return processEventsEmitter.send(new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%taskId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                waitingPayload,
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                inputEvent.timestamp()
+        ).toJson()).thenCompose(ignored -> msg.ack());
+    }
+}
+>>
+
+callActivityTaskStubClass(packageName, className, processId, taskId, inputChannel, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
+package %packageName%;
+
+// Call activities are implemented by the generated *CallActivityService class.
+public class %className% {
+}
+>>
+
+xorGatewayClass(packageName, className, inputChannel, outputs) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+%outputs:{o|
+
+    @Inject
+    @Channel("%o.channel%")
+    Emitter<String> %o.emitter%;
+}%
+
+    @Incoming("%inputChannel%")
+    public CompletionStage<Void> route(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), inputEvent.activityId())) {
+            return msg.ack();
+        }
+%outputs:{o|
+%o.conditionBlock%
+}%
+        return msg.ack();
+    }
+
+    private boolean evaluateCondition(String expression, ProcessEvent event) {
+        if (expression == null || expression.isBlank()) {
+            return false;
+        }
+        String expr = expression.trim();
+        if (expr.startsWith("${") && expr.endsWith("}")) {
+            expr = expr.substring(2, expr.length() - 1).trim();
+        }
+        if (expr.isEmpty()) {
+            return false;
+        }
+        Map<String, Object> payload = event.payload();
+        if (payload == null) {
+            return false;
+        }
+        try {
+            int[] pos = new int[]{0};
+            boolean result = evalOr(expr, pos, payload);
+            skipWhitespace(expr, pos);
+            return result && pos[0] >= expr.length();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean evalOr(String expr, int[] pos, Map<String, Object> payload) {
+        boolean left = evalAnd(expr, pos, payload);
+        while (true) {
+            skipWhitespace(expr, pos);
+            if (pos[0] + 1 < expr.length() && expr.charAt(pos[0]) == '|' && expr.charAt(pos[0] + 1) == '|') {
+                pos[0] += 2;
+                boolean right = evalAnd(expr, pos, payload);
+                left = left || right;
+            } else {
+                break;
+            }
+        }
+        return left;
+    }
+
+    private boolean evalAnd(String expr, int[] pos, Map<String, Object> payload) {
+        boolean left = evalComparison(expr, pos, payload);
+        while (true) {
+            skipWhitespace(expr, pos);
+            if (pos[0] + 1 < expr.length() && expr.charAt(pos[0]) == '&' && expr.charAt(pos[0] + 1) == '&') {
+                pos[0] += 2;
+                boolean right = evalComparison(expr, pos, payload);
+                left = left && right;
+            } else {
+                break;
+            }
+        }
+        return left;
+    }
+
+    private boolean evalComparison(String expr, int[] pos, Map<String, Object> payload) {
+        skipWhitespace(expr, pos);
+        if (pos[0] < expr.length() && expr.charAt(pos[0]) == '!') {
+            pos[0]++;
+            boolean inner = evalComparison(expr, pos, payload);
+            return !inner;
+        }
+        Object left = evalPrimary(expr, pos, payload);
+        skipWhitespace(expr, pos);
+        if (pos[0] >= expr.length()) {
+            return isTruthy(left);
+        }
+        char c = expr.charAt(pos[0]);
+        if (c == '=' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return valuesEqual(left, right);
+        } else if (c == '!' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return !valuesEqual(left, right);
+        } else if (c == '>' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) >= 0;
+        } else if (c == '<' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) <= 0;
+        } else if (c == '>') {
+            pos[0]++;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) > 0;
+        } else if (c == '<') {
+            pos[0]++;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) < 0;
+        }
+        return isTruthy(left);
+    }
+
+    private Object evalPrimary(String expr, int[] pos, Map<String, Object> payload) {
+        skipWhitespace(expr, pos);
+        if (pos[0] >= expr.length()) {
+            return null;
+        }
+        char c = expr.charAt(pos[0]);
+        if (c == '(') {
+            pos[0]++;
+            boolean result = evalOr(expr, pos, payload);
+            skipWhitespace(expr, pos);
+            if (pos[0] < expr.length() && expr.charAt(pos[0]) == ')') {
+                pos[0]++;
+            }
+            return result;
+        }
+        if (c == '"' || c == 39) {
+            char quote = c;
+            pos[0]++;
+            StringBuilder sb = new StringBuilder();
+            while (pos[0] < expr.length() && expr.charAt(pos[0]) != quote) {
+                if (expr.charAt(pos[0]) == 92 && pos[0] + 1 < expr.length()) {
+                    pos[0]++;
+                    sb.append(expr.charAt(pos[0]));
+                } else {
+                    sb.append(expr.charAt(pos[0]));
+                }
+                pos[0]++;
+            }
+            if (pos[0] < expr.length()) {
+                pos[0]++;
+            }
+            return sb.toString();
+        }
+        if (c == '-' || (c >= '0' && c <= '9')) {
+            StringBuilder sb = new StringBuilder();
+            if (c == '-') {
+                sb.append(c);
+                pos[0]++;
+            }
+            while (pos[0] < expr.length()) {
+                char d = expr.charAt(pos[0]);
+                if ((d >= '0' && d <= '9') || d == '.') {
+                    sb.append(d);
+                    pos[0]++;
+                } else {
+                    break;
+                }
+            }
+            String numStr = sb.toString();
+            try {
+                if (numStr.contains(".")) {
+                    return Double.parseDouble(numStr);
+                }
+                return Long.parseLong(numStr);
+            } catch (NumberFormatException e) {
+                return 0L;
+            }
+        }
+        if (pos[0] + 3 < expr.length()
+                && expr.substring(pos[0], pos[0] + 4).equalsIgnoreCase("true")) {
+            pos[0] += 4;
+            return true;
+        }
+        if (pos[0] + 4 < expr.length()
+                && expr.substring(pos[0], pos[0] + 5).equalsIgnoreCase("false")) {
+            pos[0] += 5;
+            return false;
+        }
+        if (pos[0] + 3 < expr.length()
+                && expr.substring(pos[0], pos[0] + 4).equalsIgnoreCase("null")) {
+            pos[0] += 4;
+            return null;
+        }
+        StringBuilder ident = new StringBuilder();
+        while (pos[0] < expr.length()) {
+            char d = expr.charAt(pos[0]);
+            if (Character.isJavaIdentifierPart(d) || d == '.') {
+                ident.append(d);
+                pos[0]++;
+            } else {
+                break;
+            }
+        }
+        String path = ident.toString().trim();
+        if (path.isEmpty()) {
+            return null;
+        }
+        return resolveField(payload, path);
+    }
+
+    private Object resolveField(Map<String, Object> payload, String path) {
+        String[] segments = path.split("\\\\.");
+        Object current = payload;
+        for (String segment : segments) {
+            if (current instanceof Map<?, ?> map) {
+                current = map.get(segment);
+            } else {
+                return null;
+            }
+        }
+        return current;
+    }
+
+    private boolean isTruthy(Object value) {
+        if (value == null) return false;
+        if (value instanceof Boolean b) return b;
+        if (value instanceof Number n) return n.doubleValue() != 0.0;
+        if (value instanceof String s) return !s.isBlank();
+        return true;
+    }
+
+    private boolean valuesEqual(Object left, Object right) {
+        if (left == null && right == null) return true;
+        if (left == null || right == null) return false;
+        if (left instanceof Number && right instanceof Number) {
+            return ((Number) left).doubleValue() == ((Number) right).doubleValue();
+        }
+        return left.toString().equals(right.toString());
+    }
+
+    private int compareValues(Object left, Object right) {
+        if (left instanceof Number ln && right instanceof Number rn) {
+            return Double.compare(ln.doubleValue(), rn.doubleValue());
+        }
+        String ls = left != null ? left.toString() : "";
+        String rs = right != null ? right.toString() : "";
+        return ls.compareTo(rs);
+    }
+
+    private void skipWhitespace(String expr, int[] pos) {
+        while (pos[0] < expr.length() && Character.isWhitespace(expr.charAt(pos[0]))) {
+            pos[0]++;
+        }
+    }
+}
+>>
+
+andSplitGatewayClass(packageName, className, inputChannel, outputs) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+%outputs:{o|
+
+    @Inject
+    @Channel("%o.channel%")
+    Emitter<String> %o.emitter%;
+}%
+
+    @Incoming("%inputChannel%")
+    public CompletionStage<Void> split(Message<String> msg) {
+        ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
+        java.util.List<java.util.concurrent.CompletableFuture<Void>\> sends = new java.util.ArrayList<>();
+%outputs:{o|
+        if (!cancellationRegistry.isCancelled(event.processInstanceId(), "%o.taskId%")) {
+            sends.add(%o.emitter%.send(msg.getPayload()).toCompletableFuture());
+            sends.add(processEventsEmitter.send(new ProcessEvent(
+                    event.processInstanceId(),
+                    event.processId(),
+                    "%o.taskId%",
+                    event.tokenId(),
+                    event.correlationId(),
+                    event.payload(),
+                    ProcessEvent.Status.STARTED,
+                    null,
+                    ProcessEvent.EventType.GATEWAY_TAKEN,
+                    event.processVersion(),
+                    event.businessKey(),
+                    null
+            ).toJson()).toCompletableFuture());
+        \}
+}%
+        return java.util.concurrent.CompletableFuture
+                .allOf(sends.toArray(new java.util.concurrent.CompletableFuture[0]))
+                .thenCompose(ignored -> msg.ack());
+    }
+}
+>>
+
+andJoinGatewayClass(packageName, className, processId, outputChannel, outputTaskId, incomingMethodsBlock, joinCondition) ::= <<
+package %packageName%;
+
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import io.smallrye.reactive.messaging.MutinyEmitter;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ProcessState;
+import org.gautelis.durga.ProcessStateStore;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+import java.util.UUID;
+
+@ApplicationScoped
+public class %className% {
+    private final ProcessStateStore stateStore =
+            new ProcessStateStore("localhost:9094", "%processId%_state", "%processId%");
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Inject
+    @Channel("process-events")
+    MutinyEmitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%outputChannel%")
+    MutinyEmitter<String> outputEmitter;
+
+%incomingMethodsBlock%
+
+    private CompletionStage<Void> handleJoin(String activityId, Message<String> msg) {
+        ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
+        if (event.status() != ProcessEvent.Status.COMPLETED) {
+            return msg.ack();
+        }
+        if (cancellationRegistry.isCancelled(event.processInstanceId(), "%outputTaskId%")) {
+            return msg.ack();
+        }
+
+        ProcessState state = stateStore.loadLatest(event.processInstanceId(), Duration.ofSeconds(2));
+        List<ProcessState.Token> tokens = new ArrayList<>();
+        Map<String, Object> variables = new HashMap<>();
+        long version = 0;
+        if (state != null) {
+            if (state.tokens() != null) {
+                tokens.addAll(state.tokens());
+            }
+            if (state.variables() != null) {
+                variables.putAll(state.variables());
+            }
+            version = state.version();
+        }
+
+        tokens.add(new ProcessState.Token(UUID.randomUUID().toString(), activityId));
+        stateStore.save(new ProcessState(event.processInstanceId(), tokens, variables, version + 1));
+
+        boolean ready = %joinCondition%;
+        if (ready) {
+            ProcessEvent nextEvent = new ProcessEvent(
+                    event.processInstanceId(),
+                    event.processId(),
+                    "%outputTaskId%",
+                    UUID.randomUUID().toString(),
+                    event.correlationId(),
+                    event.payload(),
+                    ProcessEvent.Status.STARTED,
+                    null,
+                    ProcessEvent.EventType.ACTIVITY_ENTERED,
+                    event.processVersion(),
+                    event.businessKey(),
+                    null
+            );
+            return java.util.concurrent.CompletableFuture.allOf(
+                    outputEmitter.send(nextEvent.toJson()).toCompletableFuture(),
+                    processEventsEmitter.send(new ProcessEvent(
+                    nextEvent.processInstanceId(),
+                    nextEvent.processId(),
+                    nextEvent.activityId(),
+                    nextEvent.tokenId(),
+                    nextEvent.correlationId(),
+                    nextEvent.payload(),
+                    nextEvent.status(),
+                    nextEvent.error(),
+                    ProcessEvent.EventType.GATEWAY_TAKEN,
+                    nextEvent.processVersion(),
+                    nextEvent.businessKey(),
+                    nextEvent.timestamp()
+            ).toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
+        }
+        return msg.ack();
+    }
+
+    @PreDestroy
+    public void close() {
+        stateStore.close();
+    }
+}
+>>
+
+sendTaskClass(packageName, className, processId, taskId, inputChannel, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%processId%_%taskId%_out")
+    Emitter<String> outputEmitter;
+
+    @Inject
+    @Channel("%processId%_%taskId%_send")
+    Emitter<String> sendEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Incoming("%processId%_%taskId%_in")
+    public CompletionStage<Void> handle(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+        Map<String, Object> outputPayload = new HashMap<>();
+        if (inputEvent.payload() != null) {
+            outputPayload.putAll(inputEvent.payload());
+        }
+        outputPayload.put("sender", "%taskId%");
+        outputPayload.put("taskType", "%taskType%");
+
+        ProcessEvent outputEvent = new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%taskId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                outputPayload,
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        );
+
+        return java.util.concurrent.CompletableFuture.allOf(
+                sendEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
+    }
+}
+>>
+
+receiveTaskClass(packageName, className, processId, taskId, inputChannel, taskType, taskReads, taskWrites, taskStores, hasLineage) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%processId%_%taskId%_out")
+    Emitter<String> outputEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Incoming("%processId%_%taskId%_receive")
+    public CompletionStage<Void> handle(Message<String> msg) {
+        ProcessEvent receiveEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(receiveEvent.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+        Map<String, Object> outputPayload = new HashMap<>();
+        if (receiveEvent.payload() != null) {
+            outputPayload.putAll(receiveEvent.payload());
+        }
+        outputPayload.put("receiver", "%taskId%");
+        outputPayload.put("taskType", "%taskType%");
+
+        ProcessEvent outputEvent = new ProcessEvent(
+                receiveEvent.processInstanceId(),
+                receiveEvent.processId(),
+                "%taskId%",
+                receiveEvent.tokenId(),
+                receiveEvent.correlationId(),
+                outputPayload,
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                receiveEvent.processVersion(),
+                receiveEvent.businessKey(),
+                null
+        );
+
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
+    }
+}
+>>
+
+scriptTaskHandlerClass(packageName, className, processId, taskId, taskType) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%processId%_%taskId%_out")
+    Emitter<String> outputEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Incoming("%processId%_%taskId%_in")
+    public CompletionStage<Void> handle(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+        Map<String, Object> outputPayload = new HashMap<>();
+        if (inputEvent.payload() != null) {
+            outputPayload.putAll(inputEvent.payload());
+        }
+        outputPayload.put("script", "%taskId%");
+        outputPayload.put("taskType", "%taskType%");
+
+        // TODO: implement script logic for %className%
+        // Replace this block with the actual script execution.
+        // The ProcessEvent is available as 'inputEvent'.
+
+        ProcessEvent outputEvent = new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%taskId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                outputPayload,
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        );
+
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
+    }
+}
+>>
+
+businessRuleTaskHandlerClass(packageName, className, processId, taskId, taskType) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%processId%_%taskId%_out")
+    Emitter<String> outputEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Incoming("%processId%_%taskId%_in")
+    public CompletionStage<Void> handle(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+        Map<String, Object> outputPayload = new HashMap<>();
+        if (inputEvent.payload() != null) {
+            outputPayload.putAll(inputEvent.payload());
+        }
+        outputPayload.put("rule", "%taskId%");
+        outputPayload.put("taskType", "%taskType%");
+
+        // TODO: implement business rule evaluation for %className%
+        // Replace this block with the actual rule logic (DMN, rule engine, etc.).
+        // The ProcessEvent is available as 'inputEvent'.
+
+        ProcessEvent outputEvent = new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%taskId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                outputPayload,
+                ProcessEvent.Status.COMPLETED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                null
+        );
+
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
+    }
+}
+>>
+
+orSplitGatewayClass(packageName, className, inputChannel, outputs) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+%outputs:{ output |
+    @Inject
+    @Channel("%output.channel%")
+    Emitter<String> %output.emitter%;
+}%
+
+    @Incoming("%inputChannel%")
+    public CompletionStage<Void> handle(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+%outputs:{ output |
+%output.conditionBlock%
+}%
+        return msg.ack();
+    }
+
+    private boolean evaluateCondition(String expression, ProcessEvent event) {
+        if (expression == null || expression.isBlank()) {
+            return false;
+        }
+        String expr = expression.trim();
+        if (expr.startsWith("${") && expr.endsWith("}")) {
+            expr = expr.substring(2, expr.length() - 1).trim();
+        }
+        if (expr.isEmpty()) {
+            return false;
+        }
+        Map<String, Object> payload = event.payload();
+        if (payload == null) {
+            return false;
+        }
+        try {
+            int[] pos = new int[]{0};
+            boolean result = evalOr(expr, pos, payload);
+            skipWhitespace(expr, pos);
+            return result && pos[0] >= expr.length();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean evalOr(String expr, int[] pos, Map<String, Object> payload) {
+        boolean left = evalAnd(expr, pos, payload);
+        while (true) {
+            skipWhitespace(expr, pos);
+            if (pos[0] + 1 < expr.length() && expr.charAt(pos[0]) == '|' && expr.charAt(pos[0] + 1) == '|') {
+                pos[0] += 2;
+                boolean right = evalAnd(expr, pos, payload);
+                left = left || right;
+            } else {
+                break;
+            }
+        }
+        return left;
+    }
+
+    private boolean evalAnd(String expr, int[] pos, Map<String, Object> payload) {
+        boolean left = evalComparison(expr, pos, payload);
+        while (true) {
+            skipWhitespace(expr, pos);
+            if (pos[0] + 1 < expr.length() && expr.charAt(pos[0]) == '&' && expr.charAt(pos[0] + 1) == '&') {
+                pos[0] += 2;
+                boolean right = evalComparison(expr, pos, payload);
+                left = left && right;
+            } else {
+                break;
+            }
+        }
+        return left;
+    }
+
+    private boolean evalComparison(String expr, int[] pos, Map<String, Object> payload) {
+        skipWhitespace(expr, pos);
+        if (pos[0] < expr.length() && expr.charAt(pos[0]) == '!') {
+            pos[0]++;
+            boolean inner = evalComparison(expr, pos, payload);
+            return !inner;
+        }
+        Object left = evalPrimary(expr, pos, payload);
+        skipWhitespace(expr, pos);
+        if (pos[0] >= expr.length()) {
+            return isTruthy(left);
+        }
+        char c = expr.charAt(pos[0]);
+        if (c == '=' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return valuesEqual(left, right);
+        } else if (c == '!' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return !valuesEqual(left, right);
+        } else if (c == '>' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) >= 0;
+        } else if (c == '<' && pos[0] + 1 < expr.length() && expr.charAt(pos[0] + 1) == '=') {
+            pos[0] += 2;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) <= 0;
+        } else if (c == '>') {
+            pos[0]++;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) > 0;
+        } else if (c == '<') {
+            pos[0]++;
+            Object right = evalPrimary(expr, pos, payload);
+            return compareValues(left, right) < 0;
+        }
+        return isTruthy(left);
+    }
+
+    private Object evalPrimary(String expr, int[] pos, Map<String, Object> payload) {
+        skipWhitespace(expr, pos);
+        if (pos[0] >= expr.length()) {
+            return null;
+        }
+        char c = expr.charAt(pos[0]);
+        if (c == '(') {
+            pos[0]++;
+            boolean result = evalOr(expr, pos, payload);
+            skipWhitespace(expr, pos);
+            if (pos[0] < expr.length() && expr.charAt(pos[0]) == ')') {
+                pos[0]++;
+            }
+            return result;
+        }
+        if (c == '"' || c == 39) {
+            char quote = c;
+            pos[0]++;
+            StringBuilder sb = new StringBuilder();
+            while (pos[0] < expr.length() && expr.charAt(pos[0]) != quote) {
+                if (expr.charAt(pos[0]) == 92 && pos[0] + 1 < expr.length()) {
+                    pos[0]++;
+                    sb.append(expr.charAt(pos[0]));
+                } else {
+                    sb.append(expr.charAt(pos[0]));
+                }
+                pos[0]++;
+            }
+            if (pos[0] < expr.length()) {
+                pos[0]++;
+            }
+            return sb.toString();
+        }
+        if (c == '-' || (c >= '0' && c <= '9')) {
+            StringBuilder sb = new StringBuilder();
+            if (c == '-') {
+                sb.append(c);
+                pos[0]++;
+            }
+            while (pos[0] < expr.length()) {
+                char d = expr.charAt(pos[0]);
+                if ((d >= '0' && d <= '9') || d == '.') {
+                    sb.append(d);
+                    pos[0]++;
+                } else {
+                    break;
+                }
+            }
+            String numStr = sb.toString();
+            try {
+                if (numStr.contains(".")) {
+                    return Double.parseDouble(numStr);
+                }
+                return Long.parseLong(numStr);
+            } catch (NumberFormatException e) {
+                return 0L;
+            }
+        }
+        if (pos[0] + 3 < expr.length()
+                && expr.substring(pos[0], pos[0] + 4).equalsIgnoreCase("true")) {
+            pos[0] += 4;
+            return true;
+        }
+        if (pos[0] + 4 < expr.length()
+                && expr.substring(pos[0], pos[0] + 5).equalsIgnoreCase("false")) {
+            pos[0] += 5;
+            return false;
+        }
+        if (pos[0] + 3 < expr.length()
+                && expr.substring(pos[0], pos[0] + 4).equalsIgnoreCase("null")) {
+            pos[0] += 4;
+            return null;
+        }
+        StringBuilder ident = new StringBuilder();
+        while (pos[0] < expr.length()) {
+            char d = expr.charAt(pos[0]);
+            if (Character.isJavaIdentifierPart(d) || d == '.') {
+                ident.append(d);
+                pos[0]++;
+            } else {
+                break;
+            }
+        }
+        String path = ident.toString().trim();
+        if (path.isEmpty()) {
+            return null;
+        }
+        return resolveField(payload, path);
+    }
+
+    private Object resolveField(Map<String, Object> payload, String path) {
+        String[] segments = path.split("\\\\.");
+        Object current = payload;
+        for (String segment : segments) {
+            if (current instanceof Map<?, ?> map) {
+                current = map.get(segment);
+            } else {
+                return null;
+            }
+        }
+        return current;
+    }
+
+    private boolean isTruthy(Object value) {
+        if (value == null) return false;
+        if (value instanceof Boolean b) return b;
+        if (value instanceof Number n) return n.doubleValue() != 0.0;
+        if (value instanceof String s) return !s.isBlank();
+        return true;
+    }
+
+    private boolean valuesEqual(Object left, Object right) {
+        if (left == null && right == null) return true;
+        if (left == null || right == null) return false;
+        if (left instanceof Number && right instanceof Number) {
+            return ((Number) left).doubleValue() == ((Number) right).doubleValue();
+        }
+        return left.toString().equals(right.toString());
+    }
+
+    private int compareValues(Object left, Object right) {
+        if (left instanceof Number ln && right instanceof Number rn) {
+            return Double.compare(ln.doubleValue(), rn.doubleValue());
+        }
+        String ls = left != null ? left.toString() : "";
+        String rs = right != null ? right.toString() : "";
+        return ls.compareTo(rs);
+    }
+
+    private void skipWhitespace(String expr, int[] pos) {
+        while (pos[0] < expr.length() && Character.isWhitespace(expr.charAt(pos[0]))) {
+            pos[0]++;
+        }
+    }
+}
+>>
+
+orJoinGatewayClass(packageName, className, processId, outputChannel, outputTaskId, incomingMethodsBlock, incomingCount) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+
+import java.util.HashSet;
+import java.util.UUID;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%outputChannel%")
+    Emitter<String> outputEmitter;
+
+    private final ConcurrentHashMap arrivedByInstance = new ConcurrentHashMap();
+
+%incomingMethodsBlock%
+    private CompletionStage<Void> handleJoin(String activityId, Message<String> msg) {
+        ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
+        HashSet arrived = (HashSet) arrivedByInstance.get(event.processInstanceId());
+        if (arrived == null) {
+            arrived = new HashSet();
+            arrivedByInstance.put(event.processInstanceId(), arrived);
+        }
+        arrived.add(activityId);
+        arrivedByInstance.remove(event.processInstanceId());
+        ProcessEvent nextEvent = new ProcessEvent(
+                event.processInstanceId(),
+                event.processId(),
+                "%outputTaskId%",
+                UUID.randomUUID().toString(),
+                event.correlationId(),
+                event.payload(),
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                event.processVersion(),
+                event.businessKey(),
+                null
+        );
+        return java.util.concurrent.CompletableFuture.allOf(
+                outputEmitter.send(nextEvent.toJson()).toCompletableFuture(),
+                processEventsEmitter.send(new ProcessEvent(
+                nextEvent.processInstanceId(),
+                nextEvent.processId(),
+                nextEvent.activityId(),
+                nextEvent.tokenId(),
+                nextEvent.correlationId(),
+                nextEvent.payload(),
+                nextEvent.status(),
+                nextEvent.error(),
+                ProcessEvent.EventType.GATEWAY_TAKEN,
+                nextEvent.processVersion(),
+                nextEvent.businessKey(),
+                nextEvent.timestamp()
+        ).toJson()).toCompletableFuture()
+        ).thenCompose(ignored -> msg.ack());
+    }
+}
+>>
+
+workerStandaloneClass(packageName, className, processId, taskId, inputChannel) ::= <<
+package %packageName%;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.gautelis.durga.ProcessEvent;
+
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+public class %className%Standalone {
+    private final AtomicBoolean running = new AtomicBoolean(true);
+
+    public void run(String bootstrap) {
+        Properties consumerProps = new Properties();
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "%processId%_%taskId%_worker");
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
+             KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps)) {
+
+            consumer.subscribe(java.util.Collections.singletonList("%inputChannel%"));
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                running.set(false);
+                consumer.wakeup();
+            }));
+
+            while (running.get()) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
+                for (ConsumerRecord<String, String> record : records) {
+                    try {
+                        ProcessEvent inputEvent = ProcessEvent.fromJson(record.value());
+                        Map<String, Object> payload = new HashMap<>();
+                        if (inputEvent.payload() != null) {
+                            payload.putAll(inputEvent.payload());
+                        }
+                        payload.put("worker", "%taskId%");
+
+                        ProcessEvent outputEvent = new ProcessEvent(
+                                inputEvent.processInstanceId(),
+                                inputEvent.processId(),
+                                "%taskId%",
+                                inputEvent.tokenId(),
+                                inputEvent.correlationId(),
+                                payload,
+                                ProcessEvent.Status.COMPLETED,
+                                null,
+                                ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                                inputEvent.processVersion(),
+                                inputEvent.businessKey(),
+                                null
+                        );
+
+                        producer.send(new ProducerRecord<>("%processId%_%taskId%_output",
+                                inputEvent.processInstanceId(), outputEvent.toJson()));
+                        producer.send(new ProducerRecord<>("process-events",
+                                inputEvent.processInstanceId(), outputEvent.toJson()));
+                        producer.flush();
+                        consumer.commitSync();
+                    } catch (Exception e) {
+                        System.err.println("Worker %taskId% error: " + e.getMessage());
+                    }
+                }
+            }
+        }
+    }
+}
+>>
+
+workerBootstrapMain(packageName, className, processId, tasks) ::= <<
+package %packageName%;
+
+public class %className% {
+    public static void main(String[] args) {
+        String bootstrap = args.length > 0 ? args[0]
+                : System.getenv().getOrDefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9094");
+        String workerId = System.getenv("WORKER_ID");
+        if (workerId == null) {
+            System.err.println("WORKER_ID env var required");
+            System.exit(1);
+        }
+        switch (workerId) {
+%tasks:{t|
+            case "%t%" -> new %t%Standalone().run(bootstrap);
+}%
+            default -> {
+                System.err.println("Unknown WORKER_ID: " + workerId);
+                System.exit(1);
+            }
+        }
+    }
+}
+>>
+
+customContractClass(packageName, className, processId, taskId, taskName) ::= <<
+package %packageName%;
+
+import org.gautelis.durga.plugins.Plugin;
+
+/**
+ * Contract for custom activity "%taskName%" (%taskId%) in process %processId%.
+ * <p>
+ * Generated by Durga. Implement this interface in a separate class and annotate
+ * it with {@code @ApplicationScoped}. The generated worker will inject your
+ * implementation via CDI.
+ * <p>
+ * This file is regenerated when the activity configuration changes.
+ * Do not modify it directly — create an implementation class instead.
+ */
+public interface %className% extends Plugin {
+}
+>>
+
+customDelegatingWorkerClass(packageName, className, contractClassName, processId, taskId, inputChannel, taskType, pluginConfig, customImpl, customHash, taskReads, taskWrites, taskStores, hasLineage) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+
+import java.util.concurrent.CompletionStage;
+
+/**
+ * Delegating worker for custom activity "%taskId%".
+ * <p>
+ * Injects {@code %contractClassName%} via CDI and delegates each message
+ * to the implementation. Generated by Durga — do not modify.
+ * <p>Expected implementation: {@code %customImpl%}
+ * <p>Implementation hash at generation time: {@code %customHash%}
+ */
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%processId%_%taskId%_out")
+    Emitter<String> outputEmitter;
+
+    @Inject
+    @Channel("%processId%_%taskId%_dlq")
+    Emitter<String> dlqEmitter;
+
+    @Inject
+    @Channel("vannak-metadata-events")
+    Emitter<String> vannakMetadataEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    @Inject
+    %contractClassName% implementation;
+
+    @Incoming("%processId%_%taskId%_in")
+    public CompletionStage<Void> handle(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+        if (implementation == null) {
+            String error = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
+                    msg.getPayload(), "custom:%taskId%",
+                    "No implementation injected for contract %contractClassName%");
+            return dlqEmitter.send(error).thenCompose(ignored -> msg.ack());
+        }
+        try {
+            String payload = inputEvent.payload() != null
+                    ? new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
+                    : "{}";
+            org.gautelis.durga.plugins.PluginExecutionSupport.Result pluginResult =
+                    org.gautelis.durga.plugins.PluginExecutionSupport.execute(
+                            implementation,
+                            payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                            "%pluginConfig%");
+            if (pluginResult.errorStrategy() == org.gautelis.durga.plugins.PluginResult.ErrorStrategy.SKIP) {
+                return msg.ack();
+            }
+            if (pluginResult.errorStrategy() == org.gautelis.durga.plugins.PluginResult.ErrorStrategy.DLQ) {
+                String dlqRecord = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
+                        msg.getPayload(), "custom:%taskId%",
+                        pluginResult.sideEffectDescription() != null
+                                ? pluginResult.sideEffectDescription() : "Plugin routed to DLQ");
+                return dlqEmitter.send(dlqRecord).thenCompose(ignored -> msg.ack());
+            }
+            if (pluginResult.errorStrategy() == org.gautelis.durga.plugins.PluginResult.ErrorStrategy.FAIL) {
+                throw new IllegalStateException(pluginResult.sideEffectDescription() != null
+                        ? pluginResult.sideEffectDescription() : "Plugin requested failure");
+            }
+            byte[] output = pluginResult.output();
+            java.util.Map<String, Object> outputPayload = inputEvent.payload();
+            if (output != null) {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                String outputText = new String(output, java.nio.charset.StandardCharsets.UTF_8);
+                try {
+                    com.fasterxml.jackson.databind.JsonNode outputNode = mapper.readTree(outputText);
+                    if (outputNode.isObject()) {
+                        outputPayload = mapper.convertValue(outputNode,
+                                new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>\>() {});
+                    } else {
+                        outputPayload = java.util.Map.of("_value", mapper.convertValue(outputNode, Object.class));
+                    }
+                } catch (com.fasterxml.jackson.core.JsonProcessingException parseFailure) {
+                    outputPayload = java.util.Map.of("_value", outputText);
+                }
+            }
+            ProcessEvent outputEvent = new ProcessEvent(
+                    inputEvent.processInstanceId(),
+                    inputEvent.processId(),
+                    "%taskId%",
+                    inputEvent.tokenId(),
+                    inputEvent.correlationId(),
+                    outputPayload,
+                    ProcessEvent.Status.COMPLETED,
+                    null,
+                    ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                    inputEvent.processVersion(),
+                    inputEvent.businessKey(),
+                    null
+            );
+            %if(hasLineage)%
+            return java.util.concurrent.CompletableFuture.allOf(
+                    outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                    processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                    vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
+                    inputEvent,
+                    "%taskId%",
+                    "custom:%taskId%",
+                    "%pluginConfig%",
+                    payload,
+                    outputPayload,
+                    %taskReads%,
+                    %taskWrites%,
+                    %taskStores%).toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
+            %else%
+            return java.util.concurrent.CompletableFuture.allOf(
+                    outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                    processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
+            %endif%
+        } catch (Exception e) {
+            String error = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
+                    msg.getPayload(), "custom:%taskId%", e.getMessage());
+            return java.util.concurrent.CompletableFuture.allOf(
+                    dlqEmitter.send(error).toCompletableFuture(),
+                    processEventsEmitter.send(new ProcessEvent(
+                    inputEvent.processInstanceId(),
+                    inputEvent.processId(),
+                    "%taskId%",
+                    inputEvent.tokenId(),
+                    inputEvent.correlationId(),
+                    java.util.Map.of("_payloadRedacted", true),
+                    ProcessEvent.Status.FAILED,
+                    new ProcessEvent.ErrorInfo(
+                            org.gautelis.durga.plugins.PipelinePlugin.sanitizeErrorMessage(e.getMessage()),
+                            "CUSTOM_FAILED"),
+                    ProcessEvent.EventType.PROCESS_FAILED,
+                    inputEvent.processVersion(),
+                    inputEvent.businessKey(),
+                    null
+            ).toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
+        }
+    }
+}
+>>
+
+pluginExecutorClass(packageName, className, processId, taskId, inputChannel, taskType, pluginRef, pluginConfig, pluginImplClass, category, taskReads, taskWrites, taskStores, hasLineage, isRoute, isValidate, isAggregate) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+import org.gautelis.durga.plugins.Plugin;
+import org.gautelis.durga.plugins.PluginResult;
+import %pluginImplClass%;
+import java.util.concurrent.CompletionStage;
+
+@ApplicationScoped
+public class %className% {
+    @Inject
+    @Channel("process-events")
+    Emitter<String> processEventsEmitter;
+
+    @Inject
+    @Channel("%processId%_%taskId%_out")
+    Emitter<String> outputEmitter;
+
+    @Inject
+    @Channel("%processId%_%taskId%_dlq")
+    Emitter<String> dlqEmitter;
+
+    @Inject
+    @Channel("vannak-metadata-events")
+    Emitter<String> vannakMetadataEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    private final Plugin plugin = new %pluginImplClass%();
+
+    @Incoming("%processId%_%taskId%_in")
+    public CompletionStage<Void> handle(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+        try {
+            String payload = inputEvent.payload() != null
+                    ? new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
+                    : "{}";
+            PluginResult pluginResult = plugin.executeWithResult(
+                    payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    "%pluginConfig%");
+            if (pluginResult.errorStrategy() == PluginResult.ErrorStrategy.SKIP) {
+                return msg.ack();
+            }
+            if (pluginResult.errorStrategy() == PluginResult.ErrorStrategy.DLQ) {
+                String dlqRecord = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
+                        msg.getPayload(), "%pluginRef%",
+                        pluginResult.sideEffectDescription() != null
+                                ? pluginResult.sideEffectDescription() : "Plugin routed to DLQ");
+                return dlqEmitter.send(dlqRecord).thenCompose(ignored -> msg.ack());
+            }
+            if (pluginResult.errorStrategy() == PluginResult.ErrorStrategy.FAIL) {
+                throw new IllegalStateException(pluginResult.sideEffectDescription() != null
+                        ? pluginResult.sideEffectDescription() : "Plugin requested failure");
+            }
+            byte[] output = pluginResult.output();
+            %if(isAggregate)%if (output == null) {
+                return processEventsEmitter.send(new ProcessEvent(
+                        inputEvent.processInstanceId(),
+                        inputEvent.processId(),
+                        "%taskId%",
+                        inputEvent.tokenId(),
+                        inputEvent.correlationId(),
+                        inputEvent.payload(),
+                        ProcessEvent.Status.STARTED,
+                        null,
+                        ProcessEvent.EventType.ACTIVITY_ENTERED,
+                        inputEvent.processVersion(),
+                        inputEvent.businessKey(),
+                        null
+                ).toJson()).thenCompose(ignored -> msg.ack());
+            }
+            %endif%java.util.Map<String, Object> outputPayload = inputEvent.payload();
+            if (output != null) {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                String outputText = new String(output, java.nio.charset.StandardCharsets.UTF_8);
+                try {
+                    com.fasterxml.jackson.databind.JsonNode outputNode = mapper.readTree(outputText);
+                    if (outputNode.isObject()) {
+                        outputPayload = mapper.convertValue(outputNode,
+                                new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>\>() {});
+                    } else {
+                        outputPayload = java.util.Map.of("_value", mapper.convertValue(outputNode, Object.class));
+                    }
+                } catch (com.fasterxml.jackson.core.JsonProcessingException parseFailure) {
+                    outputPayload = java.util.Map.of("_value", outputText);
+                }
+            }
+            ProcessEvent outputEvent = new ProcessEvent(
+                    inputEvent.processInstanceId(),
+                    inputEvent.processId(),
+                    "%taskId%",
+                    inputEvent.tokenId(),
+                    inputEvent.correlationId(),
+                    outputPayload,
+                    ProcessEvent.Status.COMPLETED,
+                    null,
+                    %if(isRoute)%ProcessEvent.EventType.GATEWAY_TAKEN,
+                    %else%ProcessEvent.EventType.ACTIVITY_COMPLETED,
+                    %endif%
+                    inputEvent.processVersion(),
+                    inputEvent.businessKey(),
+                    null
+            );
+            %if(hasLineage)%
+            return java.util.concurrent.CompletableFuture.allOf(
+                    outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                    processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                    vannakMetadataEmitter.send(org.gautelis.durga.VannakMetadata.pluginEvent(
+                    inputEvent,
+                    "%taskId%",
+                    "%pluginRef%",
+                    "%pluginConfig%",
+                    payload,
+                    outputPayload,
+                    %taskReads%,
+                    %taskWrites%,
+                    %taskStores%).toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
+            %else%
+            return java.util.concurrent.CompletableFuture.allOf(
+                    outputEmitter.send(outputEvent.toJson()).toCompletableFuture(),
+                    processEventsEmitter.send(outputEvent.toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
+            %endif%
+        } catch (Exception e) {
+            String error = org.gautelis.durga.plugins.PipelinePlugin.errorRecord(
+                    msg.getPayload(), "%pluginRef%", e.getMessage());
+            %if(isValidate)%
+            return java.util.concurrent.CompletableFuture.allOf(
+                    dlqEmitter.send(error).toCompletableFuture(),
+                    processEventsEmitter.send(new ProcessEvent(
+                    inputEvent.processInstanceId(),
+                    inputEvent.processId(),
+                    "%taskId%",
+                    inputEvent.tokenId(),
+                    inputEvent.correlationId(),
+                    java.util.Map.of("_payloadRedacted", true),
+                    ProcessEvent.Status.ESCALATED,
+                    new ProcessEvent.ErrorInfo(
+                            org.gautelis.durga.plugins.PipelinePlugin.sanitizeErrorMessage(e.getMessage()),
+                            "VALIDATION_FAILED"),
+                    ProcessEvent.EventType.ACTIVITY_ESCALATED,
+                    inputEvent.processVersion(),
+                    inputEvent.businessKey(),
+                    null
+            ).toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
+            %else%
+            return java.util.concurrent.CompletableFuture.allOf(
+                    dlqEmitter.send(error).toCompletableFuture(),
+                    processEventsEmitter.send(new ProcessEvent(
+                    inputEvent.processInstanceId(),
+                    inputEvent.processId(),
+                    "%taskId%",
+                    inputEvent.tokenId(),
+                    inputEvent.correlationId(),
+                    java.util.Map.of("_payloadRedacted", true),
+                    ProcessEvent.Status.FAILED,
+                    new ProcessEvent.ErrorInfo(
+                            org.gautelis.durga.plugins.PipelinePlugin.sanitizeErrorMessage(e.getMessage()),
+                            "PLUGIN_FAILED"),
+                    ProcessEvent.EventType.PROCESS_FAILED,
+                    inputEvent.processVersion(),
+                    inputEvent.businessKey(),
+                    null
+            ).toJson()).toCompletableFuture()
+            ).thenCompose(ignored -> msg.ack());
+            %endif%
+        }
+    }
+}
+>>

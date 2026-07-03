@@ -34,7 +34,7 @@ START_KAFKA="${START_KAFKA:-true}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
 FEED_PIDS="${FEED_PIDS:-invoice_receipt,order_fulfillment}"
 FEED_INTERVAL="${FEED_INTERVAL:-1000}"
-BPMN_DIR="${BPMN_DIR:-${ROOT_DIR}/src/test/resources/bpmn}"
+BPMN_DIR="${BPMN_DIR:-${ROOT_DIR}/durga-tools/src/test/resources/bpmn}"
 
 declare -a BG_PIDS=()
 

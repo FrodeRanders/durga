@@ -12,7 +12,9 @@ const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
 
-const PLUGINS_DIR = path.resolve(__dirname, '..', 'plugins');
+const PLUGINS_DIR = path.resolve(
+  process.env.DURGA_PLUGIN_CATALOG_DIR || path.join(__dirname, '..', 'plugins')
+);
 const OUTPUT_DIR = path.resolve(__dirname, 'dist');
 const OUTPUT_FILE = path.join(OUTPUT_DIR, 'plugin-catalog.json');
 
@@ -304,6 +306,13 @@ function parseDescriptor(yamlPath) {
 }
 
 function generate() {
+  if (!fs.existsSync(PLUGINS_DIR)) {
+    throw new Error(
+      `Plugin descriptor directory not found: ${PLUGINS_DIR}. ` +
+      'Set DURGA_PLUGIN_CATALOG_DIR to the directory containing catalog.yml and plugin descriptors.'
+    );
+  }
+
   if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   }
@@ -327,6 +336,7 @@ function generate() {
   });
 
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify(catalog, null, 2), 'utf8');
+  console.log(`Read plugin descriptors from: ${PLUGINS_DIR}`);
   console.log(`Generated plugin catalog: ${catalog.length} plugins → ${OUTPUT_FILE}`);
 }
 

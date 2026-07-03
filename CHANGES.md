@@ -65,7 +65,7 @@
 - Replaced stale `application.yml` with minimal config
 - Removed unused `@ApplicationScoped` from `ScopeCancellationRegistry`
 - Hardcoded `localhost:9094` externalized to `kafka.bootstrap.servers` system property
-- BPMN fixtures moved from `src/main/resources/bpmn/` to `src/test/resources/bpmn/`
+- BPMN fixtures moved from `src/main/resources/bpmn/` to `durga-tools/src/test/resources/bpmn/`
 - Added `.editorconfig` and `.github/workflows/build.yml` (JDK 21 CI)
 
 ### Documentation

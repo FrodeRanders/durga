@@ -74,7 +74,7 @@ For beta releases:
 An out-of-scope feature can move into the beta contract when it has:
 
 1. an entry in `doc/bpmn-kafka-coverage.md`,
-2. at least one BPMN fixture under `src/test/resources/bpmn/`,
+2. at least one BPMN fixture under `durga-tools/src/test/resources/bpmn/`,
 3. unit or generated-project tests that exercise the generated artifacts,
 4. Docker-backed integration coverage when Kafka state, ordering, or restart
    behavior is material to correctness,

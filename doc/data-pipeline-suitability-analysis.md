@@ -46,8 +46,8 @@ Durga's main capability is in the scaffolder:
 
 - `src/main/java/org/gautelis/durga/tools/BpmnScaffolder.java`
 - `src/main/java/org/gautelis/durga/tools/BpmnModelCollector.java`
-- `src/main/resources/templates/scaffold.stg`
-- `src/main/resources/templates/scaffold-generated-project.stg`
+- `durga-tools/src/main/resources/templates/scaffold.stg`
+- `durga-tools/src/main/resources/templates/scaffold-generated-project.stg`
 
 The README describes the tool as "BPMN -> Kafka code generation and process
 monitoring" and documents generated worker classes, task input/output topics,

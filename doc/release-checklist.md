@@ -43,16 +43,16 @@ For at least one representative BPMN model:
 
 ```bash
 mvn -q clean package
-java -jar target/durga-0.1.0-beta.1.jar src/test/resources/bpmn/invoice_receipt.bpmn
+java -jar target/durga-0.1.0-beta.1.jar durga-tools/src/test/resources/bpmn/invoice_receipt.bpmn
 cd generated
 mvn test
 ```
 
 For a plugin pipeline, also scaffold one of:
 
-- `src/test/resources/bpmn/data_pipeline_demo.bpmn`
-- `src/test/resources/bpmn/order_events_pipeline.bpmn`
-- `src/test/resources/bpmn/log_processing_pipeline.bpmn`
+- `durga-tools/src/test/resources/bpmn/data_pipeline_demo.bpmn`
+- `durga-tools/src/test/resources/bpmn/order_events_pipeline.bpmn`
+- `durga-tools/src/test/resources/bpmn/log_processing_pipeline.bpmn`
 
 ## Operational Review
 
