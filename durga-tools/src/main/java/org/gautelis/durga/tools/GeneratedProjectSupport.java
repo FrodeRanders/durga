@@ -59,6 +59,8 @@ final class GeneratedProjectSupport {
             }
         }
 
+        ensureBaseRuntimeConfig(root, processId);
+
         Map<String, Object> mp = ensureMap(root, "mp");
         Map<String, Object> messaging = ensureMap(mp, "messaging");
         Map<String, Object> incoming = ensureMap(messaging, "incoming");
@@ -213,6 +215,23 @@ final class GeneratedProjectSupport {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to write application.yml", e);
         }
+    }
+
+    private static void ensureBaseRuntimeConfig(Map<String, Object> root, String processId) {
+        Map<String, Object> kafka = ensureMap(root, "kafka");
+        Map<String, Object> bootstrap = ensureMap(kafka, "bootstrap");
+        bootstrap.putIfAbsent("servers", "${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}");
+
+        Map<String, Object> quarkus = ensureMap(root, "quarkus");
+        Map<String, Object> application = ensureMap(quarkus, "application");
+        application.putIfAbsent("name", processId);
+        Map<String, Object> http = ensureMap(quarkus, "http");
+        http.putIfAbsent("port", "${HTTP_PORT:8080}");
+        Map<String, Object> log = ensureMap(quarkus, "log");
+        log.putIfAbsent("level", "INFO");
+        Map<String, Object> category = ensureMap(log, "category");
+        Map<String, Object> gautelis = ensureMap(category, "org.gautelis");
+        gautelis.putIfAbsent("level", "DEBUG");
     }
 
     /**

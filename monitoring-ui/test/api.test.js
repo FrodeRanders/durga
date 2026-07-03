@@ -12,7 +12,7 @@ import {
 
 test('dashboardRequestPaths URL-encodes process id and threshold', () => {
   assert.deepEqual(dashboardRequestPaths('invoice review/2026', 30), [
-    '/health',
+    '/api/health',
     '/api/counts',
     '/api/alarms',
     '/api/processes/invoice%20review%2F2026/counts',

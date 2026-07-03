@@ -143,7 +143,7 @@ start_monitor() {
     log "Waiting for monitoring server..."
     local deadline=$(($(date +%s) + 60))
     while [ $(date +%s) -lt $deadline ]; do
-        if curl -s "http://localhost:$MONITOR_PORT/health" | grep -q RUNNING; then
+        if curl -s "http://localhost:$MONITOR_PORT/api/health" | grep -q RUNNING; then
             log "Monitoring server ready: http://localhost:$MONITOR_PORT"
             return
         fi

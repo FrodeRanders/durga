@@ -1485,6 +1485,12 @@ pomXml(processId, starterClass, bpmnFileName, durgaVersion) ::= <<
         </dependency>
 
         <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-config-yaml</artifactId>
+            <version>${quarkus.platform.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.jboss.logmanager</groupId>
             <artifactId>jboss-logmanager</artifactId>
             <version>${logmgr.version}</version>

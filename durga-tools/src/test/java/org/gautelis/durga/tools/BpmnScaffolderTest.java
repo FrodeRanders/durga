@@ -230,6 +230,13 @@ public class BpmnScaffolderTest {
         runGeneration("src/test/resources/bpmn/data_pipeline_demo.bpmn", outputDir);
 
         Map<String, Object> yaml = readYaml(outputDir.resolve("src/main/resources/application.yml"));
+        assertEquals("${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}",
+                mapAt(yaml, "kafka", "bootstrap").get("servers"));
+        assertEquals("${HTTP_PORT:8080}", mapAt(yaml, "quarkus", "http").get("port"));
+        String pom = Files.readString(outputDir.resolve("pom.xml"));
+        assertTrue("generated Quarkus app must read application.yml",
+                pom.contains("<artifactId>quarkus-config-yaml</artifactId>"));
+
         Map<String, Object> messaging = mapAt(yaml, "mp", "messaging");
         Map<String, Object> incoming = mapAt(messaging, "incoming");
         Map<String, Object> outgoing = mapAt(messaging, "outgoing");

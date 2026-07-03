@@ -10,6 +10,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,6 +68,7 @@ public final class ProcessMonitoringApp {
 
         KafkaStreams streams = new KafkaStreams(
                 ProcessMonitoringTopology.buildTopology(topics), props);
+        configureStreamsLogging("monitoring", streams);
         Properties faultProps = new Properties();
         faultProps.putAll(props);
         faultProps.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId + "-fault-detection");
@@ -80,6 +82,7 @@ public final class ProcessMonitoringApp {
                         FaultDetectionTopology.DEFAULT_ALARMS_TOPIC,
                         topics.modelsTopic()),
                 faultProps);
+        configureStreamsLogging("fault-detection", faultStreams);
         Properties alarmStateProps = new Properties();
         alarmStateProps.putAll(props);
         alarmStateProps.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId + "-alarm-state");
@@ -91,6 +94,7 @@ public final class ProcessMonitoringApp {
                         FaultDetectionTopology.DEFAULT_ALARMS_TOPIC,
                         AlarmStateTopology.DEFAULT_ALARM_STATE_STORE),
                 alarmStateProps);
+        configureStreamsLogging("alarm-state", alarmStateStreams);
         ProcessMonitoringQueryService queryService =
                 new ProcessMonitoringQueryService(streams, topics);
         AlarmStateQueryService alarmQueryService =
@@ -114,6 +118,15 @@ public final class ProcessMonitoringApp {
         return new MonitoringState(streams, faultStreams, alarmStateStreams, queryService, alarmQueryService);
     }
 
+    private static void configureStreamsLogging(String name, KafkaStreams streams) {
+        streams.setStateListener((newState, oldState) ->
+                LOG.info("{} streams state changed: {} -> {}", name, oldState, newState));
+        streams.setUncaughtExceptionHandler(e -> {
+            LOG.error("{} streams failed", name, e);
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+        });
+    }
+
     private static void createTopicsIfNeeded(String bootstrapServers, ProcessMonitoringTopology.MonitoringTopics topics) {
         List<String> allTopics = List.of(
                 topics.stateTopic(),
@@ -125,21 +138,38 @@ public final class ProcessMonitoringApp {
                 FaultDetectionTopology.DEFAULT_ALARMS_TOPIC);
         Properties adminProps = new Properties();
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        try (var admin = AdminClient.create(adminProps)) {
-            Set<String> existing = admin.listTopics().names().get();
-            List<NewTopic> toCreate = new ArrayList<>();
-            for (String t : allTopics) {
-                if (!existing.contains(t)) {
-                    toCreate.add(new NewTopic(t, 2, (short) 1));
+        Exception lastFailure = null;
+        for (int attempt = 1; attempt <= 10; attempt++) {
+            try (var admin = AdminClient.create(adminProps)) {
+                Set<String> existing = admin.listTopics().names().get();
+                List<NewTopic> toCreate = new ArrayList<>();
+                for (String t : allTopics) {
+                    if (!existing.contains(t)) {
+                        toCreate.add(new NewTopic(t, 2, (short) 1));
+                    }
                 }
+                if (!toCreate.isEmpty()) {
+                    admin.createTopics(toCreate).all().get();
+                    LOG.info("Created topics: {}", toCreate.stream().map(NewTopic::name).toList());
+                }
+                Set<String> afterCreate = admin.listTopics().names().get();
+                if (afterCreate.containsAll(allTopics)) {
+                    return;
+                }
+                lastFailure = new IllegalStateException("Missing monitoring topics after create: "
+                        + allTopics.stream().filter(t -> !afterCreate.contains(t)).toList());
+            } catch (Exception e) {
+                lastFailure = e;
+                LOG.warn("Could not create Kafka monitoring topics on attempt {}/10: {}", attempt, e.getMessage());
             }
-            if (!toCreate.isEmpty()) {
-                admin.createTopics(toCreate).all().get();
-                LOG.info("Created topics: {}", toCreate.stream().map(NewTopic::name).toList());
+            try {
+                Thread.sleep(1000L);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted while creating Kafka monitoring topics", e);
             }
-        } catch (Exception e) {
-            LOG.warn("Could not auto-create Kafka topics (broker may not be reachable yet): {}", e.getMessage());
         }
+        throw new IllegalStateException("Could not create Kafka monitoring topics", lastFailure);
     }
 
     /** Injectable state holder for the REST resource. */
