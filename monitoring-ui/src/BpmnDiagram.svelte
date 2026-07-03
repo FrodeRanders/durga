@@ -167,7 +167,6 @@
     }
   })
 
-  const MAX_RETRIES = 12
   const RETRY_INTERVAL_MS = 5000
   let retryTimer = null
   let retryCount = 0
@@ -182,13 +181,12 @@
 
   function scheduleRetry() {
     if (retryTimer) return
+    if (retryCount === 0) {
+      diagramError = 'Waiting for model to become available...'
+    }
     retryTimer = setInterval(() => {
       retryCount++
-      if (retryCount > MAX_RETRIES) {
-        clearRetry()
-        diagramError = 'Model not available — try reselecting the process'
-        return
-      }
+      diagramError = `Waiting for model to become available... (attempt ${retryCount})`
       fetchAndRender()
     }, RETRY_INTERVAL_MS)
   }
@@ -205,12 +203,7 @@
       const url = pid ? `/api/diagram?processId=${pid}` : '/api/diagram'
       const response = await fetch(url)
       if (!response.ok) {
-        if (response.status === 404) {
-          diagramError = 'Waiting for model to become available...'
-          scheduleRetry()
-        } else {
-          diagramError = `HTTP ${response.status}`
-        }
+        scheduleRetry()
         return
       }
       diagramXml = await response.text()
