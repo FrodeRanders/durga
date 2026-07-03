@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Kafka Streams topology for fault detection on process lifecycle events.
@@ -102,7 +103,7 @@ public final class FaultDetectionTopology {
         builder.addStateStore(configStoreBuilder);
 
         // Stream 1: process events → evaluate alarms
-        builder.stream(eventsPattern, Consumed.with(Serdes.String(), Serdes.String()))
+        builder.stream(Pattern.compile(eventsPattern), Consumed.with(Serdes.String(), Serdes.String()))
                 .process(() -> new FaultDetectionProcessor(staticConfigs),
                         CONFIG_STORE, COUNTS_STORE, WINDOWS_STORE, LAST_ALARM_STORE)
                 .to(alarmsTopic, Produced.with(Serdes.String(), Serdes.String()));
@@ -120,6 +121,7 @@ public final class FaultDetectionTopology {
 
     static final class FaultDetectionProcessor implements Processor<String, String, String, String> {
         private final Set<AlarmConfig> staticConfigs;
+        private final long startedAtMs;
         private ProcessorContext<String, String> context;
         private KeyValueStore<String, String> configStore;
         private KeyValueStore<String, Integer> countsStore;
@@ -128,6 +130,7 @@ public final class FaultDetectionTopology {
 
         FaultDetectionProcessor(Set<AlarmConfig> staticConfigs) {
             this.staticConfigs = staticConfigs != null ? staticConfigs : Set.of();
+            this.startedAtMs = System.currentTimeMillis();
         }
 
         @SuppressWarnings("unchecked")
@@ -142,6 +145,9 @@ public final class FaultDetectionTopology {
 
         @Override
         public void process(Record<String, String> record) {
+            if (record.timestamp() > 0 && record.timestamp() < startedAtMs) {
+                return;
+            }
             ProcessEvent event = parse(record.value());
             if (event == null) return;
 

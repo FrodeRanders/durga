@@ -1,7 +1,7 @@
 \section{Monitoring Interfaces}
 \label{sec:MonitoringInterfaces}
 
-The monitoring subsystem exposes these interfaces over the same Kafka Streams state:
+The monitoring subsystem exposes these interfaces over Kafka Streams read models:
 \begin{itemize}
 \item a Quarkus HTTP API and embedded SPA,
 \item a command-line client.
@@ -9,8 +9,9 @@ The monitoring subsystem exposes these interfaces over the same Kafka Streams st
 
 \subsection{HTTP service}
 
-Entry point: \texttt{ProcessMonitoringApp} (Quarkus). Query layer:
-\texttt{ProcessMonitoringQueryService}.
+Entry point: \texttt{ProcessMonitoringApp} (Quarkus). Query layers:
+\texttt{ProcessMonitoringQueryService} for process state and
+\texttt{AlarmStateQueryService} for alarm state.
 
 Endpoints (all under \texttt{/api/}):
 \begin{itemize}
@@ -22,6 +23,9 @@ Endpoints (all under \texttt{/api/}):
 \item \texttt{/api/processes/\{processId\}/latency} --- activity latency summaries,
 \item \texttt{/api/processes/\{processId\}/trends} --- bucketed start/completion/failure history,
 \item \texttt{/api/counts} --- global state-count view,
+\item \texttt{/api/alarms} --- global active alarm-state view,
+\item \texttt{/api/processes/\{processId\}/alarms} --- process-specific active alarm-state view,
+\item \texttt{/api/instances/\{processInstanceId\}/alarms} --- active alarms whose latest firing belongs to the instance,
 \item \texttt{/api/stuck} --- stuck-instance detection,
 \item \texttt{/api/diagram?processId=\textit{id}} --- BPMN 2.0 XML from the model cache,
 \item \texttt{/api/metrics} --- Prometheus-format metrics.
@@ -62,9 +66,10 @@ The Svelte SPA is built from \filepath{monitoring-ui/} and served directly
 from the monitoring backend. It shows:
 \begin{itemize}
 \item a process inventory with all known process IDs and aggregate KPIs,
-\item per-process drill-down: state mix, lifecycle trends, activity latency, stuck instances,
-\item instance detail lookup,
-\item a BPMN diagram viewer with color-coded activity overlays (latency and state).
+\item alarm KPIs and process-level alarm counts,
+\item per-process drill-down: state mix, lifecycle trends, activity latency, stuck instances, and alarm state,
+\item instance detail lookup with latest alarm details,
+\item a BPMN diagram viewer with color-coded activity overlays (alarms, latency, and state).
 \end{itemize}
 
 The diagram viewer uses \texttt{bpmn-js} with built-in zoom (scroll wheel),
@@ -76,11 +81,12 @@ dashboard with a BPMN diagram viewer.
 
 \subsection{How the interfaces fit together}
 
-All interfaces consume the same materialized state:
+The interfaces consume the same materialized read models:
 \begin{enumerate}
 \item processes self-register by publishing BPMN models to \texttt{process-models},
 \item lifecycle events flow through \texttt{process-events-*},
-\item Kafka Streams materializes state, counts, latency, trends, and the model cache,
+\item the fault detector emits matching \texttt{AlarmEvent} records to \texttt{fault-alarms},
+\item Kafka Streams materializes state, counts, latency, trends, the model cache, and alarm state,
 \item the HTTP layer exposes that materialized state,
 \item the CLI and dashboard consume the same HTTP API.
 \end{enumerate}
@@ -91,6 +97,6 @@ The operator workflow is:
 \item the dashboard shows the new process in the inventory,
 \item publish a scenario or task outcome,
 \item watch lifecycle events,
-\item query one instance or inspect counts and latency,
+\item query one instance or inspect counts, latency, and alarms,
 \item view the BPMN diagram with live overlays.
 \end{itemize}

@@ -117,6 +117,44 @@ public class ProcessMonitoringResource {
     }
 
     @GET
+    @Path("/alarms")
+    public Response allAlarms(@HeaderParam("Authorization") String authorization) {
+        Response auth = requireAuth(authorization);
+        if (auth != null) return auth;
+        try {
+            return Response.ok(state.alarmQueryService().allAlarms()).build();
+        } catch (InvalidStateStoreException e) {
+            return Response.status(503).entity(Map.of("error", "alarm state store not queryable yet")).build();
+        }
+    }
+
+    @GET
+    @Path("/processes/{processId}/alarms")
+    public Response alarmsForProcess(@HeaderParam("Authorization") String authorization,
+                                     @PathParam("processId") String processId) {
+        Response auth = requireAuth(authorization);
+        if (auth != null) return auth;
+        try {
+            return Response.ok(state.alarmQueryService().alarmsForProcess(processId)).build();
+        } catch (InvalidStateStoreException e) {
+            return Response.status(503).entity(Map.of("error", "alarm state store not queryable yet")).build();
+        }
+    }
+
+    @GET
+    @Path("/instances/{instanceId}/alarms")
+    public Response alarmsForInstance(@HeaderParam("Authorization") String authorization,
+                                      @PathParam("instanceId") String instanceId) {
+        Response auth = requireAuth(authorization);
+        if (auth != null) return auth;
+        try {
+            return Response.ok(state.alarmQueryService().alarmsForInstance(instanceId)).build();
+        } catch (InvalidStateStoreException e) {
+            return Response.status(503).entity(Map.of("error", "alarm state store not queryable yet")).build();
+        }
+    }
+
+    @GET
     @Path("/stuck")
     public Response stuck(
             @HeaderParam("Authorization") String authorization,
@@ -230,7 +268,11 @@ public class ProcessMonitoringResource {
     }
 
     static Map<String, String> healthPayload(ProcessMonitoringApp.MonitoringState state) {
-        return Map.of("streamsState", state.streams().state().name());
+        return Map.of(
+                "streamsState", state.streams().state().name(),
+                "faultStreamsState", state.faultStreams().state().name(),
+                "alarmStateStreamsState", state.alarmStateStreams().state().name()
+        );
     }
 
     static String prometheusLabelValue(String value) {

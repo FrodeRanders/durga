@@ -7,6 +7,7 @@ import jakarta.inject.Singleton;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
@@ -63,19 +64,51 @@ public final class ProcessMonitoringApp {
 
         KafkaStreams streams = new KafkaStreams(
                 ProcessMonitoringTopology.buildTopology(topics), props);
+        Properties faultProps = new Properties();
+        faultProps.putAll(props);
+        faultProps.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId + "-fault-detection");
+        faultProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        faultProps.put(StreamsConfig.STATE_DIR_CONFIG,
+                System.getProperty("durga.fault.streams.state.dir", "target/kafka-streams-fault-state"));
+        KafkaStreams faultStreams = new KafkaStreams(
+                FaultDetectionTopology.buildTopology(
+                        Set.of(),
+                        FaultDetectionTopology.DEFAULT_EVENTS_PATTERN,
+                        FaultDetectionTopology.DEFAULT_ALARMS_TOPIC,
+                        topics.modelsTopic()),
+                faultProps);
+        Properties alarmStateProps = new Properties();
+        alarmStateProps.putAll(props);
+        alarmStateProps.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId + "-alarm-state");
+        alarmStateProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        alarmStateProps.put(StreamsConfig.STATE_DIR_CONFIG,
+                System.getProperty("durga.alarm.streams.state.dir", "target/kafka-streams-alarm-state"));
+        KafkaStreams alarmStateStreams = new KafkaStreams(
+                AlarmStateTopology.buildTopology(
+                        FaultDetectionTopology.DEFAULT_ALARMS_TOPIC,
+                        AlarmStateTopology.DEFAULT_ALARM_STATE_STORE),
+                alarmStateProps);
         ProcessMonitoringQueryService queryService =
                 new ProcessMonitoringQueryService(streams, topics);
+        AlarmStateQueryService alarmQueryService =
+                new AlarmStateQueryService(alarmStateStreams, AlarmStateTopology.DEFAULT_ALARM_STATE_STORE);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             streams.close(Duration.ofSeconds(30));
+            faultStreams.close(Duration.ofSeconds(30));
+            alarmStateStreams.close(Duration.ofSeconds(30));
         }));
 
         createTopicsIfNeeded(bootstrapServers, topics);
 
         streams.start();
+        faultStreams.start();
+        alarmStateStreams.start();
         LOG.info("Monitoring topology started (state dir: {})", props.getProperty(StreamsConfig.STATE_DIR_CONFIG));
+        LOG.info("Fault detection topology started (state dir: {})", faultProps.getProperty(StreamsConfig.STATE_DIR_CONFIG));
+        LOG.info("Alarm state topology started (state dir: {})", alarmStateProps.getProperty(StreamsConfig.STATE_DIR_CONFIG));
 
-        return new MonitoringState(streams, queryService);
+        return new MonitoringState(streams, faultStreams, alarmStateStreams, queryService, alarmQueryService);
     }
 
     private static void createTopicsIfNeeded(String bootstrapServers, ProcessMonitoringTopology.MonitoringTopics topics) {
@@ -85,7 +118,8 @@ public final class ProcessMonitoringApp {
                 topics.activeTopic(),
                 topics.latencyTopic(),
                 topics.trendsTopic(),
-                topics.modelsTopic());
+                topics.modelsTopic(),
+                FaultDetectionTopology.DEFAULT_ALARMS_TOPIC);
         Properties adminProps = new Properties();
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         try (var admin = AdminClient.create(adminProps)) {
@@ -108,7 +142,10 @@ public final class ProcessMonitoringApp {
     /** Injectable state holder for the REST resource. */
     public record MonitoringState(
             KafkaStreams streams,
-            ProcessMonitoringQueryService queryService
+            KafkaStreams faultStreams,
+            KafkaStreams alarmStateStreams,
+            ProcessMonitoringQueryService queryService,
+            AlarmStateQueryService alarmQueryService
     ) {
     }
 

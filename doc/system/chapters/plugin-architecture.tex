@@ -23,11 +23,12 @@ Plugins are defined by YAML descriptors under \filepath{plugins/} and indexed by
 \subsection{Governed categories}
 
 Each plugin category has an intended contract for topic naming, lifecycle events,
-and error channel conventions. These are category semantics --- the generic plugin
-executor currently emits \texttt{ACTIVITY\_COMPLETED} on success and
-\texttt{PROCESS\_FAILED} on exceptions regardless of plugin category; category-specific
-events (such as \texttt{GATEWAY\_TAKEN} for route or \texttt{ACTIVITY\_ESCALATED}
-for validate) are not yet enforced at runtime.
+and error channel conventions. The generated plugin executor now emits
+category-specific lifecycle events for the supported governed cases:
+\texttt{GATEWAY\_TAKEN} for route plugins, \texttt{ACTIVITY\_ESCALATED} for
+validate plugin failures, and \texttt{ACTIVITY\_ENTERED} for aggregate plugins
+that keep a window open by returning no output. Other plugin categories retain
+the normal activity completion/failure lifecycle.
 
 \begin{longtable}{|>{\raggedright\arraybackslash}p{0.22\textwidth}|>{\raggedright\arraybackslash}p{0.70\textwidth}|}
 \hline

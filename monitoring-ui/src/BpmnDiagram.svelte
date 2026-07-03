@@ -1,5 +1,5 @@
 <script>
-  let { processId = '', latency = [], counts = [] } = $props()
+  let { processId = '', latency = [], counts = [], alarms = [] } = $props()
 
   let container = $state(null)
   let viewer = null
@@ -38,6 +38,17 @@
     return state.charAt(0).toUpperCase() + state.slice(1)
   }
 
+  function alarmClass(severity) {
+    return severity === 'CRITICAL' ? 'overlay-danger' : 'overlay-warn'
+  }
+
+  function strongerAlarm(current, next) {
+    if (!current) return next
+    if (next.severity === 'CRITICAL' && current.severity !== 'CRITICAL') return next
+    if (current.severity === 'CRITICAL' && next.severity !== 'CRITICAL') return current
+    return String(next.lastTriggeredAt || '').localeCompare(String(current.lastTriggeredAt || '')) > 0 ? next : current
+  }
+
   function applyOverlays() {
     if (!viewer || !rendered) return
 
@@ -57,14 +68,31 @@
       }
     }
 
+    const alarmMap = new Map()
+    for (const alarm of alarms) {
+      if (alarm.activityId) {
+        alarmMap.set(alarm.activityId, strongerAlarm(alarmMap.get(alarm.activityId), alarm))
+      }
+    }
+
     for (const element of elementRegistry.getAll()) {
       const id = element.businessObject?.id || element.id
       if (!id) continue
 
+      const alarm = alarmMap.get(id)
       const lat = latencyMap.get(id)
       const cnt = countMap.get(id)
 
-      if (lat) {
+      if (alarm) {
+        const cls = alarmClass(alarm.severity)
+        let html = `<div class="bpmn-overlay ${cls}"><span class="overlay-label">${escapeHtml(id)}</span>`
+        html += `<span class="overlay-stat">${escapeHtml(alarm.severity)} alarm x${alarm.fireCount || 1}</span>`
+        if (alarm.lastMessage) {
+          html += `<span class="overlay-sla">${escapeHtml(alarm.lastMessage)}</span>`
+        }
+        html += '</div>'
+        overlays.add(id, { position: { bottom: 0, left: 0 }, html })
+      } else if (lat) {
         const cls = latencyClass(lat.p95DurationMs, lat.slaViolationCount)
         let html = `<div class="bpmn-overlay ${cls}"><span class="overlay-label">${escapeHtml(id)}</span>`
         html += `<span class="overlay-stat">n=${lat.sampleCount} avg=${duration(lat.averageDurationMs)} p95=${duration(lat.p95DurationMs)}</span>`
@@ -134,7 +162,7 @@
 
   // Apply overlays reactively when data changes (but only after initial render)
   $effect(() => {
-    if (rendered && (latency.length > 0 || counts.length > 0)) {
+    if (rendered) {
       applyOverlays()
     }
   })

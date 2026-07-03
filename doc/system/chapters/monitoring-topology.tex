@@ -13,7 +13,8 @@ Execution topics show how work is routed. The monitoring topology answers:
 \item how many instances are in a given state,
 \item which activities are taking the longest,
 \item which instances appear stuck,
-\item what are the coarse trend counts for starts, completions, and failures.
+\item what are the coarse trend counts for starts, completions, and failures,
+\item which configured alarms are active and where they last fired.
 \end{itemize}
 
 \subsection{Topology structure}
@@ -52,6 +53,15 @@ models here on startup via \texttt{BpmnModelPublisher} or the generated
 \texttt{ModelRegistration} bean. The diagram endpoint serves models from this cache.
 \end{description}
 
+Fault detection and alarm state are deliberately separate stream topologies.
+\texttt{FaultDetectionTopology} consumes \texttt{process-events-.*} and
+\texttt{process-models}, evaluates BPMN alarm configuration, and emits
+\texttt{AlarmEvent} records to \texttt{fault-alarms}. \texttt{AlarmStateTopology}
+then consumes \texttt{fault-alarms} and folds repeated firings into
+\texttt{AlarmStateView} records in \texttt{alarm-state-store}. The monitoring
+application runs these as separate \texttt{KafkaStreams} instances with separate
+application IDs and state directories.
+
 \subsection{State stores}
 
 The topology maintains ten state stores:
@@ -86,6 +96,16 @@ The five global stores serve queries. The output topics (\texttt{process-state},
 \texttt{process-trends}) decouple computation from query access: any monitoring instance
 can spin up and receive a full read replica without recomputing.
 
+The fault and alarm-state stores are separate from the core process read model:
+
+\begin{itemize}
+\item \texttt{fault-counts-store}, \texttt{fault-windows-store}, and
+      \texttt{fault-last-alarm-store} support fault detection syndromes and alarm
+      suppression.
+\item \texttt{alarm-state-store} is the queryable active-alarm read model consumed by
+      the HTTP API and dashboard.
+\end{itemize}
+
 \subsection{Latency computation}
 
 Activity latency uses a temporal join pattern without windowed stream-stream joins.
@@ -110,11 +130,15 @@ and can be overridden via the \texttt{durga.streams.state.dir} system property.
 
 \subsection{Query access pattern}
 
-The query service (\texttt{ProcessMonitoringQueryService}) accesses only the global
+The process query service (\texttt{ProcessMonitoringQueryService}) accesses only the global
 table stores via \texttt{KafkaStreams.store()}. It uses point lookups for instance
 state and full-store scans for counts, latency, trends, and stuck detection — filtering
 in memory by process ID where needed. No interactive queries or cross-instance RPC is
 required, since global tables replicate the entire content to every monitoring instance.
+
+The alarm query service (\texttt{AlarmStateQueryService}) reads
+\texttt{alarm-state-store} from the alarm-state \texttt{KafkaStreams} instance and
+scans it for global, process-specific, and latest-instance-specific alarm views.
 
 \subsection{Relationship to demos}
 
@@ -132,7 +156,9 @@ The monitoring path now supports:
 \item latency summaries maintained incrementally via a custom processor,
 \item active-instance queries using a dedicated active-state index,
 \item coarse history as bucketed trend counts for process starts, completions, and failures,
-\item per-process BPMN diagrams served from the model cache with activity overlays.
+\item per-process BPMN diagrams served from the model cache with activity overlays,
+\item fault detection from BPMN alarm configuration,
+\item queryable active-alarm state derived from \texttt{fault-alarms}.
 \end{itemize}
 
 History is intentionally coarse — Durga supports basic trend reporting but is

@@ -1,6 +1,7 @@
 import {
   dashboardRequestPaths,
   diagramRequestPath,
+  instanceAlarmsRequestPath,
   instanceRequestPath,
   normalizeDashboardResponses,
   processListRequestPath
@@ -13,11 +14,14 @@ let instanceId = $state('')
 
 let health = $state({ streamsState: '...' })
 let allCounts = $state([])
+let allAlarms = $state([])
 let counts = $state([])
+let alarms = $state([])
 let latency = $state([])
 let stuck = $state([])
 let trends = $state([])
 let instanceView = $state(null)
+let instanceAlarms = $state([])
 let diagramAvailable = $state(false)
 let error = $state(null)
 let processList = $state([])
@@ -42,7 +46,9 @@ export async function refresh() {
   const normalized = normalizeDashboardResponses(responses)
   health = normalized.health
   allCounts = normalized.allCounts
+  allAlarms = normalized.allAlarms
   counts = normalized.counts
+  alarms = normalized.alarms
   latency = normalized.latency
   stuck = normalized.stuck
   trends = normalized.trends
@@ -51,13 +57,19 @@ export async function refresh() {
 export async function refreshInstance() {
   if (!instanceId) {
     instanceView = null
+    instanceAlarms = []
     return
   }
   try {
-    const res = await fetch(`/api/instances/${encodeURIComponent(instanceId)}`)
-    instanceView = res.ok ? await res.json() : { error: `HTTP ${res.status}` }
+    const [viewRes, alarmsRes] = await Promise.all([
+      fetch(instanceRequestPath(instanceId)),
+      fetch(instanceAlarmsRequestPath(instanceId))
+    ])
+    instanceView = viewRes.ok ? await viewRes.json() : { error: `HTTP ${viewRes.status}` }
+    instanceAlarms = alarmsRes.ok ? await alarmsRes.json() : []
   } catch (e) {
     instanceView = { error: e.message }
+    instanceAlarms = []
   }
 }
 
@@ -105,11 +117,14 @@ export function getState() {
     set instanceId(v) { instanceId = v },
     get health() { return health },
     get allCounts() { return allCounts },
+    get allAlarms() { return allAlarms },
     get counts() { return counts },
+    get alarms() { return alarms },
     get latency() { return latency },
     get stuck() { return stuck },
     get trends() { return trends },
     get instanceView() { return instanceView },
+    get instanceAlarms() { return instanceAlarms },
     get diagramAvailable() { return diagramAvailable },
     get error() { return error },
     get processList() { return processList },

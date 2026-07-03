@@ -49,6 +49,35 @@ public class BpmnAlarmConfigParserTest {
     }
 
     @Test
+    public void shouldUseNormalizedActivityNameWhenPresent() {
+        System.out.println("TC: alarm activity IDs use normalized BPMN names to match generated runtime events");
+
+        String bpmn = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                                  targetNamespace="http://example.com">
+                  <bpmn:process id="order_proc" isExecutable="true">
+                    <bpmn:serviceTask id="Task_123" name="Validate Order">
+                      <bpmn:extensionElements>
+                        <camunda:properties>
+                          <camunda:property name="durga:alarm:validation:syndrome" value="HARD_ERROR" />
+                          <camunda:property name="durga:alarm:validation:eventType" value="ACTIVITY_ESCALATED" />
+                          <camunda:property name="durga:alarm:validation:severity" value="CRITICAL" />
+                          <camunda:property name="durga:alarm:validation:message" value="Validation escalated in ${activityId}" />
+                        </camunda:properties>
+                      </bpmn:extensionElements>
+                    </bpmn:serviceTask>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        List<AlarmConfig> configs = BpmnAlarmConfigParser.parse(bpmn);
+        assertEquals(1, configs.size());
+        assertEquals("validate_order", configs.get(0).activityId());
+    }
+
+    @Test
     public void shouldParseProcessLevelInheritedAlarm() {
         System.out.println("TC: parses process-level inherited (*) alarm, creating one per activity");
 

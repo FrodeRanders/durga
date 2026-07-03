@@ -82,10 +82,12 @@ process completion, gateway events, concurrent activities, and state-key generat
 \item activity latency statistics (min, max, avg, p50, p95, p99, SLA violations),
 \item demo publishers and scenario runners that drive the monitoring topology
 without a full generated process runtime,
-\item fault detection unit tests (13 scenarios) covering the three syndromes
+\item fault detection unit tests (14 scenarios) covering the three syndromes
 (HARD\_ERROR, COUNTED, SLIDING\_WINDOW), config scoping, event type
 filtering, alarm suppression, and re-arm behaviour (see
 Section~\ref{sec:FaultDetection}).
+\item alarm state unit tests covering state-key generation, repeated firing
+fold-up, severity preservation, late older events, and topology construction.
 \end{itemize}
 
 \subsection{CI pipeline}

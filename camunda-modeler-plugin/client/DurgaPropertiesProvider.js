@@ -2,6 +2,18 @@
 
 var is = require('bpmn-js/lib/util/ModelUtil').is;
 var getBusinessObject = require('bpmn-js/lib/util/ModelUtil').getBusinessObject;
+var propertiesPanel = require('@bpmn-io/properties-panel');
+
+var TextFieldEntry = propertiesPanel.TextFieldEntry;
+var TextAreaEntry = propertiesPanel.TextAreaEntry;
+var SelectEntry = propertiesPanel.SelectEntry;
+var CheckboxEntry = propertiesPanel.CheckboxEntry;
+var NumberFieldEntry = propertiesPanel.NumberFieldEntry;
+var isTextFieldEntryEdited = propertiesPanel.isTextFieldEntryEdited;
+var isTextAreaEntryEdited = propertiesPanel.isTextAreaEntryEdited;
+var isSelectEntryEdited = propertiesPanel.isSelectEntryEdited;
+var isCheckboxEntryEdited = propertiesPanel.isCheckboxEntryEdited;
+var isNumberFieldEntryEdited = propertiesPanel.isNumberFieldEntryEdited;
 
 // Load the generated plugin catalog (bundled at build time)
 var PLUGIN_CATALOG = [];
@@ -32,23 +44,27 @@ var SEVERITY_OPTIONS = [
   { value: 'CRITICAL', label: 'CRITICAL' }
 ];
 
-function DurgaPropertiesProvider(propertiesPanel, translate) {
-  propertiesPanel.registerProvider(500, this);
+function DurgaPropertiesProvider(propertiesPanelService, translate, commandStack, bpmnFactory) {
+  this._commandStack = commandStack;
+  this._bpmnFactory = bpmnFactory;
+  propertiesPanelService.registerProvider(500, this);
 }
 
 module.exports = DurgaPropertiesProvider;
 
-DurgaPropertiesProvider.$inject = ['propertiesPanel', 'translate'];
+DurgaPropertiesProvider.$inject = ['propertiesPanel', 'translate', 'commandStack', 'bpmnFactory'];
 
 DurgaPropertiesProvider.prototype.getGroups = function(element) {
+  var commandStack = this._commandStack;
+  var bpmnFactory = this._bpmnFactory;
   return function(groups) {
     if (isActivity(element)) {
-      groups.push(createPluginSelectGroup(element));
-      groups.push(createPluginConfigGroup(element));
-      groups.push(createAlarmGroup(element));
+      groups.push(createPluginSelectGroup(element, commandStack, bpmnFactory));
+      groups.push(createPluginConfigGroup(element, commandStack, bpmnFactory));
+      groups.push(createAlarmGroup(element, commandStack, bpmnFactory));
     }
     if (is(element, 'bpmn:Process')) {
-      groups.push(createProcessAlarmGroup(element));
+      groups.push(createProcessAlarmGroup(element, commandStack, bpmnFactory));
     }
     return groups;
   };
@@ -63,7 +79,7 @@ function isActivity(element) {
 
 // ---- Plugin Select Group ----
 
-function createPluginSelectGroup(element) {
+function createPluginSelectGroup(element, commandStack, bpmnFactory) {
   var prop = getCamundaProperty(element, 'plugin');
   var selectedValue = prop ? prop.value : '';
 
@@ -90,15 +106,16 @@ function createPluginSelectGroup(element) {
     {
       id: 'durga-plugin-id',
       label: 'Plugin',
-      component: 'select',
+      component: SelectEntry,
+      isEdited: isSelectEntryEdited,
       getOptions: function() { return options; },
       getValue: function() { return selectedValue; },
       setValue: function(value) {
         if (value) {
-          setCamundaProperty(element, 'plugin', value);
+          setCamundaProperty(element, 'plugin', value, commandStack, bpmnFactory);
           selectedValue = value;
         } else {
-          removeCamundaProperty(element, 'plugin');
+          removeCamundaProperty(element, 'plugin', commandStack);
           selectedValue = '';
         }
       }
@@ -108,7 +125,7 @@ function createPluginSelectGroup(element) {
 
 // ---- Plugin Config Group (widget-driven) ----
 
-function createPluginConfigGroup(element) {
+function createPluginConfigGroup(element, commandStack, bpmnFactory) {
   var pluginProp = getCamundaProperty(element, 'plugin');
   var pluginId = pluginProp ? pluginProp.value : '';
   var catalogEntry = CATALOG_BY_ID[pluginId];
@@ -120,8 +137,10 @@ function createPluginConfigGroup(element) {
       {
         id: 'durga-config-raw',
         label: 'Config',
+        component: TextFieldEntry,
+        isEdited: isTextFieldEntryEdited,
         getValue: function() { return configProp ? configProp.value : ''; },
-        setValue: function(value) { setCamundaProperty(element, 'pluginConfig', value); }
+        setValue: function(value) { setCamundaProperty(element, 'pluginConfig', value, commandStack, bpmnFactory); }
       }
     ], configProp != null);
   }
@@ -146,20 +165,10 @@ function createPluginConfigGroup(element) {
     }
     var serialized = serializeConfigString(current, schema.delimiter);
     if (serialized) {
-      setCamundaProperty(element, 'pluginConfig', serialized);
+      setCamundaProperty(element, 'pluginConfig', serialized, commandStack, bpmnFactory);
     } else {
-      removeCamundaProperty(element, 'pluginConfig');
+      removeCamundaProperty(element, 'pluginConfig', commandStack);
     }
-  }
-
-  // Render description
-  if (schema.description) {
-    entries.push({
-      id: 'durga-config-desc',
-      label: 'Description',
-      component: 'separator',
-      description: schema.description
-    });
   }
 
   // Render each widget field
@@ -178,7 +187,9 @@ function createWidgetEntry(element, widget, parseConfigFn, writeConfigFn) {
 
   if (widget.type === 'textarea' || widget.type === 'expression') {
     return {
-      id: baseId, label: widget.label, component: 'textarea',
+      id: baseId, label: widget.label,
+      component: TextAreaEntry,
+      isEdited: isTextAreaEntryEdited,
       description: widget.help || '',
       getValue: function() { return configValue; },
       setValue: function(value) {
@@ -186,14 +197,16 @@ function createWidgetEntry(element, widget, parseConfigFn, writeConfigFn) {
         writeConfigFn(update);
         configValue = value;
       },
-      layout: { row: widget.type === 'textarea' ? 3 : 1 },
+      rows: widget.type === 'textarea' ? 3 : 1,
       validate: widget.required ? function(v) { return v ? null : 'Required'; } : undefined
     };
   }
 
   if (widget.type === 'select') {
     return {
-      id: baseId, label: widget.label, component: 'select',
+      id: baseId, label: widget.label,
+      component: SelectEntry,
+      isEdited: isSelectEntryEdited,
       description: widget.help || '',
       getOptions: function() { return widget.options || []; },
       getValue: function() { return configValue; },
@@ -207,7 +220,9 @@ function createWidgetEntry(element, widget, parseConfigFn, writeConfigFn) {
 
   if (widget.type === 'boolean') {
     return {
-      id: baseId, label: widget.label, component: 'checkbox',
+      id: baseId, label: widget.label,
+      component: CheckboxEntry,
+      isEdited: isCheckboxEntryEdited,
       description: widget.help || '',
       getValue: function() { return configValue === 'true' || configValue === true; },
       setValue: function(value) {
@@ -220,7 +235,9 @@ function createWidgetEntry(element, widget, parseConfigFn, writeConfigFn) {
 
   if (widget.type === 'number') {
     return {
-      id: baseId, label: widget.label, component: 'number',
+      id: baseId, label: widget.label,
+      component: NumberFieldEntry,
+      isEdited: isNumberFieldEntryEdited,
       description: widget.help || '',
       getValue: function() { return configValue; },
       setValue: function(value) {
@@ -234,6 +251,8 @@ function createWidgetEntry(element, widget, parseConfigFn, writeConfigFn) {
   // default: text
   return {
     id: baseId, label: widget.label,
+    component: TextFieldEntry,
+    isEdited: isTextFieldEntryEdited,
     description: widget.help || '',
     getValue: function() { return configValue; },
     setValue: function(value) {
@@ -307,36 +326,34 @@ function serializeConfigString(map, delimiter) {
 
 // ---- Alarm Groups ----
 
-function createAlarmGroup(element) {
+function createAlarmGroup(element, commandStack, bpmnFactory) {
   return createGroup('durga-alarm', 'Durga Alarm (Activity)', [
-    createAlarmField(element, 'validate-escalation:syndrome', 'Syndrome', SYNDROME_OPTIONS, true),
-    createAlarmField(element, 'validate-escalation:eventType', 'Event Type', EVENT_TYPE_OPTIONS, true),
-    createAlarmField(element, 'validate-escalation:threshold', 'Threshold (count)', null, false),
-    createAlarmField(element, 'validate-escalation:windowSeconds', 'Window (seconds)', null, false),
-    createAlarmField(element, 'validate-escalation:severity', 'Severity', SEVERITY_OPTIONS, true),
-    createAlarmField(element, 'validate-escalation:message', 'Message template', null, false)
+    createAlarmField(element, 'validate-escalation:syndrome', 'Syndrome', SYNDROME_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, 'validate-escalation:eventType', 'Event Type', EVENT_TYPE_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, 'validate-escalation:threshold', 'Threshold (count)', null, commandStack, bpmnFactory),
+    createAlarmField(element, 'validate-escalation:windowSeconds', 'Window (seconds)', null, commandStack, bpmnFactory),
+    createAlarmField(element, 'validate-escalation:severity', 'Severity', SEVERITY_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, 'validate-escalation:message', 'Message template', null, commandStack, bpmnFactory)
   ], hasAlarmProps(element));
 }
 
-function createProcessAlarmGroup(element) {
+function createProcessAlarmGroup(element, commandStack, bpmnFactory) {
   return createGroup('durga-process-alarm', 'Durga Process Alarms', [
-    createHeading('Inherited (applies to every activity):'),
-    createAlarmField(element, '*default:syndrome', 'Inherited Syndrome', SYNDROME_OPTIONS, false),
-    createAlarmField(element, '*default:eventType', 'Inherited Event Type', EVENT_TYPE_OPTIONS, false),
-    createAlarmField(element, '*default:threshold', 'Inherited Threshold', null, false),
-    createAlarmField(element, '*default:severity', 'Inherited Severity', SEVERITY_OPTIONS, false),
-    createAlarmField(element, '*default:message', 'Inherited Message', null, false),
-    createHeading('Aggregate (counts across all activities in process):'),
-    createAlarmField(element, '$burst:syndrome', 'Aggregate Syndrome', SYNDROME_OPTIONS, false),
-    createAlarmField(element, '$burst:eventType', 'Aggregate Event Type', EVENT_TYPE_OPTIONS, false),
-    createAlarmField(element, '$burst:threshold', 'Aggregate Threshold', null, false),
-    createAlarmField(element, '$burst:windowSeconds', 'Aggr. Window (sec)', null, false),
-    createAlarmField(element, '$burst:severity', 'Aggregate Severity', SEVERITY_OPTIONS, false),
-    createAlarmField(element, '$burst:message', 'Aggregate Message', null, false)
+    createAlarmField(element, '*default:syndrome', 'Inherited Syndrome', SYNDROME_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, '*default:eventType', 'Inherited Event Type', EVENT_TYPE_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, '*default:threshold', 'Inherited Threshold', null, commandStack, bpmnFactory),
+    createAlarmField(element, '*default:severity', 'Inherited Severity', SEVERITY_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, '*default:message', 'Inherited Message', null, commandStack, bpmnFactory),
+    createAlarmField(element, '$burst:syndrome', 'Aggregate Syndrome', SYNDROME_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, '$burst:eventType', 'Aggregate Event Type', EVENT_TYPE_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, '$burst:threshold', 'Aggregate Threshold', null, commandStack, bpmnFactory),
+    createAlarmField(element, '$burst:windowSeconds', 'Aggr. Window (sec)', null, commandStack, bpmnFactory),
+    createAlarmField(element, '$burst:severity', 'Aggregate Severity', SEVERITY_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, '$burst:message', 'Aggregate Message', null, commandStack, bpmnFactory)
   ], hasAlarmProps(element));
 }
 
-function createAlarmField(element, fieldSuffix, label, options) {
+function createAlarmField(element, fieldSuffix, label, options, commandStack, bpmnFactory) {
   var propName = 'durga:alarm:' + fieldSuffix;
   var prop = getCamundaProperty(element, propName);
 
@@ -344,12 +361,13 @@ function createAlarmField(element, fieldSuffix, label, options) {
     return {
       id: 'durga-' + fieldSuffix.replace(/[:*$]/g, '-'),
       label: label,
-      component: 'select',
+      component: SelectEntry,
+      isEdited: isSelectEntryEdited,
       getOptions: function() { return options; },
       getValue: function() { return prop ? prop.value : ''; },
       setValue: function(value) {
-        if (value) { setCamundaProperty(element, propName, value); }
-        else { removeCamundaProperty(element, propName); }
+        if (value) { setCamundaProperty(element, propName, value, commandStack, bpmnFactory); }
+        else { removeCamundaProperty(element, propName, commandStack); }
       }
     };
   }
@@ -357,16 +375,14 @@ function createAlarmField(element, fieldSuffix, label, options) {
   return {
     id: 'durga-' + fieldSuffix.replace(/[:*$]/g, '-'),
     label: label,
+    component: TextFieldEntry,
+    isEdited: isTextFieldEntryEdited,
     getValue: function() { return prop ? prop.value : ''; },
     setValue: function(value) {
-      if (value) { setCamundaProperty(element, propName, value); }
-      else { removeCamundaProperty(element, propName); }
+      if (value) { setCamundaProperty(element, propName, value, commandStack, bpmnFactory); }
+      else { removeCamundaProperty(element, propName, commandStack); }
     }
   };
-}
-
-function createHeading(text) {
-  return { id: 'heading-' + text.replace(/\s+/g, '-'), label: text, component: 'separator' };
 }
 
 function hasAlarmProps(element) {
@@ -414,16 +430,13 @@ function getCamundaProperty(element, name) {
   return null;
 }
 
-function setCamundaProperty(element, name, value) {
+function setCamundaProperty(element, name, value, commandStack, bpmnFactory) {
   var bo = getBusinessObject(element);
-  var bpmnFactory = bo.$model && bo.$model._model && bo.$model._model.get('factory');
-  if (!bpmnFactory) { bpmnFactory = element._model && element._model._factory; }
-  var commandStack = element._commandStack;
 
   var existing = getCamundaProperty(element, name);
   if (existing) {
     if (commandStack) {
-      commandStack.execute('element.updateProperties', { element: existing, properties: { value: value } });
+      commandStack.execute('element.updateModdleProperties', { element: element, moddleElement: existing, properties: { value: value } });
     } else {
       existing.set('value', value);
     }
@@ -469,14 +482,13 @@ function setCamundaProperty(element, name, value) {
   }
 }
 
-function removeCamundaProperty(element, name) {
+function removeCamundaProperty(element, name, commandStack) {
   var existing = getCamundaProperty(element, name);
   if (!existing) return;
   var propsElem = getCamundaPropertiesElement(element);
   if (!propsElem) return;
   var values = (propsElem.get('values') || []).slice();
   var filtered = values.filter(function(p) { return p.get('name') !== name; });
-  var commandStack = element._commandStack;
   if (commandStack) {
     commandStack.execute('element.updateModdleProperties', { element: element, moddleElement: propsElem, properties: { values: filtered } });
   } else {

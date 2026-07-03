@@ -57,6 +57,7 @@
 
   function processRows() {
     const grouped = new Map()
+    const alarmCounts = alarmsByProcess()
     for (const row of s.allCounts) {
       const processId = row.processId || 'unknown'
       const current = grouped.get(processId) || {
@@ -66,7 +67,9 @@
         completed: 0,
         failed: 0,
         cancelled: 0,
-        states: 0
+        states: 0,
+        alarms: 0,
+        criticalAlarms: 0
       }
       const count = Number(row.count || 0)
       current.total += count
@@ -75,6 +78,22 @@
       else if (row.state === 'failed') current.failed += count
       else if (row.state === 'cancelled') current.cancelled += count
       else current.active += count
+      grouped.set(processId, current)
+    }
+    for (const [processId, alarmCount] of alarmCounts.entries()) {
+      const current = grouped.get(processId) || {
+        processId,
+        total: 0,
+        active: 0,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+        states: 0,
+        alarms: 0,
+        criticalAlarms: 0
+      }
+      current.alarms = alarmCount.total
+      current.criticalAlarms = alarmCount.critical
       grouped.set(processId, current)
     }
     return Array.from(grouped.values()).sort((a, b) => b.total - a.total)
@@ -87,8 +106,30 @@
       active: acc.active + row.active,
       failed: acc.failed + row.failed,
       completed: acc.completed + row.completed,
-      cancelled: acc.cancelled + row.cancelled
-    }), { processes: 0, instances: 0, active: 0, failed: 0, completed: 0, cancelled: 0 })
+      cancelled: acc.cancelled + row.cancelled,
+      alarms: acc.alarms + row.alarms,
+      criticalAlarms: acc.criticalAlarms + row.criticalAlarms
+    }), { processes: 0, instances: 0, active: 0, failed: 0, completed: 0, cancelled: 0, alarms: 0, criticalAlarms: 0 })
+  }
+
+  function alarmsByProcess() {
+    const grouped = new Map()
+    for (const alarm of s.allAlarms) {
+      const processId = alarm.processId || 'unknown'
+      const current = grouped.get(processId) || { total: 0, critical: 0 }
+      current.total += 1
+      if (alarm.severity === 'CRITICAL') current.critical += 1
+      grouped.set(processId, current)
+    }
+    return grouped
+  }
+
+  function alarmRows() {
+    return [...s.alarms].sort((a, b) => String(b.lastTriggeredAt || '').localeCompare(String(a.lastTriggeredAt || '')))
+  }
+
+  function alarmSeverityClass(severity) {
+    return severity === 'CRITICAL' ? 'danger' : 'warn'
   }
 
   function stateRows() {
@@ -147,6 +188,17 @@
   function selectInstance(instanceId) {
     s.lookupInstance(instanceId)
   }
+
+  function healthOk() {
+    return s.health?.streamsState === 'RUNNING'
+        && s.health?.faultStreamsState === 'RUNNING'
+        && s.health?.alarmStateStreamsState === 'RUNNING'
+  }
+
+  function healthSummary() {
+    const h = s.health ?? {}
+    return `core ${h.streamsState ?? 'UNKNOWN'} / fault ${h.faultStreamsState ?? 'UNKNOWN'} / alarms ${h.alarmStateStreamsState ?? 'UNKNOWN'}`
+  }
 </script>
 
 <div class="app">
@@ -155,9 +207,9 @@
       <p class="eyebrow">Durga Monitoring</p>
       <h1>Kafka Process Dashboard</h1>
     </div>
-    <div class="status {s.health?.streamsState === 'RUNNING' ? 'ok' : 'warn'}">
+    <div class="status {healthOk() ? 'ok' : 'warn'}">
       <span></span>
-      {s.health?.streamsState ?? 'UNKNOWN'}
+      {healthSummary()}
     </div>
   </header>
 
@@ -221,6 +273,10 @@
       <span>Stuck</span>
       <strong>{number(s.stuck.length)}</strong>
     </article>
+    <article class="kpi alert">
+      <span>Alarms</span>
+      <strong>{number(totals().alarms)}</strong>
+    </article>
   </section>
 
   <main class="layout">
@@ -231,7 +287,7 @@
       </div>
       {#if processRows().length}
         <table>
-          <thead><tr><th>Process</th><th>Total</th><th>Active</th><th>Failed</th></tr></thead>
+          <thead><tr><th>Process</th><th>Total</th><th>Active</th><th>Failed</th><th>Alarms</th></tr></thead>
           <tbody>
             {#each processRows() as row}
               <tr class:selected={row.processId === s.processId}>
@@ -243,6 +299,7 @@
                 <td>{number(row.total)}</td>
                 <td>{number(row.active)}</td>
                 <td class:danger={row.failed > 0}>{number(row.failed)}</td>
+                <td class:danger={row.criticalAlarms > 0}>{number(row.alarms)}</td>
               </tr>
             {/each}
           </tbody>
@@ -304,6 +361,31 @@
         </div>
       {:else}
         <p class="empty">No trend buckets for this process.</p>
+      {/if}
+    </section>
+
+    <section class="panel alarm-panel">
+      <div class="panel-title">
+        <h2>Alarm State</h2>
+        <span>{s.processId ? `${number(s.alarms.length)} active` : `${number(s.allAlarms.length)} active`}</span>
+      </div>
+      {#if (s.processId ? alarmRows() : s.allAlarms).length}
+        <table>
+          <thead><tr><th>Process</th><th>Activity</th><th>Severity</th><th>Fires</th><th>Last</th></tr></thead>
+          <tbody>
+            {#each (s.processId ? alarmRows() : s.allAlarms) as alarm}
+              <tr>
+                <td>{alarm.processId}</td>
+                <td>{alarm.activityId ?? '*'}</td>
+                <td><span class="badge {alarmSeverityClass(alarm.severity)}">{alarm.severity}</span></td>
+                <td>{number(alarm.fireCount)}</td>
+                <td>{dateTime(alarm.lastTriggeredAt)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {:else}
+        <p class="empty">No active alarm state.</p>
       {/if}
     </section>
 
@@ -389,7 +471,7 @@
     </div>
 
       <section class="panel wide">
-        <BpmnDiagram processId={s.processId} latency={s.latency} counts={s.counts} />
+        <BpmnDiagram processId={s.processId} latency={s.latency} counts={s.counts} alarms={s.alarms} />
       </section>
 
     <section class="panel instance-panel">
@@ -420,6 +502,14 @@
           <div class="error-block">
             <strong>{s.instanceView.lastErrorCode ?? 'error'}</strong>
             <span>{s.instanceView.lastErrorMessage}</span>
+          </div>
+        {/if}
+        {#if s.instanceAlarms.length}
+          <div class="alarm-block">
+            <strong>Alarms</strong>
+            {#each s.instanceAlarms as alarm}
+              <span>{alarm.severity}: {alarm.lastMessage}</span>
+            {/each}
           </div>
         {/if}
       {:else}
@@ -559,7 +649,7 @@
 
   .kpis {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 12px;
     margin-bottom: 14px;
   }
@@ -732,6 +822,8 @@
   .badge.completed { color: var(--green); }
   .badge.failed { color: var(--red); }
   .badge.cancelled { color: var(--amber); }
+  .badge.warn { color: var(--amber); }
+  .badge.danger { color: var(--red); }
 
   .bar-track {
     height: 9px;
@@ -852,15 +944,24 @@
     font-size: 0.86rem;
   }
 
-  .error-block {
+  .error-block,
+  .alarm-block {
     display: grid;
     gap: 4px;
     margin-top: 12px;
     padding: 10px;
     border-radius: 8px;
+    font-size: 0.86rem;
+  }
+
+  .error-block {
     background: #fff1f0;
     color: #8f1f17;
-    font-size: 0.86rem;
+  }
+
+  .alarm-block {
+    background: #fff8e6;
+    color: #8a5917;
   }
 
   @media (max-width: 1050px) {

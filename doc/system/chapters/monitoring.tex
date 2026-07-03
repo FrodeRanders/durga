@@ -60,7 +60,7 @@ The main entry point is \texttt{org.gautelis.durga.monitoring.ProcessMonitoringA
 \subsection{HTTP API}
 
 The monitoring service exposes endpoints for health, process discovery, instance
-lookup, counts, latency, stuck instances, diagram serving, and a dashboard.
+lookup, counts, latency, stuck instances, alarm state, diagram serving, and a dashboard.
 All monitoring paths are served under the \texttt{/api/} prefix; a root \texttt{/health} endpoint is also available.
 
 The local development loop is:
@@ -133,7 +133,9 @@ burst detection (e.g. more than 3 \texttt{PROCESS\_FAILED} events in a
 \subsubsection{Alarm emission}
 
 Triggered alarms are serialized as JSON and published to the
-\texttt{fault-alarms} topic. Each \texttt{AlarmEvent} carries:
+\texttt{fault-alarms} topic. The topic is both an integration point for
+external notification systems and the input to Durga's alarm-state read model.
+Each \texttt{AlarmEvent} carries:
 
 \begin{itemize}
 \item \texttt{alarmId} --- unique per firing,
@@ -145,9 +147,32 @@ Triggered alarms are serialized as JSON and published to the
 \item \texttt{threshold} --- config threshold (0 for HARD\_ERROR).
 \end{itemize}
 
+\subsubsection{Alarm state read model}
+
+The monitoring server also starts an alarm-state topology that consumes
+\texttt{fault-alarms} and materializes one \texttt{AlarmStateView} per
+(processId, activityId, configId) scope in \texttt{alarm-state-store}. Process-wide
+alarms use \texttt{*} as the activity key component. Repeated alarm firings are
+folded into the same view:
+
+\begin{itemize}
+\item \texttt{status} is currently \texttt{ACTIVE};
+\item \texttt{severity} keeps the strongest observed severity;
+\item \texttt{firstTriggeredAt} and \texttt{lastTriggeredAt} delimit the firing range;
+\item \texttt{fireCount} counts folded alarm firings;
+\item \texttt{lastProcessInstanceId}, \texttt{lastCount}, \texttt{lastAlarmId}, and
+      \texttt{lastMessage} describe the newest firing.
+\end{itemize}
+
+The REST API exposes this read model through \texttt{/api/alarms},
+\texttt{/api/processes/\{processId\}/alarms}, and
+\texttt{/api/instances/\{processInstanceId\}/alarms}. The dashboard uses these
+endpoints for the alarm KPI, process inventory alarm counts, alarm-state table,
+instance alarm details, and BPMN diagram alarm overlays.
+
 \subsubsection{State stores}
 
-The topology maintains three persistent state stores:
+The fault detection topology maintains three persistent state stores:
 
 \begin{itemize}
 \item \texttt{fault-counts-store} --- current count per (config, processId, activityId).
@@ -176,12 +201,15 @@ AlarmConfig window = new AlarmConfig("burst-detect", null, null,
 
 \subsubsection{Integration with the monitoring server}
 
-The fault detection topology runs alongside the monitoring topology in the
-same Kafka Streams application. Both share the \texttt{process-events-.*}
-subscription. The \texttt{FaultDetectionTopology.buildTopology(\dots)}
-method returns a standalone \texttt{Topology} that can be started in the
-same \texttt{KafkaStreams} instance or in a separate one with its own
-application ID.
+The monitoring server starts the fault detection topology alongside the
+monitoring read-model topology as a separate \texttt{KafkaStreams} instance
+with its own application ID and state directory. Both subscribe to
+\texttt{process-events-.*}; the fault detector also consumes
+\texttt{process-models} so BPMN alarm properties can update runtime alarm
+configuration. A third \texttt{KafkaStreams} instance maintains the alarm-state
+read model from \texttt{fault-alarms}. Health output reports all three stream
+states: core monitoring, fault detection, and alarm state.
 
-Unit tests are in \texttt{FaultDetectionTest} (13 scenarios); see
+Unit tests are in \texttt{FaultDetectionTest}, \texttt{AlarmStateViewTest}, and
+\texttt{AlarmStateTopologyTest}; see
 Appendix~\ref{sec:IntegrationTestAppendix} for the test catalogue.

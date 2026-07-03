@@ -241,6 +241,19 @@ public class FaultDetectionTest {
         assertEquals(AlarmSyndrome.HARD_ERROR, alarm.syndrome());
     }
 
+    @Test
+    public void shouldBuildTopologyWithRegexEventsAndModelRegistry() {
+        System.out.println("TC: fault detection topology builds with regex event subscription and process-model registry");
+
+        org.apache.kafka.streams.Topology topology = FaultDetectionTopology.buildTopology(
+                Set.of(),
+                FaultDetectionTopology.DEFAULT_EVENTS_PATTERN,
+                FaultDetectionTopology.DEFAULT_ALARMS_TOPIC,
+                FaultDetectionTopology.DEFAULT_MODELS_TOPIC);
+
+        assertTrue(topology.describe().toString().contains(FaultDetectionTopology.DEFAULT_ALARMS_TOPIC));
+    }
+
     // ---- config validation ----
 
     @Test(expected = IllegalArgumentException.class)

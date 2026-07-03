@@ -95,7 +95,7 @@ public final class BpmnAlarmConfigParser {
         // activity-level properties
         for (FlowNode node : model.getModelElementsByType(FlowNode.class)) {
             if (node instanceof StartEvent || node instanceof EndEvent) continue;
-            String activityId = normalizeId(node.getId());
+            String activityId = normalizeId(nameOrId(node.getName(), node.getId()));
             if (activityId.isBlank()) continue;
             allActivityIds.add(activityId);
 
@@ -236,5 +236,9 @@ public final class BpmnAlarmConfigParser {
         return id.trim().toLowerCase(java.util.Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "_")
                 .replaceAll("^_+|_+$", "");
+    }
+
+    private static String nameOrId(String name, String id) {
+        return name != null && !name.isBlank() ? name : id;
     }
 }

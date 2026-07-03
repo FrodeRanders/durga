@@ -4,12 +4,12 @@
 
 This appendix documents every test suite in the project that exercises
 behaviour against a live Kafka broker (Docker-backed integration tests)
-plus the fault detection unit test suite for completeness.
-All tests extend \texttt{KafkaIntegrationTestBase}, which uses Testcontainers
-to spin up a real Kafka broker (Confluent CP 7.8.0 in KRaft mode) per test
-class. Each test class creates its own topics with randomised suffixes to
-avoid collisions and disposes of all resources in \texttt{@After} /
-\texttt{@AfterClass} hooks.
+plus the fault detection and alarm-state unit test suites for completeness.
+Docker-backed integration tests extend \texttt{KafkaIntegrationTestBase}, which
+uses Testcontainers to spin up a real Kafka broker (Confluent CP 7.8.0 in KRaft
+mode) per test class. Each integration test class creates its own topics with
+randomised suffixes to avoid collisions and disposes of all resources in
+\texttt{@After} / \texttt{@AfterClass} hooks.
 
 The integration tests are run with:
 
@@ -285,9 +285,9 @@ syndromes without requiring a Kafka broker. The test uses in-memory
 \texttt{MapKVStore} adapters that implement the \texttt{KeyValueStore}
 interface.
 
-\textbf{Class:} \texttt{FaultDetectionTest} (13 scenarios, no Docker required).
+\textbf{Class:} \texttt{FaultDetectionTest} (14 scenarios, no Docker required).
 
-\textbf{Scenarios (13):}
+\textbf{Scenarios (14):}
 
 \begin{description}
 
@@ -336,6 +336,10 @@ scope and type.
 \texttt{ACTIVITY\_ESCALATED} fires on an escalated event with correct
 syndrome and config ID.
 
+\item[shouldBuildTopologyWithRegexEventsAndModelRegistry] Verifies that the
+fault detection topology subscribes to lifecycle event topics by regex and
+includes the process-model registry input needed for BPMN alarm configuration.
+
 \item[shouldRejectSlidingWindowWithoutDuration] Constructor validation
 rejects a \texttt{SLIDING\_WINDOW} config with \texttt{null}
 \texttt{windowDuration}.
@@ -352,9 +356,50 @@ wrong would cause either alarm floods or silent failures.
 
 % ===========================================================================
 
+\subsection{AlarmStateViewTest and AlarmStateTopologyTest (unit)}
+\label{it:alarmState}
+
+\textbf{Purpose:} Unit-test the alarm-state read model that folds emitted
+\texttt{AlarmEvent} records into queryable \texttt{AlarmStateView} records for
+the dashboard and HTTP API.
+
+\textbf{Classes:} \texttt{AlarmStateViewTest} (4 scenarios) and
+\texttt{AlarmStateTopologyTest} (1 scenario), no Docker required.
+
+\textbf{Scenarios (5):}
+
+\begin{description}
+
+\item[shouldBuildStateFromAlarmEvent] Converts a single \texttt{AlarmEvent} into
+an \texttt{ACTIVE} state view with the expected key, timestamps, fire count, and
+message.
+
+\item[shouldMergeRepeatedAlarmEventsAndKeepLatestDetails] Folds repeated firings
+for the same process/activity/config into one view, increments \texttt{fireCount},
+keeps the strongest severity, and records the latest firing details.
+
+\item[shouldNotLetLateOlderEventOverwriteLatestDetails] Ensures an older event
+that arrives late does not overwrite the newest alarm ID, instance ID, message,
+or count.
+
+\item[shouldUseWildcardActivityForProcessWideAlarms] Verifies that process-wide
+alarms use \texttt{*} as the activity component in the alarm-state key.
+
+\item[shouldBuildAlarmStateStoreTopology] Verifies that the alarm-state topology
+consumes \texttt{fault-alarms} and materializes \texttt{alarm-state-store}.
+
+\end{description}
+
+\textbf{Why it matters:} Fault detection emits a stream of alarm firings, but
+operators need a stable read model. These tests protect the fold-up semantics
+used by \texttt{/api/alarms}, per-process alarm queries, instance alarm details,
+and dashboard overlays.
+
+% ===========================================================================
+
 \subsection{Infrastructure}
 
-All six suites share a common base class for Docker-backed tests:
+The Docker-backed suites share a common base class:
 
 \textbf{KafkaIntegrationTestBase} (\filepath{src/test/java/org/gautelis/}
 \filepath{durga/KafkaIntegrationTestBase.java}) uses the Testcontainers
