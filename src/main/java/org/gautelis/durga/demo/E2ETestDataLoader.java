@@ -1,4 +1,4 @@
-package org.gautelis.durga.e2e;
+package org.gautelis.durga.demo;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.producer.KafkaProducer;

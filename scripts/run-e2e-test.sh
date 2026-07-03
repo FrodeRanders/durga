@@ -90,7 +90,7 @@ stop_infra() {
 # ------- internal: monitoring server -------
 
 build_monitor() {
-    if [ -f "$MONITOR_JAR" ]; then
+    if [ -f "$MONITOR_JAR" ] && [ -z "$(find "$PROJECT_DIR/src/main" "$PROJECT_DIR/monitoring-ui" "$PROJECT_DIR/pom.xml" -newer "$MONITOR_JAR" -print -quit 2>/dev/null)" ]; then
         return
     fi
     log "Building monitoring server (Quarkus uber-JAR)..."
@@ -176,14 +176,13 @@ cmd_feed() {
     echo ""
 
     cd "$PROJECT_DIR"
-    mvn -q compile 2>/dev/null || true
 
     local mode="continuous (Ctrl-C to stop)"
     [ "$count" != "-1" ] && mode="bounded: $count records"
 
     log "Starting data feed — $mode"
     echo ""
-    java -cp target/classes \
+    java -cp "$MONITOR_JAR" \
         "$TEST_DATA_LOADER" \
         --bootstrap-servers "$REDPANDA_BOOTSTRAP" \
         --topic e2e_pipeline_start \
@@ -215,11 +214,10 @@ cmd_test_run() {
     start_monitor
     echo ""
     cd "$PROJECT_DIR"
-    mvn -q compile 2>/dev/null || true
 
     log "Starting data feed — continuous (Ctrl-C to stop)"
     echo ""
-    java -cp target/classes \
+    java -cp "$MONITOR_JAR" \
         "$TEST_DATA_LOADER" \
         --bootstrap-servers "$REDPANDA_BOOTSTRAP" \
         --topic e2e_pipeline_start \
