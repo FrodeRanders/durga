@@ -41,6 +41,8 @@ public final class ContinuousFeedPublisher {
                 : System.getenv().getOrDefault("FEED_INTERVAL_MS", "1000"));
         String bpmnDir = args.length > 3 ? args[3]
                 : System.getenv().getOrDefault("BPMN_DIR", "src/test/resources/bpmn");
+        long maxCount = Long.parseLong(args.length > 4 ? args[4]
+                : System.getenv().getOrDefault("FEED_COUNT", "-1"));
 
         List<String> activities = resolveActivities(processId, bpmnDir);
         if (activities.isEmpty()) {
@@ -58,10 +60,11 @@ public final class ContinuousFeedPublisher {
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             System.out.println("Continuous feed started: process=" + processId
                     + ", interval=" + intervalMs + "ms, bootstrap=" + bootstrap
+                    + ", count=" + (maxCount < 0 ? "continuous" : maxCount)
                     + ", activities=" + activities);
 
-            //noinspection InfiniteLoopStatement
-            while (true) {
+            long published = 0;
+            while (maxCount < 0 || published < maxCount) {
                 String instanceId = UUID.randomUUID().toString();
                 String corrId = UUID.randomUUID().toString();
                 Map<String, Object> payload = new LinkedHashMap<>();
@@ -98,8 +101,12 @@ public final class ContinuousFeedPublisher {
                         ProcessEvent.EventType.PROCESS_COMPLETED, "v1", null, null));
 
                 producer.flush();
+                published++;
                 System.out.println("Published lifecycle for instanceId=" + instanceId);
 
+                if (maxCount >= 0 && published >= maxCount) {
+                    break;
+                }
                 try {
                     Thread.sleep(intervalMs);
                 } catch (InterruptedException e) {
@@ -111,7 +118,7 @@ public final class ContinuousFeedPublisher {
     }
 
     private static List<String> resolveActivities(String processId, String bpmnDir) {
-        Path bpmnFile = Path.of(bpmnDir, processId + ".bpmn");
+        Path bpmnFile = resolveBpmnFile(processId, bpmnDir);
         if (!Files.isRegularFile(bpmnFile)) {
             LOG.warn("BPMN file not found: {}", bpmnFile);
             return List.of();
@@ -127,6 +134,18 @@ public final class ContinuousFeedPublisher {
             LOG.error("Failed to read BPMN model from {}", bpmnFile, e);
             return List.of();
         }
+    }
+
+    private static Path resolveBpmnFile(String processId, String bpmnDir) {
+        Path direct = Path.of(bpmnDir, processId + ".bpmn");
+        if (Files.isRegularFile(direct)) {
+            return direct;
+        }
+        String alternateId = processId.contains("-")
+                ? processId.replace('-', '_')
+                : processId.replace('_', '-');
+        Path alternate = Path.of(bpmnDir, alternateId + ".bpmn");
+        return Files.isRegularFile(alternate) ? alternate : direct;
     }
 
     private static void publish(KafkaProducer<String, String> producer, String topic, String key, ProcessEvent event) {

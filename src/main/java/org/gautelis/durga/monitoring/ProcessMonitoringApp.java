@@ -59,6 +59,9 @@ public final class ProcessMonitoringApp {
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG,
                 org.apache.kafka.common.serialization.Serdes.StringSerde.class);
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG,
+                System.getProperty("durga.streams.commit.interval.ms", "1000"));
         props.put(StreamsConfig.STATE_DIR_CONFIG,
                 System.getProperty("durga.streams.state.dir", "target/kafka-streams-state"));
 

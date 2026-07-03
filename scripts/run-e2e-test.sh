@@ -6,12 +6,19 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_FILE="$PROJECT_DIR/setup/e2e/docker-compose.yml"
 
 REDPANDA_BOOTSTRAP="localhost:9094"
-TEST_DATA_LOADER="org.gautelis.durga.demo.E2ETestDataLoader"
+LIFECYCLE_FEED="org.gautelis.durga.demo.ContinuousFeedPublisher"
+MODEL_PUBLISHER="org.gautelis.durga.demo.BpmnModelPublisher"
+E2E_PROCESS_ID="e2e-pipeline"
+E2E_BPMN_PATH="$PROJECT_DIR/src/test/resources/bpmn/e2e_pipeline.bpmn"
+BPMN_DIR="$PROJECT_DIR/src/test/resources/bpmn"
 INFRA_LOCK="$PROJECT_DIR/.e2e-infra-running"
 MONITOR_PORT=8081
 MONITOR_JAR="$PROJECT_DIR/target/durga-0.1.0-beta.1-runner.jar"
 MONITOR_LOG="$PROJECT_DIR/target/monitor.log"
 MONITOR_PID_FILE="$PROJECT_DIR/target/monitor.pid"
+MONITOR_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-state"
+FAULT_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-fault-state"
+ALARM_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-alarm-state"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -72,7 +79,7 @@ start_infra() {
     log "Kafka Connect ready"
 
     docker exec durga-redpanda rpk topic create \
-        process-events-e2e-pipeline vannak-metadata-events process-models 2>/dev/null || true
+        e2e_pipeline_start process-events-e2e-pipeline vannak-metadata-events process-models 2>/dev/null || true
 
     touch "$INFRA_LOCK"
     log "Infrastructure ready."
@@ -111,9 +118,14 @@ start_monitor() {
 
     build_monitor
 
+    rm -rf "$MONITOR_STATE_DIR" "$FAULT_STATE_DIR" "$ALARM_STATE_DIR"
+
     log "Starting monitoring server on port $MONITOR_PORT..."
     java -Dkafka.bootstrap.servers="$REDPANDA_BOOTSTRAP" \
          -Dquarkus.http.port="$MONITOR_PORT" \
+         -Ddurga.streams.state.dir="$MONITOR_STATE_DIR" \
+         -Ddurga.fault.streams.state.dir="$FAULT_STATE_DIR" \
+         -Ddurga.alarm.streams.state.dir="$ALARM_STATE_DIR" \
          -jar "$MONITOR_JAR" \
          > "$MONITOR_LOG" 2>&1 &
     echo $! > "$MONITOR_PID_FILE"
@@ -133,6 +145,15 @@ start_monitor() {
     err "Monitoring server failed to start within 60s. Check $MONITOR_LOG"
     stop_monitor
     exit 1
+}
+
+register_e2e_model() {
+    log "Registering BPMN model for $E2E_PROCESS_ID..."
+    java -cp "$MONITOR_JAR" \
+        "$MODEL_PUBLISHER" \
+        "$REDPANDA_BOOTSTRAP" \
+        "$E2E_PROCESS_ID" \
+        "$E2E_BPMN_PATH"
 }
 
 stop_monitor() {
@@ -173,6 +194,7 @@ cmd_feed() {
     trap 'stop_monitor; stop_infra' EXIT INT TERM
     start_infra
     start_monitor
+    register_e2e_model
     echo ""
 
     cd "$PROJECT_DIR"
@@ -182,15 +204,12 @@ cmd_feed() {
 
     log "Starting data feed — $mode"
     echo ""
-    local feed_args=(
-        --bootstrap-servers "$REDPANDA_BOOTSTRAP"
-        --topic e2e_pipeline_start
-        --interval-ms "$interval"
-    )
+    local feed_args=("$REDPANDA_BOOTSTRAP" "$E2E_PROCESS_ID" "$interval" "$BPMN_DIR")
     if [ "$count" != "-1" ]; then
-        feed_args+=(--count "$count")
+        feed_args+=("$count")
     fi
-    java -cp "$MONITOR_JAR" "$TEST_DATA_LOADER" "${feed_args[@]}"
+    java -Djava.util.logging.manager=org.jboss.logmanager.LogManager \
+        -cp "$MONITOR_JAR" "$LIFECYCLE_FEED" "${feed_args[@]}"
 }
 
 cmd_test_run() {
@@ -215,6 +234,7 @@ cmd_test_run() {
     echo ""
 
     start_monitor
+    register_e2e_model
     echo ""
     cd "$PROJECT_DIR"
 
@@ -223,15 +243,12 @@ cmd_test_run() {
 
     log "Starting data feed — $mode"
     echo ""
-    local feed_args=(
-        --bootstrap-servers "$REDPANDA_BOOTSTRAP"
-        --topic e2e_pipeline_start
-        --interval-ms "$feed_interval"
-    )
+    local feed_args=("$REDPANDA_BOOTSTRAP" "$E2E_PROCESS_ID" "$feed_interval" "$BPMN_DIR")
     if [ "$feed_count" != "-1" ]; then
-        feed_args+=(--count "$feed_count")
+        feed_args+=("$feed_count")
     fi
-    java -cp "$MONITOR_JAR" "$TEST_DATA_LOADER" "${feed_args[@]}"
+    java -Djava.util.logging.manager=org.jboss.logmanager.LogManager \
+        -cp "$MONITOR_JAR" "$LIFECYCLE_FEED" "${feed_args[@]}"
 }
 
 cmd_stop() {

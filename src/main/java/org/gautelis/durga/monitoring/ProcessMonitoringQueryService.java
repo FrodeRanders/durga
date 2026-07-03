@@ -61,7 +61,7 @@ public final class ProcessMonitoringQueryService {
         try (KeyValueIterator<String, ProcessStateCount> iterator = countsStore().all()) {
             while (iterator.hasNext()) {
                 ProcessStateCount count = iterator.next().value;
-                if (processId.equals(count.processId())) {
+                if (count.count() > 0 && processId.equals(count.processId())) {
                     results.add(count);
                 }
             }
@@ -79,7 +79,10 @@ public final class ProcessMonitoringQueryService {
         List<ProcessStateCount> results = new ArrayList<>();
         try (KeyValueIterator<String, ProcessStateCount> iterator = countsStore().all()) {
             while (iterator.hasNext()) {
-                results.add(iterator.next().value);
+                ProcessStateCount count = iterator.next().value;
+                if (count != null && count.count() > 0) {
+                    results.add(count);
+                }
             }
         }
         results.sort(Comparator.comparing(ProcessStateCount::processId).thenComparing(ProcessStateCount::state));

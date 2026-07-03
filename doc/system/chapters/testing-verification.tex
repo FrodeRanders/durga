@@ -142,8 +142,8 @@ The script \filepath{scripts/run-e2e-test.sh} automates the full test cycle:
 
 The \texttt{feed} and \texttt{test-run} commands build and start the
 monitoring server (port 8081), launch a Redpanda broker, PostgreSQL, and
-Kafka Connect via Docker Compose, then inject the \texttt{E2ETestDataLoader}
-which publishes variable order records for live observation.
+Kafka Connect via Docker Compose, register the E2E BPMN model, then start a
+lifecycle feed for live dashboard observation.
 
 \subsection{Not fully covered}
 

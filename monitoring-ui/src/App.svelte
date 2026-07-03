@@ -58,19 +58,14 @@
   function processRows() {
     const grouped = new Map()
     const alarmCounts = alarmsByProcess()
+    for (const processId of s.processList) {
+      if (!grouped.has(processId)) {
+        grouped.set(processId, emptyProcessRow(processId))
+      }
+    }
     for (const row of s.allCounts) {
       const processId = row.processId || 'unknown'
-      const current = grouped.get(processId) || {
-        processId,
-        total: 0,
-        active: 0,
-        completed: 0,
-        failed: 0,
-        cancelled: 0,
-        states: 0,
-        alarms: 0,
-        criticalAlarms: 0
-      }
+      const current = grouped.get(processId) || emptyProcessRow(processId)
       const count = Number(row.count || 0)
       current.total += count
       current.states += 1
@@ -81,22 +76,26 @@
       grouped.set(processId, current)
     }
     for (const [processId, alarmCount] of alarmCounts.entries()) {
-      const current = grouped.get(processId) || {
-        processId,
-        total: 0,
-        active: 0,
-        completed: 0,
-        failed: 0,
-        cancelled: 0,
-        states: 0,
-        alarms: 0,
-        criticalAlarms: 0
-      }
+      const current = grouped.get(processId) || emptyProcessRow(processId)
       current.alarms = alarmCount.total
       current.criticalAlarms = alarmCount.critical
       grouped.set(processId, current)
     }
     return Array.from(grouped.values()).sort((a, b) => b.total - a.total)
+  }
+
+  function emptyProcessRow(processId) {
+    return {
+      processId,
+      total: 0,
+      active: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+      states: 0,
+      alarms: 0,
+      criticalAlarms: 0
+    }
   }
 
   function totals() {
