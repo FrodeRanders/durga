@@ -26,3 +26,4 @@ monitoring-ui/node_modules/
 monitoring-ui/dist/
 generated/
 tmp/
+.e2e-*

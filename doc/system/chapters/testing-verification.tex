@@ -90,10 +90,58 @@ The non-Docker verification command \texttt{mvn test -Dtest='!*IntegrationTest'}
 currently runs 241 tests. Docker-backed integration tests are suffixed
 \texttt{IntegrationTest} and are run separately for release gates.
 
+\subsection{Integration tests}
+
+Five integration test suites use Testcontainers to spin up real Kafka brokers
+and verify runtime behaviour end to end. Each suite is documented in detail in
+Appendix~\ref{sec:IntegrationTestAppendix}.
+
+\begin{description}
+\item[ProcessEventKafkaIntegrationTest] Serialization and JSON round-trip
+integrity over a live Kafka broker. Verifies that \texttt{ProcessEvent}
+payloads, status codes, error info, and compact-constructor inference survive
+wire transport intact.
+
+\item[ProcessStateStoreIntegrationTest] Compacted-topic state persistence via
+\texttt{ProcessStateStore}. Exercises save/load, latest-wins semantics,
+multiple keys, not-found, and timeout handling against a real compacted
+Kafka topic.
+
+\item[MonitoringTopologyIntegrationTest] The monitoring topology end to end:
+state materialization, state counts, activity latency summaries, stuck
+instance detection, and unkeyed event handling.
+
+\item[ChaosIntegrationTest] Topology resilience under restart: verifies state
+recovery after crash, absence of duplicate state entries, and three
+consecutive restarts without corruption.
+
+\item[E2EPipelineIntegrationTest] Full data pipeline end-to-end test. Verifies
+the scaffolder generates category-specific lifecycle events
+(\texttt{GATEWAY\_TAKEN} for route plugins, \texttt{ACTIVITY\_ESCALATED} for
+validate plugins, \texttt{ACTIVITY\_ENTERED} for aggregate plugins), and that
+the monitoring topology correctly materializes state and latency from these
+event types in a mixed-type lifecycle.
+\end{description}
+
+\subsection{Automation}
+
+The script \filepath{scripts/run-e2e-test.sh} automates the full test cycle:
+
+\begin{verbatim}
+./scripts/run-e2e-test.sh test       # Integration tests (Testcontainers)
+./scripts/run-e2e-test.sh feed       # Infra + monitor + data feed
+./scripts/run-e2e-test.sh test-run   # Tests + monitor + continuous feed
+./scripts/run-e2e-test.sh stop       # Tear down
+\end{verbatim}
+
+The \texttt{feed} and \texttt{test-run} commands build and start the
+monitoring server (port 8081), launch a Redpanda broker, PostgreSQL, and
+Kafka Connect via Docker Compose, then inject the \texttt{E2ETestDataLoader}
+which publishes variable order records for live observation.
+
 \subsection{Not fully covered}
 
 \begin{itemize}
-\item full end-to-end process executions against a live Kafka broker,
 \item load and concurrency behavior,
 \item multi-instance monitoring scenarios.
 \end{itemize}

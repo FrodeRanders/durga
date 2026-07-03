@@ -1,0 +1,315 @@
+\appendix
+\section{Integration test catalogue}
+\label{sec:IntegrationTestAppendix}
+
+This appendix documents every Docker-backed integration test in the project.
+All tests extend \texttt{KafkaIntegrationTestBase}, which uses Testcontainers
+to spin up a real Kafka broker (Confluent CP 7.8.0 in KRaft mode) per test
+class. Each test class creates its own topics with randomised suffixes to
+avoid collisions and disposes of all resources in \texttt{@After} /
+\texttt{@AfterClass} hooks.
+
+The integration tests are run with:
+
+\begin{verbatim}
+mvn test -Dtest='*IntegrationTest'
+\end{verbatim}
+
+Timeouts default to 60~seconds and can be overridden with
+\texttt{-Ddurga.it.timeout.seconds=N} or the environment variable
+\texttt{DURGA\_IT\_TIMEOUT\_SECONDS}.
+
+% ===========================================================================
+
+\subsection{ProcessEventKafkaIntegrationTest}
+\label{it:processEventKafka}
+
+\textbf{Purpose:} Verify that \texttt{ProcessEvent} records survive a
+Kafka produce-consume round-trip with full wire-format fidelity.
+
+\textbf{Topic:} A single non-compacted topic created per test class.
+The test uses a plain \texttt{KafkaProducer} and \texttt{KafkaConsumer} with
+manual offset management (\texttt{enable.auto.commit=false},
+\texttt{auto.offset.reset=earliest}).
+
+\textbf{Scenarios (3):}
+
+\begin{description}
+
+\item[shouldProduceAndConsumeSingleEvent] Publishes one \texttt{ProcessEvent}
+with an \texttt{ErrorInfo} payload (\texttt{code="TASK\_FAILED"}). Consumes it
+and asserts that the \texttt{processInstanceId}, \texttt{processId},
+\texttt{eventType} and \texttt{error().code()} are preserved exactly.
+Exercises the full \texttt{toJson} / \texttt{fromJson} pipeline over the wire.
+
+\item[shouldProduceAndConsumeMultipleEvents] Publishes five distinct events
+with monotonically increasing \texttt{processInstanceId}s, consumes them all
+in an at-least-once poll, collects IDs, and asserts all five were received
+and each has a valid \texttt{processId} and \texttt{eventType}.
+
+\item[shouldRoundTripFromJsonToJson] Publishes a compact-constructor event
+(no explicit \texttt{eventType}, relying on the \texttt{Status} inference),
+consumes it, re-serializes the parsed result, parses again, and asserts that
+the double-parsed event matches the original \texttt{processInstanceId},
+inferred \texttt{eventType}, and nested \texttt{payload} values.
+
+\end{description}
+
+\textbf{Why it matters:} The entire monitoring model depends on
+\texttt{ProcessEvent} JSON being correctly serialised by producers and
+correctly parsed by monitoring topology consumers. Any mismatch would
+silently corrupt state stores.
+
+% ===========================================================================
+
+\subsection{ProcessStateStoreIntegrationTest}
+\label{it:processStateStore}
+
+\textbf{Purpose:} Verify that the compacted-topic \texttt{ProcessStateStore}
+persists and retrieves \texttt{ProcessState} records with correct
+latest-wins semantics.
+
+\textbf{Topic:} A single compacted topic (\texttt{cleanup.policy=compact}).
+The store is a thin wrapper around a \texttt{KafkaProducer} (for writes) and
+a \texttt{KafkaConsumer} (for reads on a compacted topic).
+
+\textbf{Scenarios (5):}
+
+\begin{description}
+
+\item[shouldSaveAndLoadLatest] Saves one \texttt{ProcessState} with a known
+\texttt{processInstanceId}, then loads it back. Asserts the returned state
+has the same instance ID, version, variables, and token list.
+
+\item[shouldReturnLatestAfterMultipleSaves] Saves three states for the same
+key with incrementing version numbers (\texttt{ver=1,2,3}). The load
+must return version~3.
+
+\item[shouldHandleMultipleKeys] Saves three distinct keys
+(\texttt{pi-a}, \texttt{pi-b}, \texttt{pi-c}) and verifies each is
+independently retrievable with the correct variables.
+
+\item[shouldReturnNullWhenKeyNotFound] Calls \texttt{loadLatest} on a
+non-existent key and asserts \texttt{null} is returned within the timeout.
+
+\item[shouldHandleTimeoutGracefully] Calls \texttt{loadLatest} with a zero
+duration timeout and verifies \texttt{null} is returned cleanly (no exception).
+
+\end{description}
+
+\textbf{Why it matters:} The \texttt{ProcessStateStore} is used by generated
+projects to snapshot process state to a compacted topic. Correct
+latest-read semantics are critical for crash recovery.
+
+% ===========================================================================
+
+\subsection{MonitoringTopologyIntegrationTest}
+\label{it:monitoringTopology}
+
+\textbf{Purpose:} End-to-end verification of the Kafka Streams monitoring
+topology against a real broker.
+
+\textbf{Topics:} Seven topics (events, state, counts, active, latency,
+trends, models) created with UUID suffixes. The topology uses
+\texttt{process-events-.*} regex subscription to consume from the events
+topic and materialises results into state stores queried through
+\texttt{ProcessMonitoringQueryService}.
+
+\textbf{Scenarios (5):}
+
+\begin{description}
+
+\item[shouldMaterializeProcessStateFromLifecycleEvents] Publishes three
+events (\texttt{PROCESS\_STARTED}, \texttt{ACTIVITY\_ENTERED},
+\texttt{ACTIVITY\_COMPLETED}) for one instance, waits for state
+materialisation, and asserts the lifecycle is \texttt{"active"} with the
+correct \texttt{currentActivityId} and a populated
+\texttt{activityDurationsMs} map.
+
+\item[shouldProduceStateCounts] Publishes events for two instances of the
+same process, then queries the count store. Asserts at least one instance
+appears in the count aggregation.
+
+\item[shouldProduceLatencySummaries] Publishes an
+\texttt{ACTIVITY\_ENTERED} followed 4~minutes later by
+\texttt{ACTIVITY\_COMPLETED} for the same activity. Queries the latency
+store and asserts the returned \texttt{ActivityLatencySummary} has a
+\texttt{sampleCount} $\ge 1$ and \texttt{maxDurationMs} $\ge 240\,000$~ms.
+This validates the entry-store-based latency computation pipeline.
+
+\item[shouldDetectStuckInstances] Publishes an
+\texttt{ACTIVITY\_ENTERED} that is never completed, then queries
+\texttt{stuckInstances()} with a 1-second threshold. Asserts the instance
+appears as stuck with \texttt{lifecycleState} \texttt{"active"}.
+
+\item[shouldMaterializeProcessStateFromUnkeyedLifecycleEvents] Publishes
+a \texttt{PROCESS\_STARTED} event with a \texttt{null} Kafka message key.
+Asserts that the monitoring topology extracts the
+\texttt{processInstanceId} from the value payload and materialises state
+correctly. This verifies the unkeyed-event fallback path in the topology.
+
+\end{description}
+
+\textbf{Why it matters:} This is the most important integration test suite.
+It validates the monitoring topology's ability to materialise state, compute
+latency percentiles, detect stuck instances, and handle edge cases like
+unkeyed events --- all over a real Kafka broker.
+
+% ===========================================================================
+
+\subsection{ChaosIntegrationTest}
+\label{it:chaos}
+
+\textbf{Purpose:} Resilience verification of the monitoring topology under
+crash-and-restart cycles.
+
+\textbf{Infrastructure:} Same topic set as \texttt{MonitoringTopologyIntegrationTest}.
+Uses a fixed \texttt{application.id} across restarts so that Kafka Streams
+rebalances and replays from the changelog topics.
+
+\textbf{Scenarios (3):}
+
+\begin{description}
+
+\item[shouldRecoverStateAfterTopologyRestart] Publishes a complete task
+flow (\texttt{PROCESS\_STARTED} $\to$ \texttt{ACTIVITY\_ENTERED} $\to$
+\texttt{ACTIVITY\_COMPLETED} $\to$ \texttt{PROCESS\_COMPLETED}), waits for
+the state to reach \texttt{"completed"}, kills the topology, restarts it,
+waits for re-materialisation, and asserts the recovered state matches the
+pre-crash state (same \texttt{processInstanceId}, \texttt{processId},
+\texttt{lifecycleState}).
+
+\item[shouldNotDuplicateStateEntriesAfterRestart] Publishes a complete
+flow, records the count-store total, kills and restarts the topology,
+and asserts the count-store total is unchanged --- no spurious
+duplicate events are generated by the rebalance.
+
+\item[shouldHandleMultipleRestarts] Publishes data once, then cycles the
+topology through three start-kill-restart iterations (0, 1, 2 restarts),
+asserting at each iteration that the original state is still present
+with the correct \texttt{lifecycleState} and \texttt{processInstanceId}.
+
+\end{description}
+
+\textbf{Why it matters:} Durga is designed for continuous operations;
+topology restarts happen during deployments, scaling events, and failure
+recovery. These tests verify that the state-store changelogs produce
+correctly idempotent results.
+
+% ===========================================================================
+
+\subsection{E2EPipelineIntegrationTest}
+\label{it:e2ePipeline}
+
+\textbf{Purpose:} Full data pipeline end-to-end verification combining
+scaffolder output validation with monitoring topology event handling for
+all category-specific lifecycle events introduced in the current release.
+
+\textbf{Fixture:} \filepath{src/test/resources/bpmn/e2e\_pipeline.bpmn} ---
+a pipeline exercising \texttt{json-transform}, \texttt{type-coercer},
+\texttt{field-router} (route), \texttt{kv-enricher} (enrich),
+\texttt{json-schema-validator} (validate), and \texttt{window-counter}
+(aggregate), with an XOR gateway branching on the \texttt{amount} field.
+
+\textbf{Scenarios (5):}
+
+\begin{description}
+
+\item[shouldGeneratePluginExecutorsWithCategorySpecificEvents] Runs the
+scaffolder on the E2E fixture and inspects the generated executor classes:
+\begin{itemize}
+\item \texttt{RouteDecisionPluginExecutor.java} must contain
+\texttt{ProcessEvent.EventType.GATEWAY\_TAKEN} (route category).
+\item \texttt{ValidateHighValuePluginExecutor.java} must contain
+\texttt{ProcessEvent.EventType.ACTIVITY\_ESCALATED},
+\texttt{ProcessEvent.Status.ESCALATED}, and error code
+\texttt{"VALIDATION\_FAILED"} (validate category).
+\item \texttt{AggregateHighValuePluginExecutor.java} must contain
+\texttt{ProcessEvent.EventType.ACTIVITY\_ENTERED} (aggregate category,
+null-output path).
+\end{itemize}
+
+\item[shouldHandleGatewayTakenEvents] Publishes
+\texttt{PROCESS\_STARTED} $\to$ \texttt{ACTIVITY\_ENTERED} $\to$
+\texttt{GATEWAY\_TAKEN} for \texttt{route\_decision} and verifies the
+monitoring state view records a duration for the routed activity with
+lifecycle \texttt{"active"}.
+
+\item[shouldHandleActivityEscalatedEvents] Publishes
+\texttt{PROCESS\_STARTED} $\to$ \texttt{ACTIVITY\_ENTERED} $\to$
+\texttt{ACTIVITY\_ESCALATED} for \texttt{validate\_high\_value} and
+verifies the monitoring topology records the escalated activity's
+duration correctly.
+
+\item[shouldHandleActivityEnteredThenCompletedEvents] Publishes
+\texttt{PROCESS\_STARTED} $\to$ \texttt{ACTIVITY\_ENTERED} $\to$
+\texttt{ACTIVITY\_COMPLETED} for \texttt{aggregate\_high\_value} (30~s
+gap) and asserts that the latency query returns an
+\texttt{ActivityLatencySummary} with $\ge 1$ sample and
+\texttt{maxDurationMs} $\ge 30\,000$~ms. This validates the entry-store
+latency pipeline for aggregate window-start events.
+
+\item[shouldHandleMultipleEventTypesInLifecycle] Simulates a
+full pipeline trace across five activities with mixed event types:
+\begin{itemize}
+\item \texttt{transform\_order}: entered $\to$ completed
+\item \texttt{coerce\_types}: entered $\to$ completed
+\item \texttt{route\_decision}: entered $\to$ \texttt{GATEWAY\_TAKEN}
+\item \texttt{enrich\_high\_value}: entered $\to$ completed
+\item \texttt{validate\_high\_value}: entered $\to$
+\texttt{ACTIVITY\_ESCALATED}
+\end{itemize}
+Asserts all five activities appear in the state view's duration map and
+the lifecycle state is \texttt{"active"}. Each test method uses an
+isolated \texttt{processId} to prevent cross-test contamination in the
+shared latency store.
+
+\end{description}
+
+\textbf{Why it matters:} This test closes the gap between the scaffolder's
+code-generation contract and the monitoring topology's runtime behaviour.
+It proves that the category-specific event types (\texttt{GATEWAY\_TAKEN},
+\texttt{ACTIVITY\_ESCALATED}, \texttt{ACTIVITY\_ENTERED}) are correctly
+generated by the scaffolder AND correctly consumed and materialised by
+the monitoring engine --- end to end, against a live Kafka broker.
+
+% ===========================================================================
+
+\subsection{Infrastructure}
+
+All five suites share a common base class:
+
+\textbf{KafkaIntegrationTestBase} (\filepath{src/test/java/org/gautelis/}
+\filepath{durga/KafkaIntegrationTestBase.java}) uses the Testcontainers
+library to start a single Confluent CP Kafka 7.8.0 broker in KRaft mode
+(no ZooKeeper). The broker listens on a random free host port and
+advertises \fbox{\texttt{localhost:<port>}}. Docker availability is
+auto-detected; if Docker is missing, tests are skipped unless
+\texttt{DURGA\_REQUIRE\_DOCKER\_TESTS=true} is set.
+
+\begin{itemize}
+\item \textbf{Environment variables:}
+\texttt{DURGA\_DOCKER\_HOST\_IP} (override advertised listener host),
+\texttt{DURGA\_REQUIRE\_DOCKER\_TESTS} (fail if Docker unavailable),
+\texttt{DURGA\_IT\_TIMEOUT\_SECONDS} (override 60~s default).
+\item \textbf{System properties:}
+\texttt{durga.it.timeout.seconds} (same as env var, takes precedence),
+\texttt{DOCKER\_HOST} (Docker socket URI, auto-detected if unset).
+\end{itemize}
+
+Each integration test class creates topics with random UUID suffixes in
+its \texttt{@BeforeClass} and tears down the broker in \texttt{@AfterClass}.
+Test methods create their own \texttt{KafkaProducer}, \texttt{KafkaConsumer},
+or \texttt{KafkaStreams} instances in \texttt{@Before} and close them in
+\texttt{@After}.
+
+\begin{itemize}
+\item \textbf{Run all integration tests:}
+\texttt{mvn test -Dtest='*IntegrationTest'}
+
+\item \textbf{Run a specific suite:}
+\texttt{mvn test -Dtest='E2EPipelineIntegrationTest'}
+
+\item \textbf{Require Docker (fail if unavailable):}
+\texttt{mvn test -Dtest='*IntegrationTest' -Ddurga.integration.requireDocker=true}
+\end{itemize}

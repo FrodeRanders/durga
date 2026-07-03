@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="e2e_pipeline" name="E2E Pipeline" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="Ingest orders">
+      <bpmn:outgoing>Flow_to_transform</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="transform_order" name="Transform Order">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="json-transform" />
+          <camunda:property name="pluginConfig" value="id:order_id, customer.name, customer.email, total:amount, status" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_to_transform</bpmn:incoming>
+      <bpmn:outgoing>Flow_transform_to_coerce</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="coerce_types" name="Coerce Types">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="type-coercer" />
+          <camunda:property name="pluginConfig" value="amount:double, order_id:int" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_transform_to_coerce</bpmn:incoming>
+      <bpmn:outgoing>Flow_coerce_to_route</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="route_by_amount" name="Route by Amount">
+      <bpmn:incoming>Flow_coerce_to_route</bpmn:incoming>
+      <bpmn:outgoing>Flow_high_value</bpmn:outgoing>
+      <bpmn:outgoing>Flow_low_value</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="route_decision" name="Route Decision">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="field-router" />
+          <camunda:property name="pluginConfig" value="field=status routes={pending:default,shipped:high,delivered:high,cancelled:low,returned:low} default=default" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_high_value</bpmn:incoming>
+      <bpmn:outgoing>Flow_route_to_enrich</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="enrich_high_value" name="Enrich High Value">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="kv-enricher" />
+          <camunda:property name="pluginConfig" value="keyField=customer_email;inline={alice@example.com:{tier:gold,rep:Alice}, bob@example.com:{tier:silver,rep:Bob}, carol@example.com:{tier:gold,rep:Carol}}" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_route_to_enrich</bpmn:incoming>
+      <bpmn:outgoing>Flow_enrich_to_validate</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="validate_high_value" name="Validate High Value">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="json-schema-validator" />
+          <camunda:property name="pluginConfig" value="required=order_id,amount,customer_email" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_enrich_to_validate</bpmn:incoming>
+      <bpmn:outgoing>Flow_validate_to_aggregate</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="aggregate_high_value" name="Aggregate High Value">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="window-counter" />
+          <camunda:property name="pluginConfig" value="window=10 groupBy=tier" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_validate_to_aggregate</bpmn:incoming>
+      <bpmn:outgoing>Flow_aggregate_to_end</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="EndEvent_High" name="Sink gold tier">
+      <bpmn:incoming>Flow_aggregate_to_end</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="aggregate_low_value" name="Aggregate Low Value">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="plugin" value="window-counter" />
+          <camunda:property name="pluginConfig" value="window=10 groupBy=status" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_low_value</bpmn:incoming>
+      <bpmn:outgoing>Flow_low_aggregate_to_end</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="EndEvent_Low" name="Sink standard">
+      <bpmn:incoming>Flow_low_aggregate_to_end</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_to_transform" sourceRef="StartEvent_1" targetRef="transform_order" />
+    <bpmn:sequenceFlow id="Flow_transform_to_coerce" sourceRef="transform_order" targetRef="coerce_types" />
+    <bpmn:sequenceFlow id="Flow_coerce_to_route" sourceRef="coerce_types" targetRef="route_by_amount" />
+    <bpmn:sequenceFlow id="Flow_high_value" sourceRef="route_by_amount" targetRef="route_decision">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 500}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_low_value" sourceRef="route_by_amount" targetRef="aggregate_low_value">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &lt;= 500}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_route_to_enrich" sourceRef="route_decision" targetRef="enrich_high_value" />
+    <bpmn:sequenceFlow id="Flow_enrich_to_validate" sourceRef="enrich_high_value" targetRef="validate_high_value" />
+    <bpmn:sequenceFlow id="Flow_validate_to_aggregate" sourceRef="validate_high_value" targetRef="aggregate_high_value" />
+    <bpmn:sequenceFlow id="Flow_aggregate_to_end" sourceRef="aggregate_high_value" targetRef="EndEvent_High" />
+    <bpmn:sequenceFlow id="Flow_low_aggregate_to_end" sourceRef="aggregate_low_value" targetRef="EndEvent_Low" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_e2e_pipeline">
+    <bpmndi:BPMNPlane id="BPMNPlane_e2e_pipeline" bpmnElement="e2e_pipeline">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="57" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="transform_order_di" bpmnElement="transform_order">
+        <dc:Bounds x="175" y="30" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="coerce_types_di" bpmnElement="coerce_types">
+        <dc:Bounds x="325" y="30" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="route_by_amount_di" bpmnElement="route_by_amount" isMarkerVisible="true">
+        <dc:Bounds x="500" y="45" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="route_decision_di" bpmnElement="route_decision">
+        <dc:Bounds x="625" y="30" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="enrich_high_value_di" bpmnElement="enrich_high_value">
+        <dc:Bounds x="775" y="30" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="validate_high_value_di" bpmnElement="validate_high_value">
+        <dc:Bounds x="925" y="30" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="aggregate_high_value_di" bpmnElement="aggregate_high_value">
+        <dc:Bounds x="1075" y="30" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_High_di" bpmnElement="EndEvent_High">
+        <dc:Bounds x="1257" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="aggregate_low_value_di" bpmnElement="aggregate_low_value">
+        <dc:Bounds x="625" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Low_di" bpmnElement="EndEvent_Low">
+        <dc:Bounds x="807" y="192" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_to_transform_di" bpmnElement="Flow_to_transform">
+        <di:waypoint x="93" y="70" />
+        <di:waypoint x="175" y="70" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_transform_to_coerce_di" bpmnElement="Flow_transform_to_coerce">
+        <di:waypoint x="275" y="70" />
+        <di:waypoint x="325" y="70" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_coerce_to_route_di" bpmnElement="Flow_coerce_to_route">
+        <di:waypoint x="425" y="70" />
+        <di:waypoint x="500" y="70" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_high_value_di" bpmnElement="Flow_high_value">
+        <di:waypoint x="550" y="70" />
+        <di:waypoint x="625" y="70" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_low_value_di" bpmnElement="Flow_low_value">
+        <di:waypoint x="525" y="95" />
+        <di:waypoint x="525" y="210" />
+        <di:waypoint x="625" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_route_to_enrich_di" bpmnElement="Flow_route_to_enrich">
+        <di:waypoint x="725" y="70" />
+        <di:waypoint x="775" y="70" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_enrich_to_validate_di" bpmnElement="Flow_enrich_to_validate">
+        <di:waypoint x="875" y="70" />
+        <di:waypoint x="925" y="70" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_validate_to_aggregate_di" bpmnElement="Flow_validate_to_aggregate">
+        <di:waypoint x="1025" y="70" />
+        <di:waypoint x="1075" y="70" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_aggregate_to_end_di" bpmnElement="Flow_aggregate_to_end">
+        <di:waypoint x="1175" y="70" />
+        <di:waypoint x="1257" y="70" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_low_aggregate_to_end_di" bpmnElement="Flow_low_aggregate_to_end">
+        <di:waypoint x="725" y="210" />
+        <di:waypoint x="807" y="210" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
