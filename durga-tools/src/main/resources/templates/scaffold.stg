@@ -1736,9 +1736,9 @@ public class %className% {
                         inputEvent.tokenId(),
                         inputEvent.correlationId(),
                         inputEvent.payload(),
-                        ProcessEvent.Status.STARTED,
+                        ProcessEvent.Status.COMPLETED,
                         null,
-                        ProcessEvent.EventType.ACTIVITY_ENTERED,
+                        ProcessEvent.EventType.PROCESS_COMPLETED,
                         inputEvent.processVersion(),
                         inputEvent.businessKey(),
                         null

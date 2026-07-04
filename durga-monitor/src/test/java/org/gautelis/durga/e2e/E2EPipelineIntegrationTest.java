@@ -36,7 +36,7 @@ import static org.junit.Assert.*;
  * <p>
  * 1. The scaffolder generates correct category-specific lifecycle events
  *    (GATEWAY_TAKEN for route, ACTIVITY_ESCALATED for validate,
- *     ACTIVITY_ENTERED for aggregate).
+ *     PROCESS_COMPLETED for aggregate absorbing an instance into an open window).
  * 2. The monitoring topology correctly materializes state from the new
  *    event types.
  * 3. Vannak data-individual metadata events carry plugin operation metadata.
@@ -135,7 +135,7 @@ public class E2EPipelineIntegrationTest extends KafkaIntegrationTestBase {
 
     @Test
     public void shouldGeneratePluginExecutorsWithCategorySpecificEvents() throws Exception {
-        System.out.println("TC: e2e pipeline generates executors with GATEWAY_TAKEN, ACTIVITY_ESCALATED, and ACTIVITY_ENTERED");
+        System.out.println("TC: e2e pipeline generates executors with GATEWAY_TAKEN, ACTIVITY_ESCALATED, and PROCESS_COMPLETED");
 
         Path outputDir = Files.createTempDirectory("durga-e2e-");
 
@@ -159,10 +159,10 @@ public class E2EPipelineIntegrationTest extends KafkaIntegrationTestBase {
         assertTrue("validate executor missing Status.ESCALATED", validateContent.contains("ProcessEvent.Status.ESCALATED"));
         assertTrue("validate executor missing VALIDATION_FAILED", validateContent.contains("VALIDATION_FAILED"));
 
-        // aggregate plugin → ACTIVITY_ENTERED
+        // aggregate plugin → an instance absorbed into an open window is terminal (PROCESS_COMPLETED)
         String aggregateContent = Files.readString(pkg.resolve("AggregateHighValuePluginExecutor.java"));
-        assertTrue("aggregate executor missing ACTIVITY_ENTERED", aggregateContent.contains("ProcessEvent.EventType.ACTIVITY_ENTERED"));
-        assertTrue("aggregate executor missing Status.STARTED", aggregateContent.contains("ProcessEvent.Status.STARTED"));
+        assertTrue("aggregate executor missing PROCESS_COMPLETED", aggregateContent.contains("ProcessEvent.EventType.PROCESS_COMPLETED"));
+        assertTrue("aggregate executor missing Status.COMPLETED", aggregateContent.contains("ProcessEvent.Status.COMPLETED"));
     }
 
     // ---------- monitoring topology verification ----------
