@@ -30,10 +30,10 @@ import java.util.Map;
  *
  * <table>
  *   <tr><th>Field</th><th>Values</th><th>Required</th></tr>
- *   <tr><td>{@code syndrome}</td><td>{@code HARD_ERROR}, {@code COUNTED}, {@code SLIDING_WINDOW}</td><td>yes</td></tr>
- *   <tr><td>{@code eventType}</td><td>{@code PROCESS_FAILED}, {@code ACTIVITY_ESCALATED}, etc.</td><td>yes</td></tr>
- *   <tr><td>{@code threshold}</td><td>positive integer</td><td>for COUNTED / SLIDING_WINDOW</td></tr>
- *   <tr><td>{@code windowSeconds}</td><td>positive integer</td><td>for SLIDING_WINDOW</td></tr>
+ *   <tr><td>{@code syndrome}</td><td>{@code HARD_ERROR}, {@code COUNTED}, {@code SLIDING_WINDOW}, {@code STUCK}, {@code CASCADE}</td><td>yes</td></tr>
+ *   <tr><td>{@code eventType}</td><td>{@code PROCESS_FAILED}, {@code ACTIVITY_ESCALATED}, etc.</td><td>event-driven syndromes only (not STUCK / CASCADE)</td></tr>
+ *   <tr><td>{@code threshold}</td><td>positive integer</td><td>for COUNTED / SLIDING_WINDOW / CASCADE</td></tr>
+ *   <tr><td>{@code windowSeconds}</td><td>positive integer</td><td>window for SLIDING_WINDOW / CASCADE, idle timeout for STUCK</td></tr>
  *   <tr><td>{@code severity}</td><td>{@code WARN}, {@code CRITICAL}</td><td>yes</td></tr>
  *   <tr><td>{@code message}</td><td>template with {@code ${processId}}, {@code ${activityId}}, etc.</td><td>yes</td></tr>
  * </table>
@@ -169,33 +169,54 @@ public final class BpmnAlarmConfigParser {
         String severityStr = fields.get("severity");
         String message = fields.get("message");
 
-        if (syndromeStr == null || eventTypeStr == null || severityStr == null || message == null) {
-            LOG.debug("Skipping alarm '{}': missing required field (syndrome, eventType, severity, message)", alarmId);
+        if (syndromeStr == null || severityStr == null || message == null) {
+            LOG.debug("Skipping alarm '{}': missing required field (syndrome, severity, message)", alarmId);
             return null;
         }
 
         AlarmSyndrome syndrome;
-        ProcessEvent.EventType eventType;
         AlarmSeverity severity;
         try {
             syndrome = AlarmSyndrome.valueOf(syndromeStr);
-            eventType = ProcessEvent.EventType.valueOf(eventTypeStr);
             severity = AlarmSeverity.valueOf(severityStr);
         } catch (IllegalArgumentException e) {
             LOG.debug("Skipping alarm '{}': invalid enum value", alarmId, e);
             return null;
         }
 
+        // eventType is only meaningful for event-driven syndromes; STUCK / CASCADE ignore it.
+        ProcessEvent.EventType eventType = null;
+        if (eventTypeStr != null && !eventTypeStr.isBlank()) {
+            try {
+                eventType = ProcessEvent.EventType.valueOf(eventTypeStr);
+            } catch (IllegalArgumentException e) {
+                LOG.debug("Skipping alarm '{}': invalid eventType '{}'", alarmId, eventTypeStr);
+                return null;
+            }
+        }
+        boolean eventDriven = syndrome == AlarmSyndrome.HARD_ERROR
+                || syndrome == AlarmSyndrome.COUNTED
+                || syndrome == AlarmSyndrome.SLIDING_WINDOW;
+        if (eventDriven && eventType == null) {
+            LOG.debug("Skipping alarm '{}': {} requires eventType", alarmId, syndrome);
+            return null;
+        }
+
         int threshold = 0;
-        if (syndrome != AlarmSyndrome.HARD_ERROR && thresholdStr != null) {
+        if (thresholdStr != null) {
             try { threshold = Integer.parseInt(thresholdStr); } catch (NumberFormatException e) {
                 LOG.debug("Skipping alarm '{}': invalid threshold '{}'", alarmId, thresholdStr);
                 return null;
             }
         }
 
+        // windowSeconds is the sliding-window size (SLIDING_WINDOW / CASCADE) or the
+        // idle timeout before an instance is considered stuck (STUCK).
         Duration windowDuration = null;
-        if (syndrome == AlarmSyndrome.SLIDING_WINDOW && windowStr != null) {
+        boolean windowed = syndrome == AlarmSyndrome.SLIDING_WINDOW
+                || syndrome == AlarmSyndrome.STUCK
+                || syndrome == AlarmSyndrome.CASCADE;
+        if (windowed && windowStr != null) {
             try { windowDuration = Duration.ofSeconds(Integer.parseInt(windowStr)); } catch (NumberFormatException e) {
                 LOG.debug("Skipping alarm '{}': invalid windowSeconds '{}'", alarmId, windowStr);
                 return null;
@@ -210,7 +231,7 @@ public final class BpmnAlarmConfigParser {
 
         try {
             return new AlarmConfig(configId, processId, activityId, eventType, syndrome,
-                    threshold, windowDuration, severity, fullMessage);
+                    threshold, windowDuration, severity, fullMessage, AlarmOrigin.EXPLICIT);
         } catch (IllegalArgumentException e) {
             LOG.debug("Skipping alarm '{}': {}", alarmId, e.getMessage());
             return null;

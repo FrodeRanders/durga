@@ -86,6 +86,21 @@ Then copy the updated `dist/` directory to the Modeler plugins folder and restar
 1. On a task: expand **"Durga Alarm (Activity)"** to set per-activity alarms
 2. On the process (click empty canvas area): expand **"Durga Process Alarms"** to set inherited defaults and aggregate alarms
 
+Available syndromes:
+
+| Syndrome | Fires when | Uses |
+|----------|-----------|------|
+| `HARD_ERROR` | first matching event | `eventType` |
+| `COUNTED` | matching-event count exceeds threshold | `eventType`, `threshold` |
+| `SLIDING_WINDOW` | matching events in a window exceed threshold | `eventType`, `threshold`, `windowSeconds` |
+| `STUCK` | an active instance is idle longer than the timeout | `windowSeconds` (idle timeout) |
+| `CASCADE` | more instances stall within a window than the threshold | `threshold`, `windowSeconds` |
+
+`STUCK` and `CASCADE` are absence-of-progress syndromes evaluated by the monitor's stall
+detector, so they do **not** require an `eventType`. The monitor also ships built-in `STUCK`
+and `CASCADE` defaults that apply with no configuration; a process-level config of the same
+syndrome overrides the built-in default for that scope.
+
 ### Fields written
 
 All configuration is stored as Camunda extension properties:

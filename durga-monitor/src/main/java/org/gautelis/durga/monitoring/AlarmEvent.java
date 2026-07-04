@@ -19,6 +19,7 @@ import java.util.Objects;
  * @param processInstanceId  specific process instance
  * @param activityId         specific activity (may be null for process-wide alarms)
  * @param triggerEventType   the lifecycle event type that pushed the count over threshold
+ *                           (null for {@link AlarmSyndrome#CASCADE}, which has no single event)
  * @param triggerTimestamp   ISO-8601 instant when the alarm fired
  * @param count              current accumulated count (1 for HARD_ERROR)
  * @param threshold          configured threshold (ignored for HARD_ERROR)
@@ -43,7 +44,6 @@ public record AlarmEvent(
         Objects.requireNonNull(syndrome, "syndrome");
         Objects.requireNonNull(severity, "severity");
         Objects.requireNonNull(processId, "processId");
-        Objects.requireNonNull(triggerEventType, "triggerEventType");
         Objects.requireNonNull(triggerTimestamp, "triggerTimestamp");
     }
 

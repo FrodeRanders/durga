@@ -21,14 +21,19 @@ import java.util.Objects;
  * @param id           unique configuration identifier
  * @param processId    scope: process to monitor (null = all processes)
  * @param activityId   scope: activity to monitor (null = all activities)
- * @param eventType    which lifecycle event type triggers counting
+ * @param eventType    which lifecycle event type triggers counting (may be null for
+ *                     {@link AlarmSyndrome#STUCK} and {@link AlarmSyndrome#CASCADE},
+ *                     which are evaluated by a punctuator rather than per event)
  * @param syndrome     how faults are aggregated into an alarm
- * @param threshold    maximum count before alarm (ignored for {@link AlarmSyndrome#HARD_ERROR})
- * @param windowDuration size of sliding window (only for {@link AlarmSyndrome#SLIDING_WINDOW})
+ * @param threshold    maximum count before alarm (ignored for {@link AlarmSyndrome#HARD_ERROR}
+ *                     and {@link AlarmSyndrome#STUCK})
+ * @param windowDuration size of sliding window for {@link AlarmSyndrome#SLIDING_WINDOW} /
+ *                     {@link AlarmSyndrome#CASCADE}, or idle timeout for {@link AlarmSyndrome#STUCK}
  * @param severity     alarm severity level
  * @param message      human-readable alarm message template, may contain
  *                     {@code ${processId}}, {@code ${activityId}}, {@code ${count}},
- *                     {@code ${processInstanceId}}
+ *                     {@code ${processInstanceId}}, {@code ${idleSeconds}}
+ * @param origin       provenance layer (automatic / opt-in / explicit)
  */
 public record AlarmConfig(
         String id,
@@ -39,18 +44,33 @@ public record AlarmConfig(
         int threshold,
         Duration windowDuration,
         AlarmSeverity severity,
-        String message
+        String message,
+        AlarmOrigin origin
 ) {
     public AlarmConfig {
         Objects.requireNonNull(id, "id");
-        Objects.requireNonNull(eventType, "eventType");
         Objects.requireNonNull(syndrome, "syndrome");
         Objects.requireNonNull(severity, "severity");
+        Objects.requireNonNull(origin, "origin");
+
+        switch (syndrome) {
+            case HARD_ERROR, COUNTED, SLIDING_WINDOW -> Objects.requireNonNull(eventType, "eventType");
+            default -> { /* STUCK / CASCADE are not event-type driven */ }
+        }
         if (syndrome == AlarmSyndrome.SLIDING_WINDOW && windowDuration == null) {
             throw new IllegalArgumentException("SLIDING_WINDOW requires windowDuration");
         }
-        if (syndrome != AlarmSyndrome.HARD_ERROR && threshold <= 0) {
-            throw new IllegalArgumentException("COUNTED and SLIDING_WINDOW require threshold > 0");
+        if (syndrome == AlarmSyndrome.STUCK && windowDuration == null) {
+            throw new IllegalArgumentException("STUCK requires windowDuration (idle timeout)");
+        }
+        if (syndrome == AlarmSyndrome.CASCADE && windowDuration == null) {
+            throw new IllegalArgumentException("CASCADE requires windowDuration");
+        }
+        boolean needsThreshold = syndrome == AlarmSyndrome.COUNTED
+                || syndrome == AlarmSyndrome.SLIDING_WINDOW
+                || syndrome == AlarmSyndrome.CASCADE;
+        if (needsThreshold && threshold <= 0) {
+            throw new IllegalArgumentException(syndrome + " requires threshold > 0");
         }
     }
 

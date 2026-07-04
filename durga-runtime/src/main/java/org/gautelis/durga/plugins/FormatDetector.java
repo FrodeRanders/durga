@@ -27,6 +27,16 @@ public final class FormatDetector implements Plugin {
         return output.toString().getBytes(StandardCharsets.UTF_8);
     }
 
+    /**
+     * Detection is an inspection result, not a replacement payload; the input payload is forwarded
+     * unchanged via {@link PluginResult.OutputDisposition#PASSTHROUGH}.
+     */
+    @Override
+    public PluginResult executeWithResult(byte[] payload, String config) throws Exception {
+        byte[] output = execute(payload, config);
+        return PluginResult.passthrough(output, idempotencyKey(payload, config));
+    }
+
     public static Detection detect(byte[] payload) {
         if (payload == null || payload.length == 0) {
             return new Detection("empty", "empty", "application/octet-stream", "none", 0, "");

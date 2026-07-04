@@ -350,6 +350,16 @@ public class E2EPipelineIntegrationTest extends KafkaIntegrationTestBase {
         try { return Duration.ofSeconds(Long.parseLong(val)); } catch (NumberFormatException e) { return Duration.ofSeconds(60); }
     }
 
+    /**
+     * Resolves this module's {@code e2e_pipeline.bpmn} test fixture.
+     * <p>
+     * Note: this fixture intentionally diverges from the runnable demo at
+     * {@code durga-tools/src/test/resources/bpmn/e2e_pipeline.bpmn}. It keeps the inline
+     * {@code route_decision} (field-router) task on purpose, to verify that the scaffolder
+     * emits route-category lifecycle events ({@code GATEWAY_TAKEN}). The tools copy removed
+     * that task because a routing plugin's key output is not a payload; the framework now
+     * guards against payload loss regardless (see {@code PluginResult.OutputDisposition}).
+     */
     private static Path fixturePath(String fileName) {
         Path modulePath = Path.of("src/test/resources", fileName);
         if (Files.exists(modulePath)) {

@@ -1581,16 +1581,22 @@ public class %className% {
             if (output != null) {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 String outputText = new String(output, java.nio.charset.StandardCharsets.UTF_8);
+                com.fasterxml.jackson.databind.JsonNode outputNode = null;
                 try {
-                    com.fasterxml.jackson.databind.JsonNode outputNode = mapper.readTree(outputText);
-                    if (outputNode.isObject()) {
-                        outputPayload = mapper.convertValue(outputNode,
-                                new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>\>() {});
-                    } else {
-                        outputPayload = java.util.Map.of("_value", mapper.convertValue(outputNode, Object.class));
-                    }
+                    outputNode = mapper.readTree(outputText);
                 } catch (com.fasterxml.jackson.core.JsonProcessingException parseFailure) {
-                    outputPayload = java.util.Map.of("_value", outputText);
+                    outputNode = null;
+                }
+                if (outputNode != null && outputNode.isObject()) {
+                    outputPayload = mapper.convertValue(outputNode,
+                            new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>\>() {});
+                } else {
+                    java.util.Map<String, Object> annotated = new java.util.LinkedHashMap<>();
+                    if (inputEvent.payload() != null) {
+                        annotated.putAll(inputEvent.payload());
+                    }
+                    annotated.put("_pluginOutput", outputText);
+                    outputPayload = annotated;
                 }
             }
             ProcessEvent outputEvent = new ProcessEvent(
@@ -1739,19 +1745,27 @@ public class %className% {
                 ).toJson()).thenCompose(ignored -> msg.ack());
             }
             %endif%java.util.Map<String, Object> outputPayload = inputEvent.payload();
-            if (output != null) {
+            if (output != null && output.length > 0) {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 String outputText = new String(output, java.nio.charset.StandardCharsets.UTF_8);
-                try {
-                    com.fasterxml.jackson.databind.JsonNode outputNode = mapper.readTree(outputText);
-                    if (outputNode.isObject()) {
-                        outputPayload = mapper.convertValue(outputNode,
-                                new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>\>() {});
-                    } else {
-                        outputPayload = java.util.Map.of("_value", mapper.convertValue(outputNode, Object.class));
+                com.fasterxml.jackson.databind.JsonNode outputNode = null;
+                if (pluginResult.disposition() == PluginResult.OutputDisposition.PAYLOAD) {
+                    try {
+                        outputNode = mapper.readTree(outputText);
+                    } catch (com.fasterxml.jackson.core.JsonProcessingException parseFailure) {
+                        outputNode = null;
                     }
-                } catch (com.fasterxml.jackson.core.JsonProcessingException parseFailure) {
-                    outputPayload = java.util.Map.of("_value", outputText);
+                }
+                if (outputNode != null && outputNode.isObject()) {
+                    outputPayload = mapper.convertValue(outputNode,
+                            new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>\>() {});
+                } else {
+                    java.util.Map<String, Object> annotated = new java.util.LinkedHashMap<>();
+                    if (inputEvent.payload() != null) {
+                        annotated.putAll(inputEvent.payload());
+                    }
+                    annotated.put("_pluginOutput", outputText);
+                    outputPayload = annotated;
                 }
             }
             ProcessEvent outputEvent = new ProcessEvent(

@@ -66,4 +66,15 @@ public class DeadLetterRouterTest {
                 "field=status routes={ok:success,error:failure} default=other");
         assertEquals("failure", Plugin.toString(result));
     }
+
+    @Test
+    public void shouldDeclarePassthroughDisposition() throws Exception {
+        System.out.println("TC: router result is PASSTHROUGH so the payload is not overwritten by the route key");
+        Plugin plugin = new DeadLetterRouter();
+        PluginResult result = plugin.executeWithResult(
+                Plugin.toBytes("{\"status\":\"error\",\"order_id\":7}"),
+                "field=status routes={ok:success,error:failure} default=other");
+        assertEquals(PluginResult.OutputDisposition.PASSTHROUGH, result.disposition());
+        assertEquals("failure", Plugin.toString(result.output()));
+    }
 }

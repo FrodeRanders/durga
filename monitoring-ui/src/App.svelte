@@ -123,10 +123,23 @@
         })
     }
 
+    function isSystemAlarm(alarm) {
+        return !alarm.processId || alarm.processId === '*'
+    }
+
+    function systemAlarms() {
+        return s.allAlarms.filter(isSystemAlarm)
+    }
+
+    function alarmScope(alarm) {
+        return isSystemAlarm(alarm) ? 'system-wide' : alarm.processId
+    }
+
     function alarmsByProcess() {
         const grouped = new Map()
         for (const alarm of s.allAlarms) {
-            const processId = alarm.processId || 'unknown'
+            if (isSystemAlarm(alarm)) continue
+            const processId = alarm.processId
             const current = grouped.get(processId) || {total: 0, critical: 0}
             current.total += 1
             if (alarm.severity === 'CRITICAL') current.critical += 1
@@ -292,7 +305,7 @@
         </article>
         <article class="kpi alert">
             <span>Alarms</span>
-            <strong>{number(totals().alarms)}</strong>
+            <strong>{number(s.allAlarms.length)}</strong>
         </article>
     </section>
 
@@ -392,10 +405,10 @@
             {/if}
         </section>
 
-        <section class="panel alarm-panel">
+        <section class="panel wide">
             <div class="panel-title">
                 <h2>Alarm State</h2>
-                <span>{s.processId ? `${number(s.alarms.length)} active` : `${number(s.allAlarms.length)} active`}</span>
+                <span>{s.processId ? `${number(s.alarms.length)} active` : `${number(s.allAlarms.length)} active${systemAlarms().length ? ` · ${number(systemAlarms().length)} system-wide` : ''}`}</span>
             </div>
             {#if (s.processId ? alarmRows() : s.allAlarms).length}
                 <table>
@@ -410,8 +423,8 @@
                     </thead>
                     <tbody>
                     {#each (s.processId ? alarmRows() : s.allAlarms) as alarm}
-                        <tr>
-                            <td>{alarm.processId}</td>
+                        <tr class:system={isSystemAlarm(alarm)}>
+                            <td>{alarmScope(alarm)}</td>
                             <td>{alarm.activityId ?? '*'}</td>
                             <td><span class="badge {alarmSeverityClass(alarm.severity)}">{alarm.severity}</span></td>
                             <td>{number(alarm.fireCount)}</td>
@@ -841,6 +854,11 @@
 
     tr.selected td {
         background: #edf4ff;
+    }
+
+    tr.system td:first-child {
+        color: var(--cyan);
+        font-weight: 800;
     }
 
     .link {

@@ -51,6 +51,17 @@ public final class DeadLetterRouter implements Plugin {
         return router.route(payload);
     }
 
+    /**
+     * A router's output is a routing key, not a payload; the input payload must be forwarded
+     * unchanged. Declares {@link PluginResult.OutputDisposition#PASSTHROUGH} so the generated
+     * worker does not overwrite the payload with the route key.
+     */
+    @Override
+    public PluginResult executeWithResult(byte[] payload, String config) throws Exception {
+        byte[] output = execute(payload, config);
+        return PluginResult.passthrough(output, idempotencyKey(payload, config));
+    }
+
     private final String field;
     private final Map<String, String> routes;
     private final String defaultRoute;

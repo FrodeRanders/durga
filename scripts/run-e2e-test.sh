@@ -26,6 +26,17 @@ GEN_LOG="$PROJECT_DIR/target/pipeline.log"
 MONITOR_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-state"
 FAULT_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-fault-state"
 ALARM_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-alarm-state"
+ALARM_WATCH_PID_FILE="$PROJECT_DIR/target/alarm-watch.pid"
+
+# Automatic (monitor-owned) alarm tuning. Defaults are deliberately sensitive so a
+# stall cascade becomes detectable within a short e2e run; override via env if needed.
+STUCK_TIMEOUT_SECONDS="${STUCK_TIMEOUT_SECONDS:-20}"
+STUCK_SEVERITY="${STUCK_SEVERITY:-WARN}"
+CASCADE_WINDOW_SECONDS="${CASCADE_WINDOW_SECONDS:-30}"
+CASCADE_THRESHOLD="${CASCADE_THRESHOLD:-3}"
+CASCADE_SEVERITY="${CASCADE_SEVERITY:-CRITICAL}"
+ALARM_SCAN_INTERVAL_MS="${ALARM_SCAN_INTERVAL_MS:-5000}"
+ALARM_WATCH_INTERVAL_SECONDS="${ALARM_WATCH_INTERVAL_SECONDS:-5}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -50,12 +61,22 @@ Feed options (with 'feed' or 'test-run'):
   --count N       Publish exactly N records then exit (default: continuous)
   --interval-ms   Interval in ms between records (default: 100)
 
+Cascade detection (automatic, monitor-owned — no BPMN alarm config needed):
+  The 'feed' and 'test-run' commands start a background watcher that polls
+  the monitor and reports STUCK instance alarms and, when a surge stalls at
+  once, the CASCADE alarm. Tune via environment variables:
+    STUCK_TIMEOUT_SECONDS   idle time before an instance is "stuck" (default 20)
+    CASCADE_WINDOW_SECONDS  rolling window for the surge (default 30)
+    CASCADE_THRESHOLD       stuck onsets in window before cascade fires (default 3)
+    ALARM_SCAN_INTERVAL_MS  monitor stall scan cadence (default 5000)
+
 Examples:
   ./run-e2e-test.sh test              # Run all integration tests
   ./run-e2e-test.sh feed              # Full e2e pipeline + monitoring (continuous)
   ./run-e2e-test.sh feed --count 200  # Bounded: 200 orders through the pipeline
   ./run-e2e-test.sh test-run          # Test + full e2e pipeline
   ./run-e2e-test.sh stop              # Tear down
+  CASCADE_THRESHOLD=2 ./run-e2e-test.sh feed   # More sensitive cascade
 EOF
 }
 
@@ -136,6 +157,12 @@ start_monitor() {
          -Ddurga.streams.state.dir="$MONITOR_STATE_DIR" \
          -Ddurga.fault.streams.state.dir="$FAULT_STATE_DIR" \
          -Ddurga.alarm.streams.state.dir="$ALARM_STATE_DIR" \
+         -Ddurga.alarm.stuck.timeoutSeconds="$STUCK_TIMEOUT_SECONDS" \
+         -Ddurga.alarm.stuck.severity="$STUCK_SEVERITY" \
+         -Ddurga.alarm.cascade.windowSeconds="$CASCADE_WINDOW_SECONDS" \
+         -Ddurga.alarm.cascade.threshold="$CASCADE_THRESHOLD" \
+         -Ddurga.alarm.cascade.severity="$CASCADE_SEVERITY" \
+         -Ddurga.alarm.scan.interval.ms="$ALARM_SCAN_INTERVAL_MS" \
          -jar "$MONITOR_JAR" \
          > "$MONITOR_LOG" 2>&1 &
     echo $! > "$MONITOR_PID_FILE"
@@ -164,6 +191,68 @@ stop_monitor() {
             kill -9 "$pid" 2>/dev/null || true
         fi
         rm -f "$MONITOR_PID_FILE"
+    fi
+}
+
+# ------- internal: cascade detection -------
+
+# Counts occurrences of a syndrome in the /api/alarms JSON payload.
+count_syndrome() {
+    local body="$1" syndrome="$2"
+    printf '%s' "$body" | grep -o "\"syndrome\":\"$syndrome\"" | wc -l | tr -d ' '
+}
+
+# Background watcher that polls the monitor's alarm read-model and reports the
+# automatic (monitor-owned) alarms as they appear — in particular the CASCADE
+# alarm that fires when a surge of instances stall, even though e2e_pipeline.bpmn
+# configures no alarms of its own.
+watch_alarms() {
+    local prev_stuck=0 prev_cascade=0
+    while true; do
+        local body stuck cascade
+        body=$(curl -s "http://localhost:$MONITOR_PORT/api/alarms" 2>/dev/null || true)
+        if [ -n "$body" ]; then
+            stuck=$(count_syndrome "$body" STUCK)
+            cascade=$(count_syndrome "$body" CASCADE)
+
+            if [ "${stuck:-0}" -gt "$prev_stuck" ]; then
+                warn "Stall detector: $stuck stuck-instance alarm scope(s) active (idle > ${STUCK_TIMEOUT_SECONDS}s)"
+                prev_stuck=$stuck
+            fi
+
+            if [ "${cascade:-0}" -gt 0 ] && [ "$prev_cascade" -eq 0 ]; then
+                err "=============================================================="
+                err " CASCADE ALARM RAISED by the monitor (automatic layer)"
+                err " >${CASCADE_THRESHOLD} instances stalled within ${CASCADE_WINDOW_SECONDS}s"
+                err " No alarm was configured on e2e_pipeline.bpmn — this is the"
+                err " monitor's own always-on detection."
+                err "--------------------------------------------------------------"
+                printf '%s' "$body" \
+                    | tr ',' '\n' \
+                    | grep -A0 -E '"(syndrome|severity|lastMessage|fireCount)"' \
+                    | sed 's/^/   /' >&2 || true
+                err "=============================================================="
+                prev_cascade=$cascade
+            fi
+        fi
+        sleep "$ALARM_WATCH_INTERVAL_SECONDS"
+    done
+}
+
+start_alarm_watch() {
+    if [ -f "$ALARM_WATCH_PID_FILE" ] && kill -0 "$(cat "$ALARM_WATCH_PID_FILE")" 2>/dev/null; then
+        return
+    fi
+    log "Starting cascade detector (stuck timeout=${STUCK_TIMEOUT_SECONDS}s, cascade threshold>${CASCADE_THRESHOLD} in ${CASCADE_WINDOW_SECONDS}s)..."
+    watch_alarms &
+    echo $! > "$ALARM_WATCH_PID_FILE"
+}
+
+stop_alarm_watch() {
+    if [ -f "$ALARM_WATCH_PID_FILE" ]; then
+        local pid=$(cat "$ALARM_WATCH_PID_FILE")
+        kill "$pid" 2>/dev/null || true
+        rm -f "$ALARM_WATCH_PID_FILE"
     fi
 }
 
@@ -267,14 +356,14 @@ cmd_feed() {
         esac
     done
 
-    trap 'stop_pipeline; stop_monitor; stop_infra' EXIT INT TERM
+    trap 'stop_alarm_watch; stop_pipeline; stop_monitor; stop_infra' EXIT INT TERM
     start_infra
     build_all
     scaffold_and_build_pipeline
     start_monitor
     start_pipeline
 
-    start_pipeline
+    start_alarm_watch
     echo ""
 
     cd "$PROJECT_DIR"
@@ -306,7 +395,7 @@ cmd_test_run() {
         esac
     done
 
-    trap 'stop_pipeline; stop_monitor; stop_infra' EXIT INT TERM
+    trap 'stop_alarm_watch; stop_pipeline; stop_monitor; stop_infra' EXIT INT TERM
     start_infra
 
     cmd_test
@@ -324,6 +413,7 @@ cmd_test_run() {
     tr -d '\n' < "$E2E_BPMN_PATH" | docker exec -i durga-redpanda rpk topic produce process-models --key "$E2E_PROCESS_ID" 2>/dev/null
     sleep 2
 
+    start_alarm_watch
     echo ""
     cd "$PROJECT_DIR"
 
@@ -342,6 +432,7 @@ cmd_test_run() {
 }
 
 cmd_stop() {
+    stop_alarm_watch
     stop_pipeline
     stop_monitor
     stop_infra

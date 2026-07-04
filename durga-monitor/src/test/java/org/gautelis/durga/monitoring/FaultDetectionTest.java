@@ -33,7 +33,7 @@ public class FaultDetectionTest {
 
         AlarmConfig config = new AlarmConfig("cfg-hard", "order-proc", "validate_order",
                 ProcessEvent.EventType.PROCESS_FAILED, AlarmSyndrome.HARD_ERROR, 0, null,
-                AlarmSeverity.CRITICAL, "Activity ${activityId} failed in process ${processId}");
+                AlarmSeverity.CRITICAL, "Activity ${activityId} failed in process ${processId}", AlarmOrigin.EXPLICIT);
 
         AlarmEvent alarm = evalHard(config, SAMPLE_EVENT);
         assertNotNull(alarm);
@@ -53,7 +53,7 @@ public class FaultDetectionTest {
 
         AlarmConfig config = new AlarmConfig("cfg-hard2", null, null,
                 ProcessEvent.EventType.PROCESS_FAILED, AlarmSyndrome.HARD_ERROR, 0, null,
-                AlarmSeverity.WARN, "Fault detected");
+                AlarmSeverity.WARN, "Fault detected", AlarmOrigin.EXPLICIT);
 
         assertNotNull(evalHard(config, SAMPLE_EVENT));
 
@@ -69,7 +69,7 @@ public class FaultDetectionTest {
 
         AlarmConfig config = new AlarmConfig("cfg-hard3", null, null,
                 ProcessEvent.EventType.ACTIVITY_ESCALATED, AlarmSyndrome.HARD_ERROR, 0, null,
-                AlarmSeverity.WARN, "Escalated");
+                AlarmSeverity.WARN, "Escalated", AlarmOrigin.EXPLICIT);
 
         assertNull(evalHard(config, SAMPLE_EVENT));
     }
@@ -80,7 +80,7 @@ public class FaultDetectionTest {
 
         AlarmConfig config = new AlarmConfig("cfg-proc", "order-proc", null,
                 ProcessEvent.EventType.PROCESS_FAILED, AlarmSyndrome.HARD_ERROR, 0, null,
-                AlarmSeverity.WARN, "Process failed");
+                AlarmSeverity.WARN, "Process failed", AlarmOrigin.EXPLICIT);
 
         assertNotNull(evalHard(config, SAMPLE_EVENT));
 
@@ -96,7 +96,7 @@ public class FaultDetectionTest {
 
         AlarmConfig config = new AlarmConfig("cfg-act", null, "validate_order",
                 ProcessEvent.EventType.PROCESS_FAILED, AlarmSyndrome.HARD_ERROR, 0, null,
-                AlarmSeverity.WARN, "Validation failed");
+                AlarmSeverity.WARN, "Validation failed", AlarmOrigin.EXPLICIT);
 
         assertNotNull(evalHard(config, SAMPLE_EVENT));
 
@@ -114,7 +114,7 @@ public class FaultDetectionTest {
 
         AlarmConfig config = new AlarmConfig("cfg-count", "order-proc", "validate_order",
                 ProcessEvent.EventType.PROCESS_FAILED, AlarmSyndrome.COUNTED, 3, null,
-                AlarmSeverity.CRITICAL, "Too many failures: ${count}");
+                AlarmSeverity.CRITICAL, "Too many failures: ${count}", AlarmOrigin.EXPLICIT);
 
         Map<String, Integer> countsStore = new HashMap<>();
         Map<String, Integer> lastAlarmStore = new HashMap<>();
@@ -148,7 +148,7 @@ public class FaultDetectionTest {
 
         AlarmConfig config = new AlarmConfig("cfg-rearm", null, null,
                 ProcessEvent.EventType.PROCESS_FAILED, AlarmSyndrome.COUNTED, 2, null,
-                AlarmSeverity.WARN, "${count} faults");
+                AlarmSeverity.WARN, "${count} faults", AlarmOrigin.EXPLICIT);
 
         Map<String, Integer> countsStore = new HashMap<>();
         Map<String, Integer> lastAlarmStore = new HashMap<>();
@@ -175,7 +175,7 @@ public class FaultDetectionTest {
 
         AlarmConfig config = new AlarmConfig("cfg-window", null, null,
                 ProcessEvent.EventType.PROCESS_FAILED, AlarmSyndrome.SLIDING_WINDOW, 2,
-                Duration.ofSeconds(60), AlarmSeverity.WARN, "Window count: ${count}");
+                Duration.ofSeconds(60), AlarmSeverity.WARN, "Window count: ${count}", AlarmOrigin.EXPLICIT);
 
         Map<String, String> windowsStore = new HashMap<>();
         Map<String, Integer> lastAlarmStore = new HashMap<>();
@@ -192,7 +192,7 @@ public class FaultDetectionTest {
 
         AlarmConfig config = new AlarmConfig("cfg-prune", null, null,
                 ProcessEvent.EventType.PROCESS_FAILED, AlarmSyndrome.SLIDING_WINDOW, 2,
-                Duration.ofMillis(100), AlarmSeverity.WARN, "Count: ${count}");
+                Duration.ofMillis(100), AlarmSeverity.WARN, "Count: ${count}", AlarmOrigin.EXPLICIT);
 
         Map<String, String> windowsStore = new HashMap<>();
         Map<String, Integer> lastAlarmStore = new HashMap<>();
@@ -216,10 +216,10 @@ public class FaultDetectionTest {
 
         AlarmConfig hard = new AlarmConfig("cfg-multi-hard", null, null,
                 ProcessEvent.EventType.PROCESS_FAILED, AlarmSyndrome.HARD_ERROR, 0, null,
-                AlarmSeverity.CRITICAL, "Hard fault");
+                AlarmSeverity.CRITICAL, "Hard fault", AlarmOrigin.EXPLICIT);
         AlarmConfig count = new AlarmConfig("cfg-multi-count", null, null,
                 ProcessEvent.EventType.PROCESS_FAILED, AlarmSyndrome.COUNTED, 2, null,
-                AlarmSeverity.WARN, "Counted fault: ${count}");
+                AlarmSeverity.WARN, "Counted fault: ${count}", AlarmOrigin.EXPLICIT);
 
         // Both match the sample event
         assertNotNull(evalHard(hard, SAMPLE_EVENT));
@@ -233,7 +233,7 @@ public class FaultDetectionTest {
 
         AlarmConfig config = new AlarmConfig("cfg-esc", null, null,
                 ProcessEvent.EventType.ACTIVITY_ESCALATED, AlarmSyndrome.HARD_ERROR, 0, null,
-                AlarmSeverity.WARN, "Escalation in ${processId}");
+                AlarmSeverity.WARN, "Escalation in ${processId}", AlarmOrigin.EXPLICIT);
 
         AlarmEvent alarm = evalHard(config, ESCALATED_EVENT);
         assertNotNull(alarm);
@@ -260,17 +260,183 @@ public class FaultDetectionTest {
     public void shouldRejectSlidingWindowWithoutDuration() {
         System.out.println("TC: SLIDING_WINDOW config without windowDuration throws");
         new AlarmConfig("bad", null, null, ProcessEvent.EventType.PROCESS_FAILED,
-                AlarmSyndrome.SLIDING_WINDOW, 5, null, AlarmSeverity.WARN, "bad");
+                AlarmSyndrome.SLIDING_WINDOW, 5, null, AlarmSeverity.WARN, "bad", AlarmOrigin.EXPLICIT);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldRejectCountedWithoutThreshold() {
         System.out.println("TC: COUNTED config without threshold throws");
         new AlarmConfig("bad", null, null, ProcessEvent.EventType.PROCESS_FAILED,
-                AlarmSyndrome.COUNTED, 0, null, AlarmSeverity.WARN, "bad");
+                AlarmSyndrome.COUNTED, 0, null, AlarmSeverity.WARN, "bad", AlarmOrigin.EXPLICIT);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldRejectStuckWithoutWindow() {
+        System.out.println("TC: STUCK config without windowDuration (idle timeout) throws");
+        new AlarmConfig("bad-stuck", null, null, null, AlarmSyndrome.STUCK,
+                0, null, AlarmSeverity.WARN, "bad", AlarmOrigin.AUTOMATIC);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldRejectCascadeWithoutThreshold() {
+        System.out.println("TC: CASCADE config without threshold throws");
+        new AlarmConfig("bad-cascade", null, null, null, AlarmSyndrome.CASCADE,
+                0, Duration.ofSeconds(60), AlarmSeverity.CRITICAL, "bad", AlarmOrigin.AUTOMATIC);
+    }
+
+    @Test
+    public void shouldRecordOriginLayer() {
+        System.out.println("TC: AlarmConfig retains its provenance layer (EXPLICIT / AUTOMATIC)");
+        AlarmConfig explicit = new AlarmConfig("x", null, null, ProcessEvent.EventType.PROCESS_FAILED,
+                AlarmSyndrome.HARD_ERROR, 0, null, AlarmSeverity.WARN, "m", AlarmOrigin.EXPLICIT);
+        assertEquals(AlarmOrigin.EXPLICIT, explicit.origin());
+
+        AlarmConfig auto = new AlarmConfig("y", null, null, null, AlarmSyndrome.STUCK,
+                0, Duration.ofSeconds(10), AlarmSeverity.WARN, "m", AlarmOrigin.AUTOMATIC);
+        assertEquals(AlarmOrigin.AUTOMATIC, auto.origin());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldRejectNullOrigin() {
+        System.out.println("TC: AlarmConfig requires an explicit origin layer");
+        new AlarmConfig("no-origin", null, null, ProcessEvent.EventType.PROCESS_FAILED,
+                AlarmSyndrome.HARD_ERROR, 0, null, AlarmSeverity.WARN, "m", null);
+    }
+
+    // ---- stuck / cascade (automatic layer) ----
+
+    @Test
+    public void shouldBuildStuckAlarmWithRenderedMessage() {
+        System.out.println("TC: STUCK alarm renders instance/activity/idle context");
+        AlarmConfig config = new AlarmConfig("builtin:stuck", null, null, null, AlarmSyndrome.STUCK,
+                0, Duration.ofSeconds(120), AlarmSeverity.WARN,
+                "Stuck ${processInstanceId} in ${processId}/${activityId} for ${idleSeconds}s",
+                AlarmOrigin.AUTOMATIC);
+
+        AlarmEvent alarm = FaultDetectionTopology.newStuckAlarm(config, "order-proc", "pi-9",
+                "validate_order", ProcessEvent.EventType.ACTIVITY_ESCALATED,
+                Instant.now().toString(), 240);
+
+        assertNotNull(alarm);
+        assertEquals(AlarmSyndrome.STUCK, alarm.syndrome());
+        assertEquals("builtin:stuck", alarm.configId());
+        assertEquals("order-proc", alarm.processId());
+        assertEquals("pi-9", alarm.processInstanceId());
+        assertEquals("validate_order", alarm.activityId());
+        assertEquals(ProcessEvent.EventType.ACTIVITY_ESCALATED, alarm.triggerEventType());
+        assertEquals(240, alarm.count());
+        assertEquals(120, alarm.threshold());
+        assertEquals("Stuck pi-9 in order-proc/validate_order for 240s", alarm.message());
+    }
+
+    @Test
+    public void shouldFireCascadeWhenStuckOnsetsExceedThreshold() {
+        System.out.println("TC: CASCADE fires once when stuck onsets in window exceed threshold");
+        AlarmConfig config = new AlarmConfig("builtin:cascade", null, null, null, AlarmSyndrome.CASCADE,
+                3, Duration.ofSeconds(60), AlarmSeverity.CRITICAL,
+                "Cascade: ${count} stuck (threshold ${threshold})", AlarmOrigin.AUTOMATIC);
+
+        Map<String, String> windows = new HashMap<>();
+        Map<String, Integer> lastAlarm = new HashMap<>();
+        long nowMs = 1_000_000_000L;
+        String now = Instant.now().toString();
+
+        assertNull(cascade(config, now, nowMs, windows, lastAlarm));   // 1
+        assertNull(cascade(config, now, nowMs, windows, lastAlarm));   // 2
+        assertNull(cascade(config, now, nowMs, windows, lastAlarm));   // 3 == threshold
+        AlarmEvent alarm = cascade(config, now, nowMs, windows, lastAlarm); // 4 > threshold
+        assertNotNull(alarm);
+        assertEquals(AlarmSyndrome.CASCADE, alarm.syndrome());
+        assertEquals("*", alarm.processId());
+        assertNull(alarm.triggerEventType());
+        assertEquals(4, alarm.count());
+        assertEquals("Cascade: 4 stuck (threshold 3)", alarm.message());
+
+        assertNull(cascade(config, now, nowMs, windows, lastAlarm));   // 5 suppressed
+    }
+
+    @Test
+    public void shouldReArmCascadeAfterWindowPrunes() {
+        System.out.println("TC: CASCADE re-arms after onsets age out of the window");
+        AlarmConfig config = new AlarmConfig("builtin:cascade", null, null, null, AlarmSyndrome.CASCADE,
+                2, Duration.ofSeconds(60), AlarmSeverity.CRITICAL, "Cascade ${count}", AlarmOrigin.AUTOMATIC);
+
+        Map<String, String> windows = new HashMap<>();
+        Map<String, Integer> lastAlarm = new HashMap<>();
+        long nowMs = 5_000_000_000L;
+        String now = Instant.now().toString();
+
+        cascade(config, now, nowMs, windows, lastAlarm);
+        cascade(config, now, nowMs, windows, lastAlarm);
+        assertNotNull(cascade(config, now, nowMs, windows, lastAlarm)); // fired
+        assertNotNull(lastAlarm.get(FaultDetectionTopology.cascadeAlarmKey(config)));
+
+        FaultDetectionTopology.maintainCascade(config, nowMs + 120_000L,
+                new MapKVStore<>(windows), new MapKVStore<>(lastAlarm));
+        assertNull(lastAlarm.get(FaultDetectionTopology.cascadeAlarmKey(config)));
+    }
+
+    @Test
+    public void shouldTreatOnlyProcessTerminalsAsTerminal() {
+        System.out.println("TC: only PROCESS_COMPLETED / PROCESS_FAILED end stall tracking");
+        assertTrue(FaultDetectionTopology.isTerminal(ProcessEvent.EventType.PROCESS_COMPLETED));
+        assertTrue(FaultDetectionTopology.isTerminal(ProcessEvent.EventType.PROCESS_FAILED));
+        assertFalse(FaultDetectionTopology.isTerminal(ProcessEvent.EventType.ACTIVITY_ESCALATED));
+        assertFalse(FaultDetectionTopology.isTerminal(ProcessEvent.EventType.ACTIVITY_ENTERED));
+    }
+
+    @Test
+    public void shouldBuildTopologyWithBuiltInStuckAndCascade() {
+        System.out.println("TC: fault detection topology builds with automatic stuck + cascade configs");
+        AlarmConfig stuck = new AlarmConfig("builtin:stuck", null, null, null, AlarmSyndrome.STUCK,
+                0, Duration.ofSeconds(120), AlarmSeverity.WARN, "stuck", AlarmOrigin.AUTOMATIC);
+        AlarmConfig cascade = new AlarmConfig("builtin:cascade", null, null, null, AlarmSyndrome.CASCADE,
+                5, Duration.ofSeconds(60), AlarmSeverity.CRITICAL, "cascade", AlarmOrigin.AUTOMATIC);
+
+        org.apache.kafka.streams.Topology topology = FaultDetectionTopology.buildTopology(
+                Set.of(stuck, cascade),
+                FaultDetectionTopology.DEFAULT_EVENTS_PATTERN,
+                FaultDetectionTopology.DEFAULT_ALARMS_TOPIC,
+                FaultDetectionTopology.DEFAULT_MODELS_TOPIC);
+
+        assertTrue(topology.describe().toString().contains(FaultDetectionTopology.DEFAULT_ALARMS_TOPIC));
+    }
+
+    @Test
+    public void shouldScopeCascadeAlarmToProcessWhenConfigured() {
+        System.out.println("TC: per-process CASCADE alarm carries the process scope, not the system wildcard");
+        AlarmConfig config = new AlarmConfig("pipeline:surge", "pipeline", null, null, AlarmSyndrome.CASCADE,
+                4, Duration.ofSeconds(30), AlarmSeverity.CRITICAL,
+                "${count} instances stalled in ${processId}", AlarmOrigin.EXPLICIT);
+
+        AlarmEvent alarm = FaultDetectionTopology.newCascadeAlarm(config, Instant.now().toString(), 5);
+        assertEquals("pipeline", alarm.processId());
+        assertEquals("pipeline:surge", alarm.configId());
+        assertEquals("5 instances stalled in pipeline", alarm.message());
+    }
+
+    @Test
+    public void shouldKeepCascadeWindowsIsolatedPerConfig() {
+        System.out.println("TC: built-in and per-process cascade configs use distinct window/alarm keys");
+        AlarmConfig builtin = new AlarmConfig("builtin:cascade", null, null, null, AlarmSyndrome.CASCADE,
+                5, Duration.ofSeconds(60), AlarmSeverity.CRITICAL, "c", AlarmOrigin.AUTOMATIC);
+        AlarmConfig perProcess = new AlarmConfig("pipeline:surge", "pipeline", null, null, AlarmSyndrome.CASCADE,
+                4, Duration.ofSeconds(30), AlarmSeverity.CRITICAL, "c", AlarmOrigin.EXPLICIT);
+
+        assertNotEquals(FaultDetectionTopology.cascadeAlarmKey(builtin),
+                FaultDetectionTopology.cascadeAlarmKey(perProcess));
+        assertNotEquals(FaultDetectionTopology.cascadeOnsetKey(builtin),
+                FaultDetectionTopology.cascadeOnsetKey(perProcess));
     }
 
     // ---- helpers ----
+
+    private static AlarmEvent cascade(AlarmConfig config, String now, long nowMs,
+                                       Map<String, String> windowsStore,
+                                       Map<String, Integer> lastAlarmStore) {
+        return FaultDetectionTopology.recordCascadeOnset(config, now, nowMs,
+                new MapKVStore<>(windowsStore), new MapKVStore<>(lastAlarmStore));
+    }
 
     private static AlarmEvent evalHard(AlarmConfig config, ProcessEvent event) {
         if (event.eventType() != config.eventType()) return null;

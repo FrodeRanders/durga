@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -77,7 +78,7 @@ public final class ProcessMonitoringApp {
                 System.getProperty("durga.fault.streams.state.dir", "target/kafka-streams-fault-state"));
         KafkaStreams faultStreams = new KafkaStreams(
                 FaultDetectionTopology.buildTopology(
-                        Set.of(),
+                        builtInAlarmConfigs(),
                         FaultDetectionTopology.DEFAULT_EVENTS_PATTERN,
                         FaultDetectionTopology.DEFAULT_ALARMS_TOPIC,
                         topics.modelsTopic()),
@@ -184,5 +185,64 @@ public final class ProcessMonitoringApp {
 
     private static String bootstrapServersDefault() {
         return System.getProperty("kafka.bootstrap.servers", "localhost:9094");
+    }
+
+    /**
+     * Automatic (always-on) alarm layer owned by the monitor itself. These apply to every
+     * process with no per-process configuration and catch conditions no process opts into —
+     * notably stalled instances and system-wide stall cascades. Tunable via system properties:
+     * <ul>
+     *   <li>{@code durga.alarm.stuck.enabled} (default true)</li>
+     *   <li>{@code durga.alarm.stuck.timeoutSeconds} (default 120)</li>
+     *   <li>{@code durga.alarm.stuck.severity} (default WARN)</li>
+     *   <li>{@code durga.alarm.cascade.enabled} (default true)</li>
+     *   <li>{@code durga.alarm.cascade.windowSeconds} (default 60)</li>
+     *   <li>{@code durga.alarm.cascade.threshold} (default 5)</li>
+     *   <li>{@code durga.alarm.cascade.severity} (default CRITICAL)</li>
+     * </ul>
+     */
+    static Set<AlarmConfig> builtInAlarmConfigs() {
+        Set<AlarmConfig> configs = new HashSet<>();
+        if (boolProp("durga.alarm.stuck.enabled", true)) {
+            int timeoutSeconds = intProp("durga.alarm.stuck.timeoutSeconds", 120);
+            configs.add(new AlarmConfig(
+                    "builtin:stuck", null, null, null, AlarmSyndrome.STUCK,
+                    0, Duration.ofSeconds(timeoutSeconds),
+                    severityProp("durga.alarm.stuck.severity", AlarmSeverity.WARN),
+                    "Instance ${processInstanceId} of ${processId} stuck in '${activityId}' "
+                            + "for ${idleSeconds}s with no progress",
+                    AlarmOrigin.AUTOMATIC));
+        }
+        if (boolProp("durga.alarm.cascade.enabled", true)) {
+            int windowSeconds = intProp("durga.alarm.cascade.windowSeconds", 60);
+            int threshold = intProp("durga.alarm.cascade.threshold", 5);
+            configs.add(new AlarmConfig(
+                    "builtin:cascade", null, null, null, AlarmSyndrome.CASCADE,
+                    threshold, Duration.ofSeconds(windowSeconds),
+                    severityProp("durga.alarm.cascade.severity", AlarmSeverity.CRITICAL),
+                    "Cascade: ${count} instances became stuck within a " + windowSeconds
+                            + "s window (threshold ${threshold})",
+                    AlarmOrigin.AUTOMATIC));
+        }
+        LOG.info("Built-in automatic alarm configs: {}", configs.stream().map(AlarmConfig::id).toList());
+        return configs;
+    }
+
+    private static boolean boolProp(String key, boolean fallback) {
+        String v = System.getProperty(key);
+        return v != null ? Boolean.parseBoolean(v) : fallback;
+    }
+
+    private static int intProp(String key, int fallback) {
+        String v = System.getProperty(key);
+        if (v == null) return fallback;
+        try { return Integer.parseInt(v); } catch (NumberFormatException e) { return fallback; }
+    }
+
+    private static AlarmSeverity severityProp(String key, AlarmSeverity fallback) {
+        String v = System.getProperty(key);
+        if (v == null) return fallback;
+        try { return AlarmSeverity.valueOf(v.trim().toUpperCase(java.util.Locale.ROOT)); }
+        catch (IllegalArgumentException e) { return fallback; }
     }
 }

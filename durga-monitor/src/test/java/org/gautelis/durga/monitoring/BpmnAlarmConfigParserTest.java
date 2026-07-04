@@ -233,4 +233,78 @@ public class BpmnAlarmConfigParserTest {
         List<AlarmConfig> configs = BpmnAlarmConfigParser.parse(bpmn);
         assertTrue(configs.isEmpty());
     }
+
+    @Test
+    public void shouldParseStuckAlarmWithoutEventType() {
+        System.out.println("TC: parses activity-level STUCK alarm (no eventType, windowSeconds = idle timeout)");
+
+        String bpmn = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                                  targetNamespace="http://example.com">
+                  <bpmn:process id="order_proc" isExecutable="true">
+                    <bpmn:serviceTask id="await_payment">
+                      <bpmn:extensionElements>
+                        <camunda:properties>
+                          <camunda:property name="durga:alarm:idle:syndrome" value="STUCK" />
+                          <camunda:property name="durga:alarm:idle:windowSeconds" value="45" />
+                          <camunda:property name="durga:alarm:idle:severity" value="WARN" />
+                          <camunda:property name="durga:alarm:idle:message" value="${processInstanceId} idle in ${activityId}" />
+                        </camunda:properties>
+                      </bpmn:extensionElements>
+                    </bpmn:serviceTask>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        List<AlarmConfig> configs = BpmnAlarmConfigParser.parse(bpmn);
+        assertEquals(1, configs.size());
+
+        AlarmConfig c = configs.get(0);
+        assertEquals("order_proc:idle", c.id());
+        assertEquals("await_payment", c.activityId());
+        assertEquals(AlarmSyndrome.STUCK, c.syndrome());
+        assertNull(c.eventType());
+        assertEquals(Duration.ofSeconds(45), c.windowDuration());
+        assertEquals(AlarmOrigin.EXPLICIT, c.origin());
+    }
+
+    @Test
+    public void shouldParseCascadeAggregateAlarm() {
+        System.out.println("TC: parses process-level aggregate ($) CASCADE alarm");
+
+        String bpmn = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                                  targetNamespace="http://example.com">
+                  <bpmn:process id="pipeline" isExecutable="true">
+                    <bpmn:extensionElements>
+                      <camunda:properties>
+                        <camunda:property name="durga:alarm:$surge:syndrome" value="CASCADE" />
+                        <camunda:property name="durga:alarm:$surge:threshold" value="4" />
+                        <camunda:property name="durga:alarm:$surge:windowSeconds" value="30" />
+                        <camunda:property name="durga:alarm:$surge:severity" value="CRITICAL" />
+                        <camunda:property name="durga:alarm:$surge:message" value="${count} instances stalled in ${processId}" />
+                      </camunda:properties>
+                    </bpmn:extensionElements>
+                    <bpmn:serviceTask id="task_x" />
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        List<AlarmConfig> configs = BpmnAlarmConfigParser.parse(bpmn);
+        assertEquals(1, configs.size());
+
+        AlarmConfig c = configs.get(0);
+        assertEquals("pipeline:surge", c.id());
+        assertEquals("pipeline", c.processId());
+        assertNull(c.activityId());
+        assertNull(c.eventType());
+        assertEquals(AlarmSyndrome.CASCADE, c.syndrome());
+        assertEquals(4, c.threshold());
+        assertEquals(Duration.ofSeconds(30), c.windowDuration());
+        assertEquals(AlarmSeverity.CRITICAL, c.severity());
+    }
 }

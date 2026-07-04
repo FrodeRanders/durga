@@ -58,4 +58,12 @@ public class FormatDetectorTest {
         assertNotNull(result.get("payloadFormat"));
         assertNull(result.get("format"));
     }
+
+    @Test
+    public void shouldDeclarePassthroughDisposition() throws Exception {
+        System.out.println("TC: inspection result is PASSTHROUGH so the original payload is preserved downstream");
+        Plugin plugin = new FormatDetector();
+        PluginResult result = plugin.executeWithResult(Plugin.toBytes("{\"order_id\":7}"), ".");
+        assertEquals(PluginResult.OutputDisposition.PASSTHROUGH, result.disposition());
+    }
 }

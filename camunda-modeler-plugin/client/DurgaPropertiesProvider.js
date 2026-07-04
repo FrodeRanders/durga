@@ -29,10 +29,13 @@ var SYNDROME_OPTIONS = [
   { value: '', label: '<none>' },
   { value: 'HARD_ERROR', label: 'Hard Error (immediate)' },
   { value: 'COUNTED', label: 'Counted (threshold)' },
-  { value: 'SLIDING_WINDOW', label: 'Sliding Window (time-bound)' }
+  { value: 'SLIDING_WINDOW', label: 'Sliding Window (time-bound)' },
+  { value: 'STUCK', label: 'Stuck (idle timeout)' },
+  { value: 'CASCADE', label: 'Cascade (stall surge)' }
 ];
 
 var EVENT_TYPE_OPTIONS = [
+  { value: '', label: '<none / not applicable>' },
   { value: 'PROCESS_FAILED', label: 'PROCESS_FAILED' },
   { value: 'ACTIVITY_ESCALATED', label: 'ACTIVITY_ESCALATED' },
   { value: 'ACTIVITY_CANCELLED', label: 'ACTIVITY_CANCELLED' },
@@ -331,7 +334,7 @@ function createAlarmGroup(element, commandStack, bpmnFactory) {
     createAlarmField(element, 'validate-escalation:syndrome', 'Syndrome', SYNDROME_OPTIONS, commandStack, bpmnFactory),
     createAlarmField(element, 'validate-escalation:eventType', 'Event Type', EVENT_TYPE_OPTIONS, commandStack, bpmnFactory),
     createAlarmField(element, 'validate-escalation:threshold', 'Threshold (count)', null, commandStack, bpmnFactory),
-    createAlarmField(element, 'validate-escalation:windowSeconds', 'Window (seconds)', null, commandStack, bpmnFactory),
+    createAlarmField(element, 'validate-escalation:windowSeconds', 'Window / idle timeout (s)', null, commandStack, bpmnFactory),
     createAlarmField(element, 'validate-escalation:severity', 'Severity', SEVERITY_OPTIONS, commandStack, bpmnFactory),
     createAlarmField(element, 'validate-escalation:message', 'Message template', null, commandStack, bpmnFactory)
   ], hasAlarmProps(element));
@@ -342,12 +345,13 @@ function createProcessAlarmGroup(element, commandStack, bpmnFactory) {
     createAlarmField(element, '*default:syndrome', 'Inherited Syndrome', SYNDROME_OPTIONS, commandStack, bpmnFactory),
     createAlarmField(element, '*default:eventType', 'Inherited Event Type', EVENT_TYPE_OPTIONS, commandStack, bpmnFactory),
     createAlarmField(element, '*default:threshold', 'Inherited Threshold', null, commandStack, bpmnFactory),
+    createAlarmField(element, '*default:windowSeconds', 'Inherited Window / idle timeout (s)', null, commandStack, bpmnFactory),
     createAlarmField(element, '*default:severity', 'Inherited Severity', SEVERITY_OPTIONS, commandStack, bpmnFactory),
     createAlarmField(element, '*default:message', 'Inherited Message', null, commandStack, bpmnFactory),
     createAlarmField(element, '$burst:syndrome', 'Aggregate Syndrome', SYNDROME_OPTIONS, commandStack, bpmnFactory),
     createAlarmField(element, '$burst:eventType', 'Aggregate Event Type', EVENT_TYPE_OPTIONS, commandStack, bpmnFactory),
     createAlarmField(element, '$burst:threshold', 'Aggregate Threshold', null, commandStack, bpmnFactory),
-    createAlarmField(element, '$burst:windowSeconds', 'Aggr. Window (sec)', null, commandStack, bpmnFactory),
+    createAlarmField(element, '$burst:windowSeconds', 'Aggr. window / timeout (s)', null, commandStack, bpmnFactory),
     createAlarmField(element, '$burst:severity', 'Aggregate Severity', SEVERITY_OPTIONS, commandStack, bpmnFactory),
     createAlarmField(element, '$burst:message', 'Aggregate Message', null, commandStack, bpmnFactory)
   ], hasAlarmProps(element));
