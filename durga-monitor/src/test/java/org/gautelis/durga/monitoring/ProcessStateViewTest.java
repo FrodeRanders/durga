@@ -84,6 +84,8 @@ public class ProcessStateViewTest {
         assertEquals("failed", state.lifecycleState());
         assertEquals(1, state.retryCount());
         assertEquals("TASK_FAILED", state.lastErrorCode());
+        assertEquals("invoice_receipt:failed", state.currentStateKey());
+        assertEquals("review_invoice", state.currentActivityId());
     }
 
     @Test
@@ -111,6 +113,7 @@ public class ProcessStateViewTest {
 
         assertEquals("cancelled", state.lifecycleState());
         assertTrue(state.activityDurationsMs().containsKey("validate_order"));
+        assertEquals("order_proc:cancelled", state.currentStateKey());
     }
 
     @Test

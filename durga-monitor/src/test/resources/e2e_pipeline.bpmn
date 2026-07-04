@@ -58,7 +58,7 @@
       <bpmn:extensionElements>
         <camunda:properties>
           <camunda:property name="plugin" value="kv-enricher" />
-          <camunda:property name="pluginConfig" value="keyField=customer_email;inline={alice@example.com:{tier:gold,rep:Alice}, bob@example.com:{tier:silver,rep:Bob}, carol@example.com:{tier:gold,rep:Carol}}" />
+          <camunda:property name="pluginConfig" value="keyField=customer_email;inline={alice@example.com:{&quot;tier&quot;:&quot;gold&quot;,&quot;rep&quot;:&quot;Alice&quot;}, bob@example.com:{&quot;tier&quot;:&quot;silver&quot;,&quot;rep&quot;:&quot;Bob&quot;}, carol@example.com:{&quot;tier&quot;:&quot;gold&quot;,&quot;rep&quot;:&quot;Carol&quot;}}" />
         </camunda:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_route_to_enrich</bpmn:incoming>

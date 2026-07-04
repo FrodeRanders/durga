@@ -63,6 +63,30 @@ public class KvEnricherTest {
         assertEquals("{\"id\":\"001\",\"amount\":100,\"name\":\"Alice\"}", Plugin.toString(result));
     }
 
+    @Test
+    public void shouldParseInlineValuesContainingCommas() throws Exception {
+        System.out.println("TC: brace-aware inline parsing keeps multi-field enrichment objects intact");
+        Plugin plugin = new KvEnricher();
+        byte[] result = plugin.execute(
+                Plugin.toBytes("{\"customer_email\":\"bob@example.com\",\"amount\":900}"),
+                "keyField=customer_email;inline={alice@example.com:{\"tier\":\"gold\",\"rep\":\"Alice\"}, "
+                        + "bob@example.com:{\"tier\":\"silver\",\"rep\":\"Bob\"}}");
+        String out = Plugin.toString(result);
+        assertTrue(out.contains("\"tier\":\"silver\""));
+        assertTrue(out.contains("\"rep\":\"Bob\""));
+        assertTrue(out.contains("\"amount\":900"));
+    }
+
+    @Test
+    public void shouldParseInlineMapRespectingBraceDepth() {
+        System.out.println("TC: parseInlineMap splits entries only at top-level commas");
+        Map<String, String> map = KvEnricher.parseInlineMap(
+                "a:{\"x\":1,\"y\":2}, b:{\"z\":3}");
+        assertEquals(2, map.size());
+        assertEquals("{\"x\":1,\"y\":2}", map.get("a"));
+        assertEquals("{\"z\":3}", map.get("b"));
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnInvalidInputJson() {
         System.out.println("TC: throws IllegalArgumentException when input payload is invalid JSON");

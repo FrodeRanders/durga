@@ -38,14 +38,7 @@ public final class KvEnricher implements Plugin {
                     case "keyField" -> keyField = val;
                     case "inline" -> {
                         if (val.startsWith("{") && val.endsWith("}")) {
-                            val = val.substring(1, val.length() - 1);
-                            for (String pair : val.split("\\s*,\\s*")) {
-                                int colon = pair.indexOf(':');
-                                if (colon > 0) {
-                                    inline.put(pair.substring(0, colon).trim(),
-                                            pair.substring(colon + 1).trim());
-                                }
-                            }
+                            inline.putAll(parseInlineMap(val.substring(1, val.length() - 1)));
                         }
                     }
                 }
@@ -53,6 +46,56 @@ public final class KvEnricher implements Plugin {
         }
         KvEnricher enricher = new KvEnricher(keyField, inline);
         return enricher.enrich(payload);
+    }
+
+    /**
+     * Parses the inline map body ({@code key:{json}, key:{json}}) into a map of key to raw
+     * enrichment JSON. Splitting is brace/bracket/quote aware, so commas and colons inside a
+     * value's JSON object do not break the entry boundaries.
+     */
+    static Map<String, String> parseInlineMap(String body) {
+        Map<String, String> map = new java.util.LinkedHashMap<>();
+        int depth = 0;
+        boolean inString = false;
+        char quote = 0;
+        int entryStart = 0;
+        int colon = -1;
+        for (int i = 0; i < body.length(); i++) {
+            char c = body.charAt(i);
+            if (inString) {
+                if (c == quote && (i == 0 || body.charAt(i - 1) != '\\')) {
+                    inString = false;
+                }
+                continue;
+            }
+            switch (c) {
+                case '"', '\'' -> { inString = true; quote = c; }
+                case '{', '[' -> depth++;
+                case '}', ']' -> depth--;
+                case ':' -> { if (depth == 0 && colon < 0) colon = i; }
+                case ',' -> {
+                    if (depth == 0) {
+                        addInlineEntry(map, body, entryStart, colon, i);
+                        entryStart = i + 1;
+                        colon = -1;
+                    }
+                }
+                default -> { }
+            }
+        }
+        addInlineEntry(map, body, entryStart, colon, body.length());
+        return map;
+    }
+
+    private static void addInlineEntry(Map<String, String> map, String body, int start, int colon, int end) {
+        if (colon < 0 || colon <= start) {
+            return;
+        }
+        String key = body.substring(start, colon).trim();
+        String value = body.substring(colon + 1, end).trim();
+        if (!key.isEmpty() && !value.isEmpty()) {
+            map.put(key, value);
+        }
     }
 
     private final String keyField;

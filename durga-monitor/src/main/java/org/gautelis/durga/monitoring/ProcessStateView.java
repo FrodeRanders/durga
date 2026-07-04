@@ -129,10 +129,26 @@ public record ProcessStateView(
      */
     public String currentStateKey() {
         String pid = processId != null && !processId.isBlank() ? processId : "unknown";
-        String state = currentActivityId != null && !currentActivityId.isBlank()
-                ? currentActivityId
-                : lifecycleState != null && !lifecycleState.isBlank() ? lifecycleState : UNKNOWN_STATE;
+        String state;
+        if (isTerminalLifecycle(lifecycleState)) {
+            // Terminal instances count by their lifecycle outcome (completed/failed/cancelled),
+            // not by the activity they last touched — otherwise failures hide inside the
+            // activity's active count.
+            state = lifecycleState;
+        } else if (currentActivityId != null && !currentActivityId.isBlank()) {
+            state = currentActivityId;
+        } else if (lifecycleState != null && !lifecycleState.isBlank()) {
+            state = lifecycleState;
+        } else {
+            state = UNKNOWN_STATE;
+        }
         return pid + ":" + state;
+    }
+
+    private static boolean isTerminalLifecycle(String lifecycleState) {
+        return "completed".equals(lifecycleState)
+                || "failed".equals(lifecycleState)
+                || "cancelled".equals(lifecycleState);
     }
 
     private static void recordDuration(

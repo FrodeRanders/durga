@@ -65,7 +65,7 @@ final class TaskRoutingGenerator {
             }
             if (task.pluginRef != null) {
                 worker.add("pluginRef", task.pluginRef);
-                worker.add("pluginConfig", task.pluginConfig != null ? task.pluginConfig : ".");
+                worker.add("pluginConfig", escapeJava(task.pluginConfig != null ? task.pluginConfig : "."));
                 worker.add("pluginImplClass", task.pluginImplClass);
                 String cat = task.pluginCategory != null ? task.pluginCategory : "";
                 worker.add("category", cat);
@@ -161,7 +161,7 @@ final class TaskRoutingGenerator {
             worker.add("taskId", task.name);
             worker.add("inputChannel", computeTaskInputChannel(processId, nodes, task.id));
             worker.add("taskType", task.kind.bpmnType);
-            worker.add("pluginConfig", task.pluginConfig != null ? task.pluginConfig : ".");
+            worker.add("pluginConfig", escapeJava(task.pluginConfig != null ? task.pluginConfig : "."));
             worker.add("customImpl", task.customImpl != null ? task.customImpl : "");
             worker.add("customHash", task.customHash != null ? task.customHash : "");
             addLineageToTemplate(worker, taskLineage, task.name);
