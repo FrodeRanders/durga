@@ -115,7 +115,7 @@
                             <scripts>
                                 <script><![CDATA[
 import org.stringtemplate.v4.STGroupString
-def base = new File(project.basedir, "src/main/resources/templates")
+def base = new File(project.basedir, "src/main/resources/templates-java")
 def files = ["scaffold.stg", "scaffold-events.stg", "scaffold-subprocess.stg",
              "scaffold-generated-project.stg", "scaffold-connect.stg"]
 def sb = new StringBuilder()

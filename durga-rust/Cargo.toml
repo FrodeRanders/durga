@@ -1,0 +1,14 @@
+[package]
+name = "durga-rust"
+version = "0.1.0-beta.1"
+edition = "2021"
+description = "Durga runtime plugin contracts and implementations for the Rust code-generation target"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+hex = "0.4"
+
+[dev-dependencies]

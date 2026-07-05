@@ -1771,11 +1771,11 @@ public class BpmnScaffolder {
 
     private static String loadTemplates() {
         return loadTemplateResources(
-                "/templates/scaffold.stg",
-                "/templates/scaffold-events.stg",
-                "/templates/scaffold-subprocess.stg",
-                "/templates/scaffold-generated-project.stg",
-                "/templates/scaffold-connect.stg"
+                "/templates-java/scaffold.stg",
+                "/templates-java/scaffold-events.stg",
+                "/templates-java/scaffold-subprocess.stg",
+                "/templates-java/scaffold-generated-project.stg",
+                "/templates-java/scaffold-connect.stg"
         );
     }
 

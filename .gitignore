@@ -27,3 +27,6 @@ monitoring-ui/dist/
 generated/
 tmp/
 .e2e-*
+
+# Rust build output
+durga-rust/target/
