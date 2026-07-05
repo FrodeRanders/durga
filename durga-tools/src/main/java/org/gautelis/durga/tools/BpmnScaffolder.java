@@ -223,6 +223,14 @@ public class BpmnScaffolder {
                     .add(flowInfo(flow));
         }
 
+        // Rust code-generation target: from the same extracted model, render a Cargo
+        // project whose workers depend on the durga-rust plugin crate. This is a distinct
+        // generation path from the Java target below.
+        if ("rust".equals(parsed.target)) {
+            RustTargetGenerator.generate(parsed, processId, outputRoot, taskSpecs, nodes, flowsBySource);
+            return;
+        }
+
         // Load every template group up front so the rest of main can stay focused on
         // "what gets generated" rather than on ST4 plumbing.
         STGroupString group = new STGroupString(loadTemplates());

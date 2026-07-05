@@ -13,9 +13,11 @@ pub mod expr;
 pub mod pipeline;
 pub mod plugin;
 pub mod result;
+pub mod worker;
 pub mod plugins;
 
 pub use event::{ErrorInfo, EventType, ProcessEvent, Status};
 pub use expr::eval_condition;
 pub use plugin::{default_idempotency_key, Plugin, PluginError};
 pub use result::{ErrorStrategy, OutputDisposition, PluginResult};
+pub use worker::{plan_worker_output, Category, WorkerPlan};

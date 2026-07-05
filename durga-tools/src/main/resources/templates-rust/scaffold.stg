@@ -1,0 +1,226 @@
+group scaffold_rust;
+delimiters "%", "%"
+
+cargoToml(processId, crateName, durgaRustPath) ::= <<
+[package]
+name = "%crateName%"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+durga-rust = { path = "%durgaRustPath%" }
+serde_json = "1"
+rdkafka = { version = "0.36", features = ["cmake-build"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+# One binary is generated per BPMN task / gateway under src/bin/.
+>>
+
+readmeMd(processId, crateName) ::= <<
+# %processId% (Rust target)
+
+Generated Rust workers for the `%processId%` process. Each BPMN task and
+gateway is a separate binary under `src/bin/`, sharing the runtime in
+`src/lib.rs`. Workers depend on the `durga-rust` plugin crate and emit
+`ProcessEvent` lifecycle records to `process-events-%processId%`, which the
+existing Java monitor consumes unchanged.
+
+## Build
+
+Requires a Rust toolchain and, for `rdkafka`, `cmake` + a C toolchain
+(librdkafka is built via the `cmake-build` feature).
+
+```
+cargo build --release
+```
+
+## Run
+
+Set the broker and start each worker (one process per task):
+
+```
+KAFKA_BROKERS=localhost:9094 cargo run --bin transform_order
+```
+
+Feed the pipeline by publishing a `PROCESS_STARTED` `ProcessEvent` to the first
+task's input topic (`%processId%_<firstTask>_in`).
+>>
+
+libRs(processId, eventsTopic) ::= <<
+//! Generated worker runtime for process "%processId%".
+//!
+//! Thin Kafka glue around durga-rust: consume an input topic, run the plugin
+//! (or evaluate gateway conditions), emit lifecycle events, forward the payload.
+
+use std::time::Duration;
+
+use durga_rust::{eval_condition, plan_worker_output, Category, Plugin, ProcessEvent};
+use rdkafka::config::ClientConfig;
+use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
+use rdkafka::message::Message;
+use rdkafka::producer::{FutureProducer, FutureRecord};
+
+pub const EVENTS_TOPIC: &str = "%eventsTopic%";
+
+/// Configuration for a plugin-task worker.
+pub struct PluginWorker {
+    pub group_id: String,
+    pub input_topic: String,
+    pub output_topic: Option<String>,
+    pub dlq_topic: String,
+    pub activity_id: String,
+    pub category: Category,
+    pub plugin_config: String,
+    pub terminal: bool,
+}
+
+/// Configuration for an exclusive-gateway worker. Branches are evaluated in
+/// order; the first with a matching condition (or a `None` default) wins.
+pub struct GatewayWorker {
+    pub group_id: String,
+    pub input_topic: String,
+    pub activity_id: String,
+    pub branches: Vec<(Option<String>, String)>,
+}
+
+fn build_consumer(brokers: &str, group_id: &str, topic: &str) -> StreamConsumer {
+    let consumer: StreamConsumer = ClientConfig::new()
+        .set("bootstrap.servers", brokers)
+        .set("group.id", group_id)
+        .set("enable.auto.commit", "false")
+        .set("auto.offset.reset", "earliest")
+        .create()
+        .expect("consumer creation failed");
+    consumer.subscribe(&[topic]).expect("subscribe failed");
+    consumer
+}
+
+fn build_producer(brokers: &str) -> FutureProducer {
+    ClientConfig::new()
+        .set("bootstrap.servers", brokers)
+        .create()
+        .expect("producer creation failed")
+}
+
+async fn send(producer: &FutureProducer, topic: &str, key: &str, payload: &str) {
+    let record = FutureRecord::to(topic).key(key).payload(payload);
+    if let Err((e, _)) = producer.send(record, Duration::from_secs(5)).await {
+        eprintln!("[durga] send to {topic} failed: {e}");
+    }
+}
+
+/// Runs a plugin task: consume, execute, emit lifecycle, forward or terminate.
+pub async fn run_plugin_worker(brokers: &str, cfg: PluginWorker, plugin: Box<dyn Plugin + Send + Sync>) {
+    let consumer = build_consumer(brokers, &cfg.group_id, &cfg.input_topic);
+    let producer = build_producer(brokers);
+    eprintln!("[durga] {} consuming {}", cfg.activity_id, cfg.input_topic);
+    loop {
+        match consumer.recv().await {
+            Err(e) => eprintln!("[durga] consume error: {e}"),
+            Ok(msg) => {
+                let raw = msg.payload().unwrap_or_default();
+                let text = String::from_utf8_lossy(raw);
+                let Ok(event) = ProcessEvent::from_json(&text) else {
+                    let _ = consumer.commit_message(&msg, CommitMode::Async);
+                    continue;
+                };
+                let payload_bytes = serde_json::to_vec(
+                    &event.payload.clone().unwrap_or(serde_json::json!({})),
+                )
+                .unwrap_or_else(|_| b"{}".to_vec());
+
+                let result = plugin
+                    .execute_with_result(&payload_bytes, &cfg.plugin_config)
+                    .map_err(|e| e.to_string());
+
+                let plan = plan_worker_output(&event, &cfg.activity_id, cfg.category, cfg.terminal, result);
+                let key = event.process_instance_id.clone().unwrap_or_default();
+
+                for ev in &plan.emits {
+                    send(&producer, EVENTS_TOPIC, &key, &ev.to_json()).await;
+                }
+                if let (Some(fwd), Some(out)) = (&plan.forward, &cfg.output_topic) {
+                    send(&producer, out, &key, &fwd.to_json()).await;
+                }
+                if let Some(dlq) = &plan.dlq {
+                    send(&producer, &cfg.dlq_topic, &key, dlq).await;
+                }
+                let _ = consumer.commit_message(&msg, CommitMode::Async);
+            }
+        }
+    }
+}
+
+/// Runs an exclusive gateway: consume, pick the first matching branch, forward.
+pub async fn run_gateway_worker(brokers: &str, cfg: GatewayWorker) {
+    let consumer = build_consumer(brokers, &cfg.group_id, &cfg.input_topic);
+    let producer = build_producer(brokers);
+    eprintln!("[durga] gateway {} consuming {}", cfg.activity_id, cfg.input_topic);
+    loop {
+        match consumer.recv().await {
+            Err(e) => eprintln!("[durga] consume error: {e}"),
+            Ok(msg) => {
+                let raw = msg.payload().unwrap_or_default();
+                let text = String::from_utf8_lossy(raw);
+                let Ok(event) = ProcessEvent::from_json(&text) else {
+                    let _ = consumer.commit_message(&msg, CommitMode::Async);
+                    continue;
+                };
+                let payload = event.payload.clone().unwrap_or(serde_json::Value::Null);
+                let target = cfg.branches.iter().find_map(|(cond, topic)| match cond {
+                    None => Some(topic.clone()),
+                    Some(expr) if eval_condition(expr, &payload) => Some(topic.clone()),
+                    _ => None,
+                });
+                let key = event.process_instance_id.clone().unwrap_or_default();
+                let taken = event.gateway_taken(&cfg.activity_id, payload);
+                send(&producer, EVENTS_TOPIC, &key, &taken.to_json()).await;
+                if let Some(topic) = target {
+                    send(&producer, &topic, &key, &taken.to_json()).await;
+                } else {
+                    eprintln!("[durga] gateway {} matched no branch", cfg.activity_id);
+                }
+                let _ = consumer.commit_message(&msg, CommitMode::Async);
+            }
+        }
+    }
+}
+>>
+
+pluginWorkerBin(processId, crateLib, activityId, structName, pluginConfig, inputTopic, outputTopic, dlqTopic, groupId, categoryVariant, terminal) ::= <<
+use %crateLib%::{run_plugin_worker, PluginWorker};
+use durga_rust::plugins::%structName%;
+use durga_rust::Category;
+
+#[tokio::main]
+async fn main() {
+    let brokers = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9094".to_string());
+    let cfg = PluginWorker {
+        group_id: "%groupId%".to_string(),
+        input_topic: "%inputTopic%".to_string(),
+        output_topic: %if(terminal)%None%else%Some("%outputTopic%".to_string())%endif%,
+        dlq_topic: "%dlqTopic%".to_string(),
+        activity_id: "%activityId%".to_string(),
+        category: Category::%categoryVariant%,
+        plugin_config: "%pluginConfig%".to_string(),
+        terminal: %if(terminal)%true%else%false%endif%,
+    };
+    run_plugin_worker(&brokers, cfg, Box::new(%structName%::new())).await;
+}
+>>
+
+gatewayWorkerBin(processId, crateLib, activityId, inputTopic, groupId, branchesBlock) ::= <<
+use %crateLib%::{run_gateway_worker, GatewayWorker};
+
+#[tokio::main]
+async fn main() {
+    let brokers = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9094".to_string());
+    let cfg = GatewayWorker {
+        group_id: "%groupId%".to_string(),
+        input_topic: "%inputTopic%".to_string(),
+        activity_id: "%activityId%".to_string(),
+        branches: %branchesBlock%,
+    };
+    run_gateway_worker(&brokers, cfg).await;
+}
+>>

@@ -11,7 +11,7 @@ final class CliParser {
     private static final String USAGE =
             "Usage: BpmnScaffolder <path-to-bpmn.xml> [--out <dir>] [--process-id <id>] [--package <pkg>] "
                     + "[--event-topic <topic>] [--retention <h|d|w>] [--dry-run] [--transactions] "
-                    + "[--separate-workers] [--strimzi] [--connect]";
+                    + "[--separate-workers] [--strimzi] [--connect] [--target java|rust]";
 
     private static final String PROCESS_ID_PATTERN = "[a-zA-Z0-9][a-zA-Z0-9_-]*";
     private static final String PACKAGE_PATTERN = "[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*";
@@ -36,6 +36,7 @@ final class CliParser {
         String packageName = null;
         String retentionHours = null;
         String eventsTopic = null;
+        String target = "java";
         List<String> positional = new ArrayList<>();
 
         for (int i = 0; i < args.length; i++) {
@@ -85,6 +86,16 @@ final class CliParser {
                 }
                 eventsTopic = validateArg(args[++i], TOPIC_PATTERN, "--event-topic");
                 if (eventsTopic == null) return null;
+            } else if ("--target".equals(arg)) {
+                if (i + 1 >= args.length) {
+                    System.err.println("Missing value for --target");
+                    return null;
+                }
+                target = args[++i];
+                if (!"java".equals(target) && !"rust".equals(target)) {
+                    System.err.println("--target must be 'java' or 'rust'");
+                    return null;
+                }
             } else {
                 positional.add(arg);
             }
@@ -99,7 +110,7 @@ final class CliParser {
         if (outputDir == null) {
             outputDir = positional.size() > 1 ? positional.get(1) : "generated";
         }
-        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi, processIdOverride, packageName, retentionHours, eventsTopic);
+        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi, processIdOverride, packageName, retentionHours, eventsTopic, target);
     }
 
     private static String validateArg(String value, String pattern, String argName) {
