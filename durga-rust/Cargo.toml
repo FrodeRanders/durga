@@ -10,5 +10,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
 hex = "0.4"
+regex = "1"
+uuid = { version = "1", features = ["v4", "v7"] }
 
 [dev-dependencies]
