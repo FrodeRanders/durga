@@ -1,7 +1,7 @@
 group scaffold_rust;
 delimiters "%", "%"
 
-cargoToml(processId, crateName, durgaRustPath) ::= <<
+cargoToml(processId, crateName, durgaRustPath, durgaRustBuildPath) ::= <<
 [package]
 name = "%crateName%"
 version = "0.1.0"
@@ -13,7 +13,86 @@ serde_json = "1"
 rdkafka = { version = "0.36", features = ["cmake-build"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
+# build.rs enriches the embedded BPMN model with any local custom-plugin source.
+[build-dependencies]
+durga-rust-build = { path = "%durgaRustBuildPath%" }
+
 # One binary is generated per BPMN task / gateway under src/bin/.
+>>
+
+buildRs(entriesBlock, rerunBlock) ::= <<
+//! Build-time model enrichment: captures local custom-plugin source into the
+//! embedded BPMN model (durga:source) and writes the result to OUT_DIR, which
+//! src/lib.rs embeds via include_str!.
+
+fn main() {
+    let entries = vec![
+%entriesBlock%    ];
+    if let Err(e) = durga_rust_build::enrich_to_out_dir("model.bpmn", &entries) {
+        panic!("BPMN model enrichment failed: {e}");
+    }
+    println!("cargo:rerun-if-changed=model.bpmn");
+%rerunBlock%}
+>>
+
+customModRs(modulesBlock) ::= <<
+//! Locally-developed custom plugins. Edit the modules here; their source is
+//! captured into the BPMN model at build time and preserved across
+//! re-generation.
+
+%modulesBlock%
+>>
+
+customStub(structName, activityId) ::= <<
+//! Custom plugin implementation for activity "%activityId%".
+//!
+//! This file is yours to edit. It is embedded into the BPMN model at build time
+//! (as durga:source) and is NOT overwritten when the project is re-generated.
+
+use durga_rust::{Plugin, PluginError};
+
+pub struct %structName%;
+
+impl %structName% {
+    pub fn new() -> Self {
+        %structName%
+    }
+}
+
+impl Default for %structName% {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Plugin for %structName% {
+    fn execute_str(&self, payload: &str, _config: &str) -> Result<Option<String>, PluginError> {
+        // TODO: implement your transformation. Passes the payload through by default.
+        Ok(Some(payload.to_string()))
+    }
+}
+>>
+
+customWorkerBin(processId, crateLib, activityId, module, structName, pluginConfig, inputTopic, outputTopic, dlqTopic, groupId, terminal) ::= <<
+use %crateLib%::{run_plugin_worker, PluginWorker};
+use %crateLib%::custom::%module%::%structName%;
+use durga_rust::Category;
+
+#[tokio::main]
+async fn main() {
+    let brokers = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9094".to_string());
+    let cfg = PluginWorker {
+        group_id: "%groupId%".to_string(),
+        input_topic: "%inputTopic%".to_string(),
+        output_topic: %if(terminal)%None%else%Some("%outputTopic%".to_string())%endif%,
+        dlq_topic: "%dlqTopic%".to_string(),
+        activity_id: "%activityId%".to_string(),
+        category: Category::Other,
+        plugin_config: "%pluginConfig%".to_string(),
+        terminal: %if(terminal)%true%else%false%endif%,
+    };
+    run_plugin_worker(&brokers, cfg, Box::new(%structName%::new())).await;
+}
 >>
 
 readmeMd(processId, crateName) ::= <<
@@ -46,7 +125,7 @@ Feed the pipeline by publishing a `PROCESS_STARTED` `ProcessEvent` to the first
 task's input topic (`%processId%_<firstTask>_in`).
 >>
 
-libRs(processId, eventsTopic, bpmnFile) ::= <<
+libRs(processId, eventsTopic, hasCustom) ::= <<
 //! Generated worker runtime for process "%processId%".
 //!
 //! Thin Kafka glue around durga-rust: consume an input topic, run the plugin
@@ -62,14 +141,16 @@ use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
 use rdkafka::message::Message;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 
-pub const EVENTS_TOPIC: &str = "%eventsTopic%";
+%if(hasCustom)%pub mod custom;
+
+%endif%pub const EVENTS_TOPIC: &str = "%eventsTopic%";
 pub const MODELS_TOPIC: &str = "process-models";
 pub const PROCESS_ID: &str = "%processId%";
 
-/// This process's BPMN model, embedded at build time. Self-registration
-/// publishes it so the monitor has the diagram, alarm configs, and inventory
-/// entry without any external step.
-pub const BPMN_MODEL: &str = include_str!("../%bpmnFile%");
+/// This process's BPMN model, enriched with local custom-plugin source by
+/// build.rs and embedded at build time. Self-registration publishes it so the
+/// monitor has the diagram, alarm configs, and inventory entry.
+pub const BPMN_MODEL: &str = include_str!(concat!(env!("OUT_DIR"), "/model.bpmn"));
 
 /// Configuration for a plugin-task worker.
 pub struct PluginWorker {

@@ -59,32 +59,32 @@ final class RustTargetGenerator {
         String crateLib = processId.replace('-', '_');
         String eventsTopic = "process-events-" + processId;
         String durgaRustPath = System.getProperty("durga.rust.crate.path", "../durga-rust");
+        String durgaRustBuildPath = System.getProperty("durga.rust.build.crate.path", "../durga-rust-build");
         Path binDir = outputRoot.resolve("src/bin");
+
+        // Custom tasks whose local source build.rs captures into the model.
+        List<String[]> customEntries = new java.util.ArrayList<>(); // {taskId, structName, relPath}
+        List<String> customModules = new java.util.ArrayList<>();
 
         ST cargo = group.getInstanceOf("cargoToml");
         cargo.add("processId", processId);
         cargo.add("crateName", crateName);
         cargo.add("durgaRustPath", durgaRustPath);
+        cargo.add("durgaRustBuildPath", durgaRustBuildPath);
         write(parsed, outputRoot.resolve("Cargo.toml"), cargo.render());
 
         // Embed the BPMN model in the crate so each worker can self-register it
-        // (the Rust counterpart to the Java ModelRegistration bean).
-        String bpmnFile = "model.bpmn";
-        copyModel(parsed, outputRoot.resolve(bpmnFile));
-
-        ST lib = group.getInstanceOf("libRs");
-        lib.add("processId", processId);
-        lib.add("eventsTopic", eventsTopic);
-        lib.add("bpmnFile", bpmnFile);
-        write(parsed, outputRoot.resolve("src/lib.rs"), lib.render());
-
-        ST readme = group.getInstanceOf("readmeMd");
-        readme.add("processId", processId);
-        readme.add("crateName", crateName);
-        write(parsed, outputRoot.resolve("README.md"), readme.render());
+        // (the Rust counterpart to the Java ModelRegistration bean). build.rs
+        // enriches it into OUT_DIR before it is embedded.
+        copyModel(parsed, outputRoot.resolve("model.bpmn"));
 
         int workers = 0;
         for (TaskSpec task : taskSpecs) {
+            if (task.kind == TaskKind.CUSTOM) {
+                workers += generateCustomTask(parsed, group, processId, crateLib, outputRoot, binDir,
+                        task, nodes, flowsBySource, customEntries, customModules);
+                continue;
+            }
             if (task.kind != TaskKind.PLUGIN || task.pluginRef == null) {
                 LOG.warn("Rust target: skipping task '{}' (kind {} not supported yet)", task.name, task.kind);
                 continue;
@@ -114,6 +114,42 @@ final class RustTargetGenerator {
             workers++;
         }
 
+        boolean hasCustom = !customModules.isEmpty();
+
+        ST lib = group.getInstanceOf("libRs");
+        lib.add("processId", processId);
+        lib.add("eventsTopic", eventsTopic);
+        lib.add("hasCustom", hasCustom);
+        write(parsed, outputRoot.resolve("src/lib.rs"), lib.render());
+
+        if (hasCustom) {
+            ST mod = group.getInstanceOf("customModRs");
+            StringBuilder modules = new StringBuilder();
+            for (String m : customModules) {
+                modules.append("pub mod ").append(m).append(";\n");
+            }
+            mod.add("modulesBlock", modules.toString());
+            write(parsed, outputRoot.resolve("src/custom/mod.rs"), mod.render());
+        }
+
+        ST buildRs = group.getInstanceOf("buildRs");
+        StringBuilder entries = new StringBuilder();
+        StringBuilder rerun = new StringBuilder();
+        for (String[] e : customEntries) {
+            entries.append("        durga_rust_build::CustomSource::from_file(\"")
+                    .append(e[0]).append("\", \"").append(e[1]).append("\", \"").append(e[2])
+                    .append("\").expect(\"read custom source\"),\n");
+            rerun.append("    println!(\"cargo:rerun-if-changed=").append(e[2]).append("\");\n");
+        }
+        buildRs.add("entriesBlock", entries.toString());
+        buildRs.add("rerunBlock", rerun.toString());
+        write(parsed, outputRoot.resolve("build.rs"), buildRs.render());
+
+        ST readme = group.getInstanceOf("readmeMd");
+        readme.add("processId", processId);
+        readme.add("crateName", crateName);
+        write(parsed, outputRoot.resolve("README.md"), readme.render());
+
         for (NodeInfo node : nodes.values()) {
             if (node.type != NodeType.XOR) {
                 continue;
@@ -138,7 +174,48 @@ final class RustTargetGenerator {
             }
         }
 
-        LOG.info("Rust target: generated {} worker(s) for process '{}' in {}", workers, processId, outputRoot);
+        LOG.info("Rust target: generated {} worker(s) ({} custom) for process '{}' in {}",
+                workers, customModules.size(), processId, outputRoot);
+    }
+
+    private static int generateCustomTask(ParsedArgs parsed, STGroupString group, String processId,
+                                          String crateLib, Path outputRoot, Path binDir, TaskSpec task,
+                                          Map<String, NodeInfo> nodes, Map<String, List<FlowInfo>> flowsBySource,
+                                          List<String[]> customEntries, List<String> customModules) {
+        String module = task.name;
+        String structName = BpmnScaffolder.toClassName(task.name);
+        String relPath = "src/custom/" + module + ".rs";
+
+        // The stub is the developer's local code: generate it once, never overwrite.
+        Path stubPath = outputRoot.resolve(relPath);
+        if (!parsed.dryRun && !java.nio.file.Files.exists(stubPath)) {
+            ST stub = group.getInstanceOf("customStub");
+            stub.add("structName", structName);
+            stub.add("activityId", task.name);
+            BpmnScaffolder.writeFile(stubPath, stub.render());
+        }
+
+        NodeInfo taskNode = nodes.get(task.id);
+        NodeInfo next = firstTarget(taskNode, nodes, flowsBySource);
+        boolean terminal = next == null || next.type == NodeType.END;
+
+        ST bin = group.getInstanceOf("customWorkerBin");
+        bin.add("processId", processId);
+        bin.add("crateLib", crateLib);
+        bin.add("activityId", task.name);
+        bin.add("module", module);
+        bin.add("structName", structName);
+        bin.add("pluginConfig", escapeRust(task.pluginConfig != null ? task.pluginConfig : "."));
+        bin.add("inputTopic", inputTopicFor(processId, taskNode, nodes));
+        bin.add("outputTopic", terminal ? "" : inputTopicFor(processId, next, nodes));
+        bin.add("dlqTopic", processId + "_" + task.name + "_dlq");
+        bin.add("groupId", processId + "-" + task.name);
+        bin.add("terminal", terminal);
+        write(parsed, binDir.resolve(task.name + ".rs"), bin.render());
+
+        customModules.add(module);
+        customEntries.add(new String[]{task.id, structName, relPath});
+        return 1;
     }
 
     private static NodeInfo firstTarget(NodeInfo node, Map<String, NodeInfo> nodes,

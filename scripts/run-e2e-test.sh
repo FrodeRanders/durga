@@ -29,6 +29,7 @@ ALARM_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-alarm-state"
 ALARM_WATCH_PID_FILE="$PROJECT_DIR/target/alarm-watch.pid"
 RUST_WORKERS_PID_FILE="$PROJECT_DIR/target/rust-workers.pids"
 DURGA_RUST_DIR="$PROJECT_DIR/durga-rust"
+DURGA_RUST_BUILD_DIR="$PROJECT_DIR/durga-rust-build"
 
 # Code-generation target for the pipeline: 'java' (Quarkus) or 'rust' (Cargo
 # workers). The monitoring server is Java in both cases and observes either via
@@ -322,7 +323,7 @@ scaffold_and_build_pipeline_rust() {
     fi
     log "Scaffolding $E2E_PROCESS_ID (Rust target)..."
     rm -rf "$GEN_DIR"
-    java -Ddurga.rust.crate.path="$DURGA_RUST_DIR" -cp "$TOOLS_JAR" "$SCAFFOLDER" \
+    java -Ddurga.rust.crate.path="$DURGA_RUST_DIR" -Ddurga.rust.build.crate.path="$DURGA_RUST_BUILD_DIR" -cp "$TOOLS_JAR" "$SCAFFOLDER" \
         "$E2E_BPMN_PATH" --out "$GEN_DIR" --process-id "$E2E_PROCESS_ID" --target rust
     log "Scaffolding complete."
 

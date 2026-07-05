@@ -30,3 +30,4 @@ tmp/
 
 # Rust build output
 durga-rust/target/
+durga-rust-build/target/

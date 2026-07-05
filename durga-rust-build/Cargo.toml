@@ -1,0 +1,11 @@
+[package]
+name = "durga-rust-build"
+version = "0.1.0-beta.1"
+edition = "2021"
+description = "Build-time model enrichment for the Durga Rust code-generation target: captures local custom-plugin source into the BPMN model (durga:source), round-trip compatible with the Java ModelEnricher."
+license = "MIT"
+
+[dependencies]
+xmltree = "0.10"
+sha2 = "0.10"
+hex = "0.4"
