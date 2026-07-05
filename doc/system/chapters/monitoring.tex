@@ -90,23 +90,56 @@ a set of configured \texttt{AlarmConfig} rules. When a rule's criteria are
 met, an \texttt{AlarmEvent} is published to the \texttt{fault-alarms} topic
 for downstream notification, alerting, or dashboard integration.
 
+\subsubsection{Alarm layering}
+
+Alarms originate from three provenance layers, identified by
+\texttt{AlarmOrigin}. When multiple configs match the same scope the higher layer
+takes precedence.
+
+\begin{description}
+\item[Automatic] Monitor-owned, always active, requiring no process configuration.
+  Includes built-in stall and cascade detection (see STUCK / CASCADE below).
+  Tunable via system properties (\texttt{durga.alarm.stuck.timeoutSeconds} etc.).
+\item[Opt-in] A monitor-provided default that a process enables and may tune by
+  including the alarm's properties in its BPMN model.
+\item[Explicit] Fully specified by a process, typically through BPMN extension
+  properties (\texttt{durga:alarm:<id>:<field>}) or authored directly in the
+  Camunda Modeler plugin.
+\end{description}
+
 \subsubsection{Alarm configuration}
 
-Alarms are defined with the following scope and syndrome:
+A single \texttt{AlarmConfig} record combines scope, a syndrome, severity, and a
+message template:
 
 \begin{description}
 \item[Scope] Each config can target a specific process (\texttt{processId}),
   a specific activity (\texttt{activityId}), both, or neither (all events).
+  A null \texttt{processId} matches every process; a null \texttt{activityId}
+  matches process-level aggregates.
 \item[Event type] Which \texttt{ProcessEvent.EventType} triggers evaluation
-  (e.g. \texttt{PROCESS\_FAILED}, \texttt{ACTIVITY\_ESCALATED}).
-\item[Syndrome] How observed faults are aggregated into an alarm (see below).
+  (e.g. \texttt{PROCESS\_FAILED}, \texttt{ACTIVITY\_ESCALATED}). Optional for
+  STUCK and CASCADE, which are evaluated by a wall-clock punctuator rather than
+  per incoming event.
+\item[Syndrome] How observed behaviour is aggregated into an alarm (see below).
 \item[Severity] \texttt{WARN} or \texttt{CRITICAL}.
+\item[Threshold] Maximum count before alarm (required for COUNTED, SLIDING\_WINDOW,
+  CASCADE; ignored for HARD\_ERROR and STUCK).
+\item[Window duration] Sliding-window size for SLIDING\_WINDOW / CASCADE, or
+  idle-timeout for STUCK.
 \item[Message] A template rendered at alarm time; supports
   \texttt{\$\{processId\}}, \texttt{\$\{activityId\}},
-  \texttt{\$\{count\}}, and \texttt{\$\{processInstanceId\}}.
+  \texttt{\$\{count\}}, \texttt{\$\{processInstanceId\}}, and
+  \texttt{\$\{idleSeconds\}} (STUCK only).
+\item[Origin] One of \texttt{AUTOMATIC}, \texttt{OPT\_IN}, or \texttt{EXPLICIT}.
 \end{description}
 
 \subsubsection{Syndromes}
+
+\subsubsection{Event-driven syndromes}
+
+The three event-driven syndromes are evaluated for each incoming lifecycle
+event.
 
 \begin{description}
 
@@ -130,6 +163,29 @@ burst detection (e.g. more than 3 \texttt{PROCESS\_FAILED} events in a
 
 \end{description}
 
+\subsubsection{Absent-progress syndromes}
+
+The two absent-progress syndromes react to the \emph{absence} of lifecycle
+events rather than events that arrive. They are evaluated by a wall-clock
+punctuator scanning the active-instance index, not by the event-driven loop.
+
+\begin{description}
+
+\item[STUCK] An active instance that has emitted no lifecycle event for
+longer than \texttt{windowDuration} (the idle-timeout) is reported as stuck.
+The alarm fires once per instance; subsequent punctuation cycles suppress
+until a fresh lifecycle event re-arms tracking. The template variable
+\texttt{\$\{idleSeconds\}} reports how long the instance has been idle.
+
+\item[CASCADE] Collapses a surge of STUCK alarms into a single higher-severity
+alert. When the number of instances that newly became stuck within a rolling
+\texttt{windowDuration} exceeds \texttt{threshold}, one CASCADE alarm fires.
+Suppressed until the window count falls back below threshold (re-arm).
+A CASCADE alarm's \texttt{processId} is \texttt{*} (system-wide); per-process
+CASCADE configs carry the actual process identifier.
+
+\end{description}
+
 \subsubsection{Alarm emission}
 
 Triggered alarms are serialized as JSON and published to the
@@ -142,9 +198,10 @@ Each \texttt{AlarmEvent} carries:
 \item \texttt{configId} --- back-reference to the triggering config,
 \item \texttt{syndrome}, \texttt{severity}, \texttt{message} --- from config,
 \item \texttt{processId}, \texttt{processInstanceId}, \texttt{activityId} --- scope,
-\item \texttt{triggerEventType}, \texttt{triggerTimestamp} --- what fired it,
+\item \texttt{triggerEventType}, \texttt{triggerTimestamp} --- what fired it
+  (\texttt{triggerEventType} is \texttt{null} for CASCADE alarms),
 \item \texttt{count} --- current accumulated count at firing,
-\item \texttt{threshold} --- config threshold (0 for HARD\_ERROR).
+\item \texttt{threshold} --- config threshold (0 for HARD\_ERROR, timeout-seconds for STUCK).
 \end{itemize}
 
 \subsubsection{Alarm state read model}
@@ -169,15 +226,25 @@ The REST API exposes this read model through \texttt{/api/alarms},
 \texttt{/api/instances/\{processInstanceId\}/alarms}. The dashboard uses these
 endpoints for the alarm KPI, process inventory alarm counts, alarm-state table,
 instance alarm details, and BPMN diagram alarm overlays.
+System-wide alarms (\texttt{processId:\,*}) are excluded from the process
+inventory and rendered as \texttt{system-wide} in the Alarm State widget.
 
 \subsubsection{State stores}
 
-The fault detection topology maintains three persistent state stores:
+The fault detection topology maintains five persistent state stores:
 
 \begin{itemize}
+\item \texttt{fault-config-store} --- serialized \texttt{AlarmConfig} per
+  processId, updated when a process model is published to
+  \texttt{process-models}.
 \item \texttt{fault-counts-store} --- current count per (config, processId, activityId).
-\item \texttt{fault-windows-store} --- list of epoch-millis timestamps per scope (SLIDING\_WINDOW only).
-\item \texttt{fault-last-alarm-store} --- count at which the last alarm fired, used for single-fire suppression.
+\item \texttt{fault-windows-store} --- list of epoch-millis timestamps per scope
+  (SLIDING\_WINDOW and CASCADE).
+\item \texttt{fault-last-alarm-store} --- count at which the last alarm fired,
+  used for single-fire suppression.
+\item \texttt{fault-seen-store} --- per-instance record of the last lifecycle
+  activity observed (processId, activityId, last-seen epoch millis, alarm
+  flag), used by the STUCK punctuator.
 \end{itemize}
 
 \subsubsection{Example configuration}
@@ -186,17 +253,32 @@ The fault detection topology maintains three persistent state stores:
 AlarmConfig hard = new AlarmConfig("schema-fail-critical", null,
     "validate_high_value", ProcessEvent.EventType.ACTIVITY_ESCALATED,
     AlarmSyndrome.HARD_ERROR, 0, null,
-    AlarmSeverity.CRITICAL, "Schema validation escalated");
+    AlarmSeverity.CRITICAL, "Schema validation escalated",
+    AlarmOrigin.EXPLICIT);
 
 AlarmConfig counted = new AlarmConfig("proc-fail-warn", "order-proc",
     null, ProcessEvent.EventType.PROCESS_FAILED,
     AlarmSyndrome.COUNTED, 5, null,
-    AlarmSeverity.WARN, "${count} failures in ${processId}");
+    AlarmSeverity.WARN, "${count} failures in ${processId}",
+    AlarmOrigin.EXPLICIT);
 
 AlarmConfig window = new AlarmConfig("burst-detect", null, null,
     ProcessEvent.EventType.PROCESS_FAILED,
     AlarmSyndrome.SLIDING_WINDOW, 3, Duration.ofMinutes(1),
-    AlarmSeverity.CRITICAL, "Burst: ${count} failures in 1 min");
+    AlarmSeverity.CRITICAL, "Burst: ${count} failures in 1 min",
+    AlarmOrigin.EXPLICIT);
+
+AlarmConfig stuck = new AlarmConfig("builtin:stuck", null, null, null,
+    AlarmSyndrome.STUCK, 0, Duration.ofSeconds(120),
+    AlarmSeverity.WARN, "Stuck ${processInstanceId} in ${activityId} "
+        + "for ${idleSeconds}s",
+    AlarmOrigin.AUTOMATIC);
+
+AlarmConfig cascade = new AlarmConfig("builtin:cascade", null, null, null,
+    AlarmSyndrome.CASCADE, 5, Duration.ofSeconds(60),
+    AlarmSeverity.CRITICAL,
+    "Cascade: ${count} instances stalled within 60s (threshold ${threshold})",
+    AlarmOrigin.AUTOMATIC);
 \end{verbatim}
 
 \subsubsection{Integration with the monitoring server}
@@ -210,6 +292,7 @@ configuration. A third \texttt{KafkaStreams} instance maintains the alarm-state
 read model from \texttt{fault-alarms}. Health output reports all three stream
 states: core monitoring, fault detection, and alarm state.
 
-Unit tests are in \texttt{FaultDetectionTest}, \texttt{AlarmStateViewTest}, and
-\texttt{AlarmStateTopologyTest}; see
-Appendix~\ref{sec:IntegrationTestAppendix} for the test catalogue.
+Unit tests are in \texttt{FaultDetectionTest}, \texttt{BpmnAlarmConfigParserTest},
+\texttt{AlarmStateViewTest},
+\texttt{AlarmStateTopologyTest}, and \texttt{PluginResultTest};
+see Appendix~\ref{sec:IntegrationTestAppendix} for the test catalogue.

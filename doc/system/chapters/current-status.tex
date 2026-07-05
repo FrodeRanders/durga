@@ -17,9 +17,26 @@ described in the deployment, supervision and configuration chapters.
 \item dry-run and compile-level tests cover representative BPMN features,
 \item core runtime contracts are unit-tested,
 \item monitoring topology with global-table query model,
-\item BPMN-driven fault detection with \texttt{HARD\_ERROR}, \texttt{COUNTED}, and
-      \texttt{SLIDING\_WINDOW} alarm syndromes,
-\item queryable alarm-state read model and dashboard alarm overlays,
+\item three-layer alarm model (AUTOMATIC / OPT\_IN / EXPLICIT) with
+      \texttt{AlarmOrigin} provenance; the monitor ships built-in STUCK and
+      CASCADE syndromes that detect stall cascades with no per-process
+      configuration,
+\item five alarm syndromes: \texttt{HARD\_ERROR}, \texttt{COUNTED},
+      \texttt{SLIDING\_WINDOW} (event-driven) plus \texttt{STUCK},
+      \texttt{CASCADE} (absence-of-progress, evaluated by wall-clock
+      punctuator),
+\item queryable alarm-state read model and dashboard alarm overlays; the
+      dashboard surfaces system-wide alarms separately from per-process
+      alarms,
+\item category-aware plugin output disposition (\texttt{PluginResult.
+      OutputDisposition}) so routing and inspection plugins no longer
+      overwrite the business payload,
+\item brace-aware inline config parsing in \texttt{KvEnricher} and
+      \texttt{pluginConfig} escaping in the scaffolder for safe config
+      injection,
+\item lifecycle-aware state counts: terminal instances (completed, failed,
+      cancelled) bucket by outcome instead of their last activity, and
+      aggregate-absorbed instances reach a terminal completed state,
 \item interrupting boundary cancellation via in-memory registry,
 \item GitHub Actions CI on push/PR (JDK 25 plus monitoring UI test/build gate),
 \item \texttt{SendTask}, \texttt{ReceiveTask}, \texttt{ScriptTask}, \texttt{BusinessRuleTask} generate dedicated handlers,
