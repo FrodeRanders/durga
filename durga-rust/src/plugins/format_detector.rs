@@ -22,7 +22,7 @@ pub struct Detection {
 }
 
 impl Detection {
-    fn to_json(&self) -> Value {
+    pub(crate) fn to_json(&self) -> Value {
         let mut node = Map::new();
         node.insert("format".to_string(), Value::from(self.format.clone()));
         node.insert("datatype".to_string(), Value::from(self.datatype.clone()));
