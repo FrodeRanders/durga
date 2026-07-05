@@ -16,7 +16,10 @@ Plugins are defined by YAML descriptors under \filepath{plugins/} and indexed by
 \item \texttt{category} --- governed taxonomy (transform, validate, enrich, route, aggregate, inspect, store, connect),
 \item \texttt{status} --- lifecycle state (experimental, stable, deprecated, retired),
 \item \texttt{implementation} --- Java class implementing
-\filepath{org.gautelis.durga.plugins.Plugin},
+\filepath{org.gautelis.durga.plugins.Plugin}. For the Rust code-generation
+target (Section~\ref{sec:RustTarget}) the same plugin is implemented natively in
+the \filepath{durga-rust} crate under the same catalog identity and configuration
+schema; there are no adapters onto the Java implementation.
 \item \texttt{config} --- typed configuration schema (field types, defaults, allowed values).
 \end{itemize}
 
@@ -26,9 +29,11 @@ Each plugin category has an intended contract for topic naming, lifecycle events
 and error channel conventions. The generated plugin executor now emits
 category-specific lifecycle events for the supported governed cases:
 \texttt{GATEWAY\_TAKEN} for route plugins, \texttt{ACTIVITY\_ESCALATED} for
-validate plugin failures, and \texttt{ACTIVITY\_ENTERED} for aggregate plugins
-that keep a window open by returning no output. Other plugin categories retain
-the normal activity completion/failure lifecycle.
+validate plugin failures, and, for aggregate plugins that keep a window open by
+returning no output, \texttt{PROCESS\_COMPLETED} for the absorbed instance (it is
+folded into the window and reaches a terminal state rather than lingering as
+active). Other plugin categories retain the normal activity completion/failure
+lifecycle.
 
 \begin{longtable}{|>{\raggedright\arraybackslash}p{0.22\textwidth}|>{\raggedright\arraybackslash}p{0.70\textwidth}|}
 \hline

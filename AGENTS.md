@@ -6,7 +6,8 @@
 - `src/main/java/org/gautelis/durga/plugins/` contains 15 data pipeline plugins implementing the `Plugin` interface, plus shared utilities (`PipelinePlugin.java`).
 - `src/main/java/org/gautelis/durga/demo/` contains demo publishers and scenario runners.
 - `src/main/java/org/gautelis/durga/` holds core runtime contracts (`ProcessEvent`, `ProcessState`, `ScopeCancellationRegistry`, `ProcessStateStore`).
-- `src/main/resources/templates/` holds StringTemplate 4 `.stg` template files used by the scaffolder.
+- `src/main/resources/templates-java/` holds StringTemplate 4 `.stg` template files for the Java code-generation target; `src/main/resources/templates-rust/` holds the equivalent templates for the (in-progress) Rust target.
+- `durga-rust/` is a Cargo crate providing the Rust plugin runtime for the Rust code-generation target: the `Plugin` trait (binary/text/structured dispatch mirroring the Java interface), `PluginResult` with `OutputDisposition`, a wire-compatible `ProcessEvent`, and Rust ports of the pipeline plugins. Generated Rust workers depend on it directly; there are no adapters onto the Java plugins.
 - `src/test/resources/bpmn/` contains BPMN example models used as scaffolder test fixtures (24 models covering all BPMN 2.0 element types).
 - `setup/` contains local Kafka infrastructure (`docker-compose.yml`, `config.yml`).
 - `target/` is Maven build output (generated).

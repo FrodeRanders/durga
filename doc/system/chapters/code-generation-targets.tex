@@ -1,0 +1,81 @@
+\section{Code-Generation Targets}
+\label{sec:RustTarget}
+
+The scaffolder is target-parameterised: from a single BPMN model it can render a
+generated project in more than one implementation language. The mature target is
+Java (Quarkus / SmallRye Reactive Messaging); a Rust target is in progress. Both
+targets emit workers that speak the same Kafka wire protocol, so a single process
+can, in principle, be realised as a mix of Java and Rust workers, and the same
+Java monitor observes either.
+
+\subsection{Template organisation}
+
+Template groups are separated by target under \filepath{durga-tools/src/main/resources/}:
+
+\begin{itemize}
+\item \filepath{templates-java/} --- the Java target (\filepath{scaffold.stg} and
+  companions). This is the default and the only fully implemented target.
+\item \filepath{templates-rust/} --- the Rust target (in progress).
+\end{itemize}
+
+The attribute model passed from the generator (process id, task id, plugin
+reference, plugin configuration, channels, lineage) is identical across targets;
+only the rendered syntax differs. Loading the template group is the single
+switch point in \texttt{BpmnScaffolder}.
+
+\subsection{Shared source of truth}
+
+To keep the targets in lock-step, the following remain single sources of truth
+consumed by both:
+
+\begin{itemize}
+\item \textbf{Plugin catalog} --- the YAML descriptors under \filepath{plugins/}
+  define plugin identity, category, and the typed configuration schema. A model
+  scaffolds identically for either target; the same plugin configuration string
+  (e.g.\ \texttt{id:order\_id, customer.email:customer\_email}) is honoured by the
+  Java and Rust plugin implementations alike.
+\item \textbf{Lifecycle wire format} --- the \texttt{ProcessEvent} JSON (camelCase
+  fields, SCREAMING\_SNAKE event types and statuses) is byte-compatible across
+  targets, so the monitoring topology, alarm model, and dashboard treat
+  Rust-generated tasks exactly as Java tasks.
+\end{itemize}
+
+\subsection{The Rust plugin runtime (\texttt{durga-rust})}
+
+The \filepath{durga-rust/} Cargo crate is the Rust counterpart to the Java
+\filepath{durga-runtime} plugin layer. Generated Rust workers depend on it
+directly --- there are no adapters onto the Java plugins; each plugin is a native
+Rust implementation.
+
+The \texttt{Plugin} trait mirrors the Java \texttt{Plugin} interface, including its
+dispatch defaults:
+
+\begin{itemize}
+\item \texttt{execute\_bytes(payload, config)} --- binary entry point; the default
+  UTF-8 decodes and delegates to \texttt{execute\_str}, then re-encodes. Binary
+  plugins override this directly.
+\item \texttt{execute\_str(payload, config)} --- text / JSON entry point; text
+  plugins override this. The default is unsupported, matching the Java default.
+\item \texttt{execute\_with\_result(payload, config)} --- the structured entry
+  point the generated worker calls; the default wraps \texttt{execute\_bytes} with
+  a content-based idempotency key and the \texttt{PAYLOAD} disposition.
+\item \texttt{idempotency\_key(payload, config)} --- SHA-256 of payload then
+  config, byte-identical to the Java default.
+\end{itemize}
+
+\texttt{PluginResult} carries the same \texttt{OutputDisposition}
+(\texttt{PAYLOAD}, \texttt{PASSTHROUGH}, \texttt{SIDE\_EFFECT}) and
+\texttt{ErrorStrategy} (\texttt{FAIL}, \texttt{SKIP}, \texttt{DLQ}) semantics as
+the Java record, so routing and inspection plugins declare \texttt{PASSTHROUGH}
+and the generated worker preserves the payload identically on either target.
+
+\subsection{Status}
+
+Implemented so far: the crate contracts (\texttt{Plugin}, \texttt{PluginResult},
+\texttt{ProcessEvent}, dot-path field helpers) and the first faithful plugin ports
+(\texttt{json-transform}, \texttt{type-coercer}) with unit tests. Remaining work:
+the rest of the plugin ports, the Rust worker / gateway / orchestrator and
+project (\texttt{Cargo.toml}) templates, and the \texttt{-{}-target rust} switch in
+the CLI. The Rust workers will use a mature Kafka client
+(\texttt{rdkafka}) and an async runtime (\texttt{tokio}) for the same
+consume-transform-emit loop the plain-Kafka Java worker performs.

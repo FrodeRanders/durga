@@ -16,8 +16,10 @@ Durga has three parts:
 \item[Generation support] Model extraction and template coordination: \texttt{BpmnModelSupport}, \\
 \texttt{TaskRoutingGenerator}, \texttt{EventTemplateGenerator},
 \texttt{SubProcessTemplateGenerator}, \texttt{GeneratedProjectSupport}.
-\item[Templates] StringTemplate groups under \texttt{durga-tools/src/main/resources/templates/} define
-generated Java classes, scripts, YAML, Maven build files and shared runtime helpers.
+\item[Templates] StringTemplate groups under \texttt{durga-tools/src/main/resources/templates-java/}
+define the generated Java classes, scripts, YAML, Maven build files and shared runtime
+helpers. A parallel \texttt{templates-rust/} directory holds the equivalent templates for
+the in-progress Rust code-generation target (see Section~\ref{sec:RustTarget}).
 \item[Monitoring runtime] A Kafka Streams topology consumes canonical lifecycle events and
 materializes state, counts, latency summaries and stuck-instance views.
 \end{description}
