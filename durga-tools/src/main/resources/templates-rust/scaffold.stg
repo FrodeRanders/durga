@@ -46,11 +46,13 @@ Feed the pipeline by publishing a `PROCESS_STARTED` `ProcessEvent` to the first
 task's input topic (`%processId%_<firstTask>_in`).
 >>
 
-libRs(processId, eventsTopic) ::= <<
+libRs(processId, eventsTopic, bpmnFile) ::= <<
 //! Generated worker runtime for process "%processId%".
 //!
 //! Thin Kafka glue around durga-rust: consume an input topic, run the plugin
 //! (or evaluate gateway conditions), emit lifecycle events, forward the payload.
+//! Each worker also self-registers this process's embedded BPMN model so the
+//! monitor can serve the diagram and derive alarm configs.
 
 use std::time::Duration;
 
@@ -61,6 +63,13 @@ use rdkafka::message::Message;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 
 pub const EVENTS_TOPIC: &str = "%eventsTopic%";
+pub const MODELS_TOPIC: &str = "process-models";
+pub const PROCESS_ID: &str = "%processId%";
+
+/// This process's BPMN model, embedded at build time. Self-registration
+/// publishes it so the monitor has the diagram, alarm configs, and inventory
+/// entry without any external step.
+pub const BPMN_MODEL: &str = include_str!("../%bpmnFile%");
 
 /// Configuration for a plugin-task worker.
 pub struct PluginWorker {
@@ -109,10 +118,19 @@ async fn send(producer: &FutureProducer, topic: &str, key: &str, payload: &str) 
     }
 }
 
+/// Publishes this process's embedded BPMN model to the process-models topic.
+/// Idempotent (keyed by process id); every worker registers on startup, so the
+/// process self-registers regardless of which workers are running.
+pub async fn register_model(producer: &FutureProducer) {
+    send(producer, MODELS_TOPIC, PROCESS_ID, BPMN_MODEL).await;
+    eprintln!("[durga] registered BPMN model for {} ({} bytes)", PROCESS_ID, BPMN_MODEL.len());
+}
+
 /// Runs a plugin task: consume, execute, emit lifecycle, forward or terminate.
 pub async fn run_plugin_worker(brokers: &str, cfg: PluginWorker, plugin: Box<dyn Plugin + Send + Sync>) {
     let consumer = build_consumer(brokers, &cfg.group_id, &cfg.input_topic);
     let producer = build_producer(brokers);
+    register_model(&producer).await;
     eprintln!("[durga] {} consuming {}", cfg.activity_id, cfg.input_topic);
     loop {
         match consumer.recv().await {
@@ -155,6 +173,7 @@ pub async fn run_plugin_worker(brokers: &str, cfg: PluginWorker, plugin: Box<dyn
 pub async fn run_gateway_worker(brokers: &str, cfg: GatewayWorker) {
     let consumer = build_consumer(brokers, &cfg.group_id, &cfg.input_topic);
     let producer = build_producer(brokers);
+    register_model(&producer).await;
     eprintln!("[durga] gateway {} consuming {}", cfg.activity_id, cfg.input_topic);
     loop {
         match consumer.recv().await {

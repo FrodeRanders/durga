@@ -520,10 +520,6 @@ cmd_test_run() {
     start_monitor
     start_pipeline
 
-    log "Registering BPMN model..."
-    tr -d '\n' < "$E2E_BPMN_PATH" | docker exec -i durga-redpanda rpk topic produce process-models --key "$E2E_PROCESS_ID" 2>/dev/null
-    sleep 2
-
     start_alarm_watch
     echo ""
     cd "$PROJECT_DIR"

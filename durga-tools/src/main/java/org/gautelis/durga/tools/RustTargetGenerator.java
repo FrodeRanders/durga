@@ -67,9 +67,15 @@ final class RustTargetGenerator {
         cargo.add("durgaRustPath", durgaRustPath);
         write(parsed, outputRoot.resolve("Cargo.toml"), cargo.render());
 
+        // Embed the BPMN model in the crate so each worker can self-register it
+        // (the Rust counterpart to the Java ModelRegistration bean).
+        String bpmnFile = "model.bpmn";
+        copyModel(parsed, outputRoot.resolve(bpmnFile));
+
         ST lib = group.getInstanceOf("libRs");
         lib.add("processId", processId);
         lib.add("eventsTopic", eventsTopic);
+        lib.add("bpmnFile", bpmnFile);
         write(parsed, outputRoot.resolve("src/lib.rs"), lib.render());
 
         ST readme = group.getInstanceOf("readmeMd");
@@ -217,6 +223,20 @@ final class RustTargetGenerator {
             return;
         }
         BpmnScaffolder.writeFile(path, content);
+    }
+
+    private static void copyModel(ParsedArgs parsed, Path target) {
+        if (parsed.dryRun) {
+            LOG.info("[dry-run] would embed BPMN model at {}", target);
+            return;
+        }
+        try {
+            java.nio.file.Files.createDirectories(target.getParent());
+            java.nio.file.Files.copy(java.nio.file.Path.of(parsed.bpmnPath), target,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to embed BPMN model at " + target, e);
+        }
     }
 
     private static String loadTemplate() {
