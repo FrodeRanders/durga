@@ -98,8 +98,8 @@ final class RustTargetGenerator {
             bin.add("activityId", task.name);
             bin.add("structName", structName);
             bin.add("pluginConfig", escapeRust(task.pluginConfig != null ? task.pluginConfig : "."));
-            bin.add("inputTopic", inputTopic(processId, task.name));
-            bin.add("outputTopic", terminal ? "" : inputTopic(processId, next.name));
+            bin.add("inputTopic", inputTopicFor(processId, taskNode, nodes));
+            bin.add("outputTopic", terminal ? "" : inputTopicFor(processId, next, nodes));
             bin.add("dlqTopic", processId + "_" + task.name + "_dlq");
             bin.add("groupId", processId + "-" + task.name);
             bin.add("categoryVariant", categoryVariant(task.pluginCategory));
@@ -117,7 +117,7 @@ final class RustTargetGenerator {
             bin.add("processId", processId);
             bin.add("crateLib", crateLib);
             bin.add("activityId", node.name);
-            bin.add("inputTopic", inputTopic(processId, node.name));
+            bin.add("inputTopic", inputTopicFor(processId, node, nodes));
             bin.add("groupId", processId + "-" + node.name);
             bin.add("branchesBlock", branches);
             write(parsed, binDir.resolve(node.name + ".rs"), bin.render());
@@ -158,7 +158,7 @@ final class RustTargetGenerator {
                 if (target == null) {
                     continue;
                 }
-                String topic = inputTopic(processId, target.name);
+                String topic = inputTopicFor(processId, target, nodes);
                 boolean isDefault = flow.id.equals(gateway.defaultFlowId)
                         || flow.condition == null || flow.condition.isBlank();
                 if (isDefault) {
@@ -187,6 +187,24 @@ final class RustTargetGenerator {
 
     private static String inputTopic(String processId, String nodeName) {
         return processId + "_" + nodeName + "_in";
+    }
+
+    /**
+     * Input topic for a node. A task/gateway fed directly by the start event
+     * consumes the process start topic ({@code <processId>_start}) so the shared
+     * feeder and infrastructure topics line up with the Java target; every other
+     * node consumes {@code <processId>_<name>_in}.
+     */
+    private static String inputTopicFor(String processId, NodeInfo node, Map<String, NodeInfo> nodes) {
+        if (node != null) {
+            for (String incomingId : node.incomingIds) {
+                NodeInfo incoming = nodes.get(incomingId);
+                if (incoming != null && incoming.type == NodeType.START) {
+                    return processId + "_start";
+                }
+            }
+        }
+        return inputTopic(processId, node != null ? node.name : "unknown");
     }
 
     static String escapeRust(String s) {

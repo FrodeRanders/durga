@@ -27,6 +27,13 @@ MONITOR_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-state"
 FAULT_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-fault-state"
 ALARM_STATE_DIR="$PROJECT_DIR/target/e2e-kafka-streams-alarm-state"
 ALARM_WATCH_PID_FILE="$PROJECT_DIR/target/alarm-watch.pid"
+RUST_WORKERS_PID_FILE="$PROJECT_DIR/target/rust-workers.pids"
+DURGA_RUST_DIR="$PROJECT_DIR/durga-rust"
+
+# Code-generation target for the pipeline: 'java' (Quarkus) or 'rust' (Cargo
+# workers). The monitoring server is Java in both cases and observes either via
+# the shared process-events topic. Set with --target on feed/test-run.
+TARGET="java"
 
 # Automatic (monitor-owned) alarm tuning. Defaults are deliberately sensitive so a
 # stall cascade becomes detectable within a short e2e run; override via env if needed.
@@ -47,6 +54,13 @@ log()  { echo -e "${GREEN}[e2e]${NC} $*"; }
 warn() { echo -e "${YELLOW}[warn]${NC} $*"; }
 err()  { echo -e "${RED}[err]${NC} $*" >&2; }
 
+validate_target() {
+    if [ "$TARGET" != "java" ] && [ "$TARGET" != "rust" ]; then
+        err "--target must be 'java' or 'rust' (got '$TARGET')"
+        exit 1
+    fi
+}
+
 usage() {
     cat <<EOF
 Usage: run-e2e-test.sh <command> [options]
@@ -58,8 +72,14 @@ Commands:
   stop       Stop infrastructure, pipeline, and monitoring server
 
 Feed options (with 'feed' or 'test-run'):
+  --target T      Pipeline code-gen target: 'java' (default) or 'rust'
   --count N       Publish exactly N records then exit (default: continuous)
   --interval-ms   Interval in ms between records (default: 100)
+
+The 'rust' target scaffolds the process with --target rust, builds the Cargo
+project (one worker binary per BPMN task/gateway; requires a Rust toolchain and
+cmake for librdkafka), and runs each worker as a separate process. The Java
+monitor observes the Rust workers unchanged via process-events-<processId>.
 
 Cascade detection (automatic, monitor-owned — no BPMN alarm config needed):
   The 'feed' and 'test-run' commands start a background watcher that polls
@@ -74,6 +94,7 @@ Examples:
   ./run-e2e-test.sh test              # Run all integration tests
   ./run-e2e-test.sh feed              # Full e2e pipeline + monitoring (continuous)
   ./run-e2e-test.sh feed --count 200  # Bounded: 200 orders through the pipeline
+  ./run-e2e-test.sh feed --target rust # Same pipeline, generated as Rust workers
   ./run-e2e-test.sh test-run          # Test + full e2e pipeline
   ./run-e2e-test.sh stop              # Tear down
   CASCADE_THRESHOLD=2 ./run-e2e-test.sh feed   # More sensitive cascade
@@ -259,6 +280,10 @@ stop_alarm_watch() {
 # ------- internal: generated pipeline -------
 
 scaffold_and_build_pipeline() {
+    if [ "$TARGET" = "rust" ]; then
+        scaffold_and_build_pipeline_rust
+        return
+    fi
     log "Scaffolding $E2E_PROCESS_ID..."
     rm -rf "$GEN_DIR"
     java -cp "$TOOLS_JAR" "$SCAFFOLDER" "$E2E_BPMN_PATH" "$GEN_DIR"
@@ -288,7 +313,88 @@ scaffold_and_build_pipeline() {
     log "Pipeline built: $jar"
 }
 
+# ------- internal: generated pipeline (rust target) -------
+
+scaffold_and_build_pipeline_rust() {
+    if ! command -v cargo >/dev/null 2>&1; then
+        err "cargo not found — install a Rust toolchain to use --target rust."
+        exit 1
+    fi
+    log "Scaffolding $E2E_PROCESS_ID (Rust target)..."
+    rm -rf "$GEN_DIR"
+    java -Ddurga.rust.crate.path="$DURGA_RUST_DIR" -cp "$TOOLS_JAR" "$SCAFFOLDER" \
+        "$E2E_BPMN_PATH" --out "$GEN_DIR" --process-id "$E2E_PROCESS_ID" --target rust
+    log "Scaffolding complete."
+
+    log "Building generated Rust workers (cargo build --release)..."
+    ( cd "$GEN_DIR" && cargo build --release ) || { err "cargo build failed."; exit 1; }
+    log "Rust workers built."
+}
+
+create_rust_topics() {
+    local topics=()
+    local f name
+    for f in "$GEN_DIR"/src/bin/*.rs; do
+        name=$(basename "$f" .rs)
+        topics+=("${E2E_PROCESS_ID}_${name}_in" "${E2E_PROCESS_ID}_${name}_dlq")
+    done
+    if [ ${#topics[@]} -gt 0 ]; then
+        log "Creating Rust worker topics..."
+        docker exec durga-redpanda rpk topic create "${topics[@]}" 2>/dev/null || true
+    fi
+}
+
+start_pipeline_rust() {
+    if [ -f "$RUST_WORKERS_PID_FILE" ] && kill -0 "$(head -1 "$RUST_WORKERS_PID_FILE" 2>/dev/null)" 2>/dev/null; then
+        log "Rust workers already running."
+        return
+    fi
+    if [ ! -d "$GEN_DIR/target/release" ]; then
+        scaffold_and_build_pipeline_rust
+    fi
+    create_rust_topics
+
+    : > "$RUST_WORKERS_PID_FILE"
+    : > "$GEN_LOG"
+    log "Starting generated Rust workers..."
+    local f name bin count=0
+    for f in "$GEN_DIR"/src/bin/*.rs; do
+        name=$(basename "$f" .rs)
+        bin="$GEN_DIR/target/release/$name"
+        if [ ! -x "$bin" ]; then
+            warn "  missing binary: $bin"
+            continue
+        fi
+        KAFKA_BROKERS="$REDPANDA_BOOTSTRAP" "$bin" >> "$GEN_LOG" 2>&1 &
+        echo $! >> "$RUST_WORKERS_PID_FILE"
+        log "  started worker: $name (pid $!)"
+        count=$((count + 1))
+    done
+    sleep 2
+    log "Rust workers ready ($count processes; logs -> $GEN_LOG)."
+}
+
+stop_rust_workers() {
+    if [ ! -f "$RUST_WORKERS_PID_FILE" ]; then
+        return
+    fi
+    log "Stopping Rust workers..."
+    local pid
+    while read -r pid; do
+        [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+    done < "$RUST_WORKERS_PID_FILE"
+    sleep 1
+    while read -r pid; do
+        [ -n "$pid" ] && kill -9 "$pid" 2>/dev/null || true
+    done < "$RUST_WORKERS_PID_FILE"
+    rm -f "$RUST_WORKERS_PID_FILE"
+}
+
 start_pipeline() {
+    if [ "$TARGET" = "rust" ]; then
+        start_pipeline_rust
+        return
+    fi
     if [ -f "$GEN_PID_FILE" ] && kill -0 "$(cat "$GEN_PID_FILE")" 2>/dev/null; then
         log "Pipeline already running (pid $(cat "$GEN_PID_FILE"))."
         return
@@ -322,6 +428,7 @@ start_pipeline() {
 }
 
 stop_pipeline() {
+    stop_rust_workers
     if [ -f "$GEN_PID_FILE" ]; then
         local pid=$(cat "$GEN_PID_FILE")
         if kill -0 "$pid" 2>/dev/null; then
@@ -350,11 +457,13 @@ cmd_feed() {
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            --target) TARGET="$2"; shift 2;;
             --count) count="$2"; shift 2;;
             --interval-ms) interval="$2"; shift 2;;
             *) shift;;
         esac
     done
+    validate_target
 
     trap 'stop_alarm_watch; stop_pipeline; stop_monitor; stop_infra' EXIT INT TERM
     start_infra
@@ -371,7 +480,7 @@ cmd_feed() {
     local mode="continuous (Ctrl-C to stop)"
     [ "$count" != "-1" ] && mode="bounded: $count records (interval=${interval}ms)"
 
-    log "Starting data feed — $mode"
+    log "Starting data feed ($TARGET target) — $mode"
     log "Pipeline processes orders through: transform_order -> coerce_types -> [XOR route_by_amount] -> ..."
     echo ""
 
@@ -389,11 +498,13 @@ cmd_test_run() {
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            --target) TARGET="$2"; shift 2;;
             --count) feed_count="$2"; shift 2;;
             --interval-ms) feed_interval="$2"; shift 2;;
             *) shift;;
         esac
     done
+    validate_target
 
     trap 'stop_alarm_watch; stop_pipeline; stop_monitor; stop_infra' EXIT INT TERM
     start_infra
@@ -420,7 +531,7 @@ cmd_test_run() {
     local mode="continuous (Ctrl-C to stop)"
     [ "$feed_count" != "-1" ] && mode="bounded: $feed_count records (interval=${feed_interval}ms)"
 
-    log "Starting data feed — $mode"
+    log "Starting data feed ($TARGET target) — $mode"
     echo ""
 
     local feed_args=("$REDPANDA_BOOTSTRAP" "$E2E_PROCESS_ID" "$feed_interval")
