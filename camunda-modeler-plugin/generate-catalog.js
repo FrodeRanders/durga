@@ -192,6 +192,13 @@ const WIDGET_SCHEMAS = {
         help: 'Root directory for file storage (file: URI or local path).' },
       { key: 'prefix', label: 'Prefix', type: 'text', defaultValue: 'objects',
         help: 'Subdirectory prefix under root.' },
+      { key: 'layout', label: 'Naming layout', type: 'text',
+        placeholder: 'const:tenantA/date/field:region',
+        help: 'Directory scheme under the prefix; the filename is always a UUID. '
+          + 'Slash-separated tokens, freely combined: '
+          + 'date | date:hour | date:minute (yyyy/MM/dd[/HH][/mm], UTC); '
+          + 'field:<path> (sanitized payload value — content/business-concept naming; _unknown if absent); '
+          + 'const:<text> or a bare literal (fixed segment). Empty = flat structure.' },
       { key: 'includeFormat', label: 'Include format', type: 'boolean', defaultValue: 'true' },
       { key: 'includeOriginal', label: 'Include original', type: 'boolean', defaultValue: 'false' }
     ]
