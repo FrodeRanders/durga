@@ -9,11 +9,13 @@
 //! interoperates over the same Kafka topics.
 
 pub mod event;
+pub mod expr;
 pub mod pipeline;
 pub mod plugin;
 pub mod result;
 pub mod plugins;
 
 pub use event::{ErrorInfo, EventType, ProcessEvent, Status};
+pub use expr::eval_condition;
 pub use plugin::{default_idempotency_key, Plugin, PluginError};
 pub use result::{ErrorStrategy, OutputDisposition, PluginResult};
