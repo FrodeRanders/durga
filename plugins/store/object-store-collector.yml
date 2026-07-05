@@ -29,6 +29,17 @@ config:
     required: false
     default: objects
     description: Relative object prefix under the store root
+  layout:
+    type: string
+    required: false
+    description: >
+      Directory naming scheme placed between the prefix and the (always UUID)
+      filename. A '/'-separated list of tokens, freely combined for a mixed
+      scheme: 'date' | 'date:hour' | 'date:minute' (expands to yyyy/MM/dd[/HH][/mm]
+      in UTC); 'field:<path>' (sanitized payload field value, dot-notation, for
+      content/business-concept naming; '_unknown' when absent); 'const:<text>'
+      or a bare literal (fixed, sanitized segment). Empty/absent = flat structure
+      (prefix/<uuid>). Example: 'const:tenantA/date/field:region'.
   asset:
     type: string
     required: false

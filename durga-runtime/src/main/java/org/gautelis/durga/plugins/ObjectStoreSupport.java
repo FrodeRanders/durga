@@ -1,5 +1,8 @@
 package org.gautelis.durga.plugins;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -8,14 +11,19 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 final class ObjectStoreSupport {
 
     private static final String DEFAULT_ROOT = System.getProperty("java.io.tmpdir") + "/durga-object-store";
+    private static final ObjectMapper LAYOUT_MAPPER = new ObjectMapper();
 
     private ObjectStoreSupport() {
     }
@@ -71,6 +79,9 @@ final class ObjectStoreSupport {
         String extension = extension(config.get("extension"), payload, config.get("fileName"));
         String id = UUID.randomUUID().toString();
         Path dir = root.resolve(prefix).normalize();
+        for (String segment : layoutSegments(config.get("layout"), payload, Instant.now())) {
+            dir = dir.resolve(segment).normalize();
+        }
         Files.createDirectories(dir);
         Path target = dir.resolve(id + extension).normalize();
         if (!target.startsWith(root.normalize())) {
@@ -78,6 +89,84 @@ final class ObjectStoreSupport {
         }
         Files.write(target, payload);
         return new StoredObject(id, target.toUri().toString(), payload.length, sha256(payload), Instant.now().toString());
+    }
+
+    /**
+     * Resolves the {@code layout} config into directory segments placed between
+     * the prefix and the (always UUID) filename. The layout is a {@code /}-separated
+     * list of tokens, each one of:
+     * <ul>
+     *   <li>{@code date} / {@code date:hour} / {@code date:minute} — expands to
+     *       {@code yyyy/MM/dd}[/HH][/mm] in UTC;</li>
+     *   <li>{@code field:<path>} — sanitized value of a payload field (dot-notation),
+     *       {@code _unknown} when absent (content / business-concept naming);</li>
+     *   <li>{@code const:<text>} or a bare literal — a fixed, sanitized segment.</li>
+     * </ul>
+     * An empty or absent layout yields a flat structure ({@code prefix/<uuid>}).
+     * Tokens may be freely combined for a mixed scheme.
+     */
+    static List<String> layoutSegments(String layout, byte[] payload, Instant now) {
+        List<String> segments = new ArrayList<>();
+        if (layout == null || layout.isBlank()) {
+            return segments;
+        }
+        JsonNode json = null;
+        boolean jsonParsed = false;
+        OffsetDateTime dt = now.atOffset(ZoneOffset.UTC);
+        for (String rawToken : layout.split("/")) {
+            String token = rawToken.trim();
+            if (token.isEmpty()) {
+                continue;
+            }
+            if (token.equals("date") || token.startsWith("date:")) {
+                String granularity = token.contains(":")
+                        ? token.substring(token.indexOf(':') + 1).trim().toLowerCase(java.util.Locale.ROOT)
+                        : "day";
+                segments.add(String.format("%04d", dt.getYear()));
+                segments.add(String.format("%02d", dt.getMonthValue()));
+                segments.add(String.format("%02d", dt.getDayOfMonth()));
+                if (granularity.equals("hour") || granularity.equals("minute")) {
+                    segments.add(String.format("%02d", dt.getHour()));
+                }
+                if (granularity.equals("minute")) {
+                    segments.add(String.format("%02d", dt.getMinute()));
+                }
+            } else if (token.startsWith("field:")) {
+                if (!jsonParsed) {
+                    json = parseJsonPayload(payload);
+                    jsonParsed = true;
+                }
+                String value = null;
+                if (json != null) {
+                    JsonNode node = PipelinePlugin.fieldAt(json, token.substring("field:".length()).trim());
+                    if (node != null && !node.isNull()) {
+                        value = node.asText();
+                    }
+                }
+                segments.add(sanitizeSegment(value != null && !value.isBlank() ? value : "_unknown"));
+            } else if (token.startsWith("const:")) {
+                segments.add(sanitizeSegment(token.substring("const:".length()).trim()));
+            } else {
+                segments.add(sanitizeSegment(token));
+            }
+        }
+        return segments;
+    }
+
+    private static JsonNode parseJsonPayload(byte[] payload) {
+        try {
+            return LAYOUT_MAPPER.readTree(payload);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private static String sanitizeSegment(String value) {
+        String sanitized = value.replace('\\', '/')
+                .replace("/", "_")
+                .replaceAll("\\.\\.", "")
+                .replaceAll("[^A-Za-z0-9_.-]", "_");
+        return sanitized.isBlank() ? "_" : sanitized;
     }
 
     static byte[] read(String uri) throws IOException {
