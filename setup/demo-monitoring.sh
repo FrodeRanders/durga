@@ -18,11 +18,17 @@ fi
 
 cd "${PROJECT_ROOT}"
 
-mvn -q package -Pmonitoring
+mvn -q package -DskipTests
 
-JAR="$(find target -maxdepth 1 -name 'durga-*-runner.jar' -type f -exec ls -t {} + 2>/dev/null | head -n 1 || true)"
+JAR="$(find durga-monitor/target -maxdepth 1 -name 'durga-monitor-*-runner.jar' -type f -exec ls -t {} + 2>/dev/null | head -n 1 || true)"
 if [[ -z "${JAR}" || ! -f "${JAR}" ]]; then
-  echo "Could not find built Durga JAR under target/" >&2
+  echo "Could not find built Durga monitor runner JAR under durga-monitor/target/" >&2
+  exit 1
+fi
+
+TOOLS_JAR="$(find durga-tools/target -maxdepth 1 -name 'durga-tools-*.jar' ! -name 'original-*' -type f -exec ls -t {} + 2>/dev/null | head -n 1 || true)"
+if [[ -z "${TOOLS_JAR}" || ! -f "${TOOLS_JAR}" ]]; then
+  echo "Could not find built Durga tools JAR under durga-tools/target/" >&2
   exit 1
 fi
 
@@ -51,7 +57,7 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
-publish_output=$(java -cp "${JAR}" \
+publish_output=$(java -cp "${TOOLS_JAR}" \
   org.gautelis.durga.demo.ProcessEventScenarioRunner \
   "${BOOTSTRAP}" \
   "${SCENARIO}" \

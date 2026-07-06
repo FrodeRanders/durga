@@ -85,13 +85,18 @@ if [[ "${SKIP_BUILD}" != "true" ]]; then
     cd "${ROOT_DIR}"
     mkdir -p monitoring-ui/dist && touch monitoring-ui/dist/.gitkeep
     (cd monitoring-ui && npm install --silent 2>/dev/null && npm run build)
-    mvn -q package -DskipTests -Pmonitoring
+    mvn -q package -DskipTests
     info "Jar and SPA ready"
 fi
 
-JAR="$(find "${ROOT_DIR}/target" -maxdepth 1 -name 'durga-*-runner.jar' -type f -print -quit)"
+JAR="$(find "${ROOT_DIR}/durga-monitor/target" -maxdepth 1 -name 'durga-monitor-*-runner.jar' -type f -print -quit)"
 if [[ -z "${JAR}" || ! -f "${JAR}" ]]; then
-    echo "ERROR: Could not find built Durga runner JAR under target/" >&2; exit 1
+    echo "ERROR: Could not find built Durga monitor runner JAR under durga-monitor/target/" >&2; exit 1
+fi
+
+TOOLS_JAR="$(find "${ROOT_DIR}/durga-tools/target" -maxdepth 1 -name 'durga-tools-*.jar' ! -name 'original-*' -type f -print -quit)"
+if [[ -z "${TOOLS_JAR}" || ! -f "${TOOLS_JAR}" ]]; then
+    echo "ERROR: Could not find built Durga tools JAR under durga-tools/target/" >&2; exit 1
 fi
 
 # ── 3. Clean up ────────────────────────────────────────────────────────────
@@ -117,7 +122,7 @@ if [[ -d "${BPMN_DIR}" ]]; then
     banner "Registering BPMN models"
     for bpmn in "${BPMN_DIR}"/*.bpmn; do
         fname="$(basename "${bpmn}" .bpmn)"
-        java -cp "${JAR}" \
+        java -cp "${TOOLS_JAR}" \
             org.gautelis.durga.demo.BpmnModelPublisher \
             "${BOOTSTRAP}" \
             "${fname}" \
@@ -132,7 +137,7 @@ fi
 banner "Starting feed generators"
 IFS=',' read -ra PIDS <<< "${FEED_PIDS}"
 for pid in "${PIDS[@]}"; do
-    java -cp "${JAR}" \
+    java -cp "${TOOLS_JAR}" \
         org.gautelis.durga.demo.ContinuousFeedPublisher \
         "${BOOTSTRAP}" \
         "${pid}" \

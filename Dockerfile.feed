@@ -1,15 +1,15 @@
-FROM maven:3.9-eclipse-temurin-21 AS builder
+FROM maven:3.9-eclipse-temurin-25 AS builder
 WORKDIR /build
 COPY . .
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -q package -DskipTests
 
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 RUN apk add --no-cache libstdc++
 RUN addgroup -S durga && adduser -S durga -G durga
 USER durga
 RUN mkdir -p /tmp/logs
-COPY --from=builder /build/target/durga-*.jar /app/durga.jar
-COPY src/test/resources/bpmn /app/bpmn
+COPY --from=builder /build/durga-tools/target/durga-tools-*.jar /app/durga.jar
+COPY durga-tools/src/test/resources/bpmn /app/bpmn
 ENTRYPOINT ["java", "-Dlog-path=/tmp/logs", "-cp", "/app/durga.jar", \
   "org.gautelis.durga.demo.ContinuousFeedPublisher"]
