@@ -93,13 +93,13 @@ fold-up, severity preservation, late older events, and topology construction.
 \subsection{CI pipeline}
 
 The non-Docker verification command \texttt{mvn test -Dtest='!*IntegrationTest'}
-currently runs 326 tests (durga-runtime 208, durga-tools 57, durga-monitor 61).
+currently runs 341 tests (durga-runtime 209, durga-tools 57, durga-monitor 75).
 Docker-backed integration tests are suffixed
 \texttt{IntegrationTest} and are run separately for release gates.
 
 \subsection{Integration tests}
 
-Six integration test suites use Testcontainers to spin up real Kafka brokers
+Seven integration test suites use Testcontainers to spin up real Kafka brokers
 and verify runtime behaviour end to end. Each suite is documented in detail in
 Appendix~\ref{sec:IntegrationTestAppendix}.
 
@@ -134,6 +134,12 @@ end to end: joins candidate-task outputs against production outputs over a live
 Kafka broker and verifies the comparison outcomes (\texttt{EQUAL},
 \texttt{DIFF}, \texttt{PRIOR\_MISSING}, \texttt{CANDIDATE\_ERROR}) are
 materialized into the validation results store.
+
+\item[SlaMonitoringIntegrationTest] The performance-SLA path end to end: runs the
+fault-detection and alarm-state topologies over a live broker and verifies that a
+slow task breaches its \texttt{SLA\_LATENCY} ceiling and a starved pipeline
+breaches its \texttt{SLA\_THROUGHPUT} floor, with both alarms materialized into the
+alarm-state read model that \texttt{/api/metrics} exposes.
 \end{description}
 
 \subsection{Automation}

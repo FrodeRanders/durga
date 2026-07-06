@@ -280,6 +280,42 @@ public class ProcessMonitoringResource {
                 // validation store not queryable yet; omit validation metrics
             }
 
+            try {
+                var alarms = state.alarmQueryService().allAlarms();
+                if (!alarms.isEmpty()) {
+                    sb.append("# HELP durga_alarm_active Active alarm states (1 per active alarm)\n");
+                    sb.append("# TYPE durga_alarm_active gauge\n");
+                    sb.append("# HELP durga_alarm_fire_count Firings folded into an active alarm\n");
+                    sb.append("# TYPE durga_alarm_fire_count counter\n");
+                    sb.append("# HELP durga_sla_last_observed Latest observed SLA measurement (latency ms, or windowed completion count)\n");
+                    sb.append("# TYPE durga_sla_last_observed gauge\n");
+                    sb.append("# HELP durga_sla_limit Configured SLA limit (max latency ms, or minimum completions per window)\n");
+                    sb.append("# TYPE durga_sla_limit gauge\n");
+                    for (AlarmStateView a : alarms) {
+                        String activity = a.activityId() != null && !a.activityId().isBlank()
+                                ? a.activityId() : "*";
+                        String labels = String.format(
+                                "process_id=\"%s\",activity_id=\"%s\",syndrome=\"%s\",severity=\"%s\"",
+                                prometheusLabelValue(a.processId()), prometheusLabelValue(activity),
+                                a.syndrome() != null ? a.syndrome().name() : "",
+                                a.severity() != null ? a.severity().name() : "");
+                        sb.append(String.format("durga_alarm_active{%s} 1\n", labels));
+                        sb.append(String.format("durga_alarm_fire_count{%s} %d\n", labels, a.fireCount()));
+                        if (a.syndrome() == AlarmSyndrome.SLA_LATENCY
+                                || a.syndrome() == AlarmSyndrome.SLA_THROUGHPUT) {
+                            String slaLabels = String.format(
+                                    "process_id=\"%s\",activity_id=\"%s\",syndrome=\"%s\"",
+                                    prometheusLabelValue(a.processId()), prometheusLabelValue(activity),
+                                    a.syndrome().name());
+                            sb.append(String.format("durga_sla_last_observed{%s} %d\n", slaLabels, a.lastCount()));
+                            sb.append(String.format("durga_sla_limit{%s} %d\n", slaLabels, a.threshold()));
+                        }
+                    }
+                }
+            } catch (InvalidStateStoreException ignored) {
+                // alarm state store not queryable yet; omit alarm metrics
+            }
+
             return Response.ok(sb.toString()).build();
         } catch (Exception e) {
             return Response.status(503).entity("# error: " + e.getMessage()).build();

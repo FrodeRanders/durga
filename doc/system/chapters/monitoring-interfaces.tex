@@ -31,7 +31,9 @@ Endpoints (all under \texttt{/api/}):
 \item \texttt{/api/validation/results?processId=\&taskId=\&status=} --- individual validation comparisons,
 \item \texttt{/api/validation/instances/\{instanceId\}} --- validation comparisons for one instance,
 \item \texttt{/api/diagram?processId=\textit{id}} --- BPMN 2.0 XML from the model cache,
-\item \texttt{/api/metrics} --- Prometheus-format metrics.
+\item \texttt{/api/metrics} --- Prometheus-format metrics (activity latency and
+      samples, SLA-latency violations, active alarms and SLA observed/limit gauges,
+      streams state, and validation counts).
 \end{itemize}
 
 The diagram endpoint serves models from the \texttt{process-models-store}

@@ -336,7 +336,19 @@ The monitoring app exposes at \texttt{/api/metrics}:
   \texttt{activity\_id}. Total completed samples.
 \item[\texttt{durga\_activity\_sla\_violations}] Counter. Labels:
   \texttt{process\_id}, \texttt{activity\_id}. Count exceeding the
-  configured SLA threshold.
+  configured (global) SLA-latency threshold.
+\item[\texttt{durga\_alarm\_active}] Gauge (1 per active alarm). Labels:
+  \texttt{process\_id}, \texttt{activity\_id}, \texttt{syndrome},
+  \texttt{severity}. Every active alarm-state entry, including SLA alarms.
+\item[\texttt{durga\_alarm\_fire\_count}] Counter. Same labels as
+  \texttt{durga\_alarm\_active}; number of firings folded into the active alarm.
+\item[\texttt{durga\_sla\_last\_observed}] Gauge. Labels: \texttt{process\_id},
+  \texttt{activity\_id}, \texttt{syndrome}. Latest observed SLA measurement ---
+  wall-clock latency in ms for \texttt{SLA\_LATENCY}, or windowed completion count
+  for \texttt{SLA\_THROUGHPUT}.
+\item[\texttt{durga\_sla\_limit}] Gauge. Same labels as
+  \texttt{durga\_sla\_last\_observed}; the agreed limit --- maximum latency in ms,
+  or minimum completions per window.
 \item[\texttt{durga\_streams\_state}] Gauge. 1 if RUNNING, 0 otherwise.
 \end{description}
 

@@ -325,6 +325,41 @@ comparison outcomes are computed and materialised correctly over real Kafka.
 
 % ===========================================================================
 
+\subsection{SlaMonitoringIntegrationTest}
+\label{it:slaMonitoring}
+
+\textbf{Purpose:} End-to-end verification of the performance-SLA alarm path. Runs
+the fault-detection topology (which measures SLAs from lifecycle events and emits
+alarms to \texttt{fault-alarms}) together with the alarm-state topology (which
+folds those alarms into the queryable read model consumed by \texttt{/api/metrics}),
+both against a live Kafka broker.
+
+\textbf{Scenarios (2):}
+
+\begin{description}
+
+\item[shouldFireSlaLatencyAlarmWhenTaskExceedsLimit] Publishes
+\texttt{ACTIVITY\_ENTERED} then \texttt{ACTIVITY\_COMPLETED} four minutes apart for a
+task with a 1\,s \texttt{SLA\_LATENCY} ceiling. Asserts the alarm-state store
+materialises an \texttt{SLA\_LATENCY} alarm whose observed latency
+(\texttt{lastCount}) is 240\,000\,ms and limit (\texttt{threshold}) is 1\,000\,ms ---
+the exact values surfaced as \texttt{durga\_sla\_last\_observed} /
+\texttt{durga\_sla\_limit}.
+
+\item[shouldFireSlaThroughputAlarmWhenRateStarves] Declares a process-wide
+\texttt{SLA\_THROUGHPUT} floor of two completions per two-second window, feeds a
+single completion, and asserts the wall-clock punctuator reports a breach
+(\texttt{lastCount} below \texttt{threshold}) once a full window has elapsed with
+insufficient throughput. Uses a 1\,s scan interval override for prompt scoring.
+
+\end{description}
+
+\textbf{Why it matters:} Proves that SLAs declared in the process model turn into
+real, queryable alarms driven by observed wall-clock latency and throughput ---
+not merely a static counter.
+
+% ===========================================================================
+
 \subsection{FaultDetectionTest (unit)}
 \label{it:faultDetection}
 

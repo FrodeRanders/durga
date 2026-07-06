@@ -12,7 +12,7 @@ The project is a multi-module Maven build (parent aggregator `durga`, `pom` pack
 
 ## Build, Test, and Development Commands
 - `mvn clean package` builds all modules (the scaffolder shaded JAR and the monitor Quarkus runner) and cleans logs configured by the clean plugin.
-- `mvn test` runs all JUnit 4 tests across modules. `mvn test -Dtest='!*IntegrationTest'` runs the non-Docker suite (326 tests as of 2026-07-06: durga-runtime 208, durga-tools 57, durga-monitor 61); integration tests require Docker and are suffixed `IntegrationTest`.
+- `mvn test` runs all JUnit 4 tests across modules. `mvn test -Dtest='!*IntegrationTest'` runs the non-Docker suite (341 tests as of 2026-07-06: durga-runtime 209, durga-tools 57, durga-monitor 75); integration tests require Docker and are suffixed `IntegrationTest`.
 - `mvn test -Dtest='!*IntegrationTest'` runs unit tests only (no Docker required).
 - `mvn test -Dtest='*IntegrationTest'` runs integration tests only (requires Docker).
 - `mvn compile` compiles sources without running tests.
