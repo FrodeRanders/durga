@@ -149,8 +149,23 @@
         return grouped
     }
 
-    function alarmRows() {
-        return [...s.alarms].sort((a, b) => String(b.lastTriggeredAt || '').localeCompare(String(a.lastTriggeredAt || '')))
+    function displayedAlarms() {
+        // When a process is selected, show its alarms plus system-wide alarms (which are not
+        // scoped to any single process); otherwise show everything.
+        const rows = s.processId ? [...s.alarms, ...systemAlarms()] : [...s.allAlarms]
+        return rows.sort((a, b) => String(b.lastTriggeredAt || '').localeCompare(String(a.lastTriggeredAt || '')))
+    }
+
+    function alarmTooltip(alarm) {
+        const lines = []
+        if (alarm.syndrome) lines.push(`Syndrome: ${alarm.syndrome}`)
+        if (alarm.lastMessage) lines.push(alarm.lastMessage)
+        if (alarm.threshold) lines.push(`Latest count ${number(alarm.lastCount)} (threshold ${number(alarm.threshold)})`)
+        if (alarm.firstTriggeredAt) lines.push(`First fired: ${dateTime(alarm.firstTriggeredAt)}`)
+        if (alarm.lastProcessInstanceId) lines.push(`Last instance: ${alarm.lastProcessInstanceId}`)
+        if (alarm.triggerEventType) lines.push(`Trigger: ${alarm.triggerEventType}`)
+        if (alarm.configId) lines.push(`Config: ${alarm.configId}`)
+        return lines.join('\n')
     }
 
     function alarmSeverityClass(severity) {
@@ -464,9 +479,9 @@
         <section class="panel wide">
             <div class="panel-title">
                 <h2>Alarm State</h2>
-                <span>{s.processId ? `${number(s.alarms.length)} active` : `${number(s.allAlarms.length)} active${systemAlarms().length ? ` · ${number(systemAlarms().length)} system-wide` : ''}`}</span>
+                <span>{number(displayedAlarms().length)} active{systemAlarms().length ? ` · ${number(systemAlarms().length)} system-wide` : ''}</span>
             </div>
-            {#if (s.processId ? alarmRows() : s.allAlarms).length}
+            {#if displayedAlarms().length}
                 <table>
                     <thead>
                     <tr>
@@ -478,8 +493,8 @@
                     </tr>
                     </thead>
                     <tbody>
-                    {#each (s.processId ? alarmRows() : s.allAlarms) as alarm}
-                        <tr class:system={isSystemAlarm(alarm)}>
+                    {#each displayedAlarms() as alarm}
+                        <tr class:system={isSystemAlarm(alarm)} title={alarmTooltip(alarm)}>
                             <td>{alarmScope(alarm)}</td>
                             <td>{alarm.activityId ?? '*'}</td>
                             <td><span class="badge {alarmSeverityClass(alarm.severity)}">{alarm.severity}</span></td>
