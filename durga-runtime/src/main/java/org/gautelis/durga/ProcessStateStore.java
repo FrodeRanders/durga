@@ -21,6 +21,13 @@ import java.util.Properties;
  * <p>
  * The store writes complete {@link ProcessState} snapshots and reads them back by scanning the
  * compacted topic to the current end offset.
+ * <p>
+ * A single instance is shared across generated messaging handlers (e.g. the orchestrator's
+ * gateway/completion listeners), which run on different reactive threads. The underlying
+ * {@link org.apache.kafka.clients.consumer.KafkaConsumer} is not thread-safe, so the public
+ * {@link #save} / {@link #loadLatest} / {@link #close} methods are {@code synchronized} to
+ * serialize access. Callers should invoke them from a worker thread (e.g. {@code @Blocking}),
+ * since {@link #loadLatest} polls Kafka and must not run on an event-loop thread.
  */
 public class ProcessStateStore implements AutoCloseable {
     private final KafkaProducer<String, String> producer;
@@ -58,7 +65,7 @@ public class ProcessStateStore implements AutoCloseable {
      *
      * @param state state snapshot to persist
      */
-    public void save(ProcessState state) {
+    public synchronized void save(ProcessState state) {
         ProducerRecord<String, String> record =
                 new ProducerRecord<>(topic, state.processInstanceId(), state.toJson());
         producer.send(record);
@@ -73,7 +80,7 @@ public class ProcessStateStore implements AutoCloseable {
      * @param timeout maximum scan duration
      * @return latest visible snapshot, or {@code null} if no state was found
      */
-    public ProcessState loadLatest(String processInstanceId, Duration timeout) {
+    public synchronized ProcessState loadLatest(String processInstanceId, Duration timeout) {
         List<TopicPartition> partitions = consumer.partitionsFor(topic).stream()
                 .map(info -> new TopicPartition(topic, info.partition()))
                 .toList();
@@ -121,7 +128,7 @@ public class ProcessStateStore implements AutoCloseable {
      * Closes the underlying producer and consumer.
      */
     @Override
-    public void close() {
+    public synchronized void close() {
         try {
             producer.close();
         } finally {

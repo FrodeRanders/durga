@@ -3492,14 +3492,14 @@ public class ProcessStateStore implements AutoCloseable {
         this.consumer = new KafkaConsumer<>(consumerProps);
     }
 
-    public void save(ProcessState state) {
+    public synchronized void save(ProcessState state) {
         ProducerRecord<String, String> record =
                 new ProducerRecord<>(topic, state.processInstanceId(), state.toJson());
         producer.send(record);
         producer.flush();
     }
 
-    public ProcessState loadLatest(String processInstanceId, Duration timeout) {
+    public synchronized ProcessState loadLatest(String processInstanceId, Duration timeout) {
         List<TopicPartition> partitions = consumer.partitionsFor(topic).stream()
                 .map(info -> new TopicPartition(topic, info.partition()))
                 .toList();
@@ -3541,7 +3541,7 @@ public class ProcessStateStore implements AutoCloseable {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         producer.close();
         consumer.close();
     }

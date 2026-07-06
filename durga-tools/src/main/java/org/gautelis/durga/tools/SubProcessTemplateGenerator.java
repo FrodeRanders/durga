@@ -226,9 +226,13 @@ final class SubProcessTemplateGenerator {
         for (JoinMethodSpec method : incomingMethods) {
             // Render concrete @Incoming methods instead of a loop in the template so the
             // generated class stays explicit and easy to inspect in an IDE.
+            // @Blocking runs the handler on a worker thread: handleCompletion polls Kafka via
+            // the shared ProcessStateStore, which must not run on the reactive event loop and
+            // must not be entered concurrently from multiple event-loop threads.
             builder.append("    @Incoming(\"")
                     .append(method.channel)
                     .append("\")\n")
+                    .append("    @io.smallrye.common.annotation.Blocking\n")
                     .append("    public CompletionStage<Void> ")
                     .append(method.method)
                     .append("(Message<String> msg) {\n")
