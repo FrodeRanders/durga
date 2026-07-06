@@ -10,7 +10,10 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -657,7 +660,8 @@ public class BpmnScaffolderTest {
      * Generated projects depend on {@code org.gautelis:durga-runtime} for the concrete plugin
      * classes, so the spawned generated-project Maven builds must resolve that artifact from the
      * local repository. A plain reactor {@code mvn test}/{@code verify} builds durga-runtime but
-     * never installs it, so these tests only pass on a warm {@code ~/.m2}. Install it once here so
+     * never installs it, so these tests only pass on a warm {@code ~/.m2}. Install both the parent
+     * aggregator POM (durga-runtime's POM inherits from it) and durga-runtime itself once here so
      * the tests are self-contained on a cold local repository (and in CI).
      */
     private static synchronized void ensureDurgaRuntimeInstalled() throws Exception {
@@ -665,22 +669,30 @@ public class BpmnScaffolderTest {
             return;
         }
         Path repoRoot = findRepoRoot();
-        Process process = new ProcessBuilder(
-                "mvn", "-q", "-pl", "durga-runtime", "install",
-                "-DskipTests", "-Dcheckstyle.skip=true", "-Dspotbugs.skip=true", "-Djacoco.skip=true")
-                .directory(repoRoot.toFile())
+        // Parent aggregator POM first (non-recursive), then durga-runtime — otherwise reading the
+        // durga-runtime descriptor fails on the missing org.gautelis:durga:pom parent.
+        runMaven(repoRoot, "-N", "install",
+                "-DskipTests", "-Dcheckstyle.skip=true", "-Dspotbugs.skip=true", "-Djacoco.skip=true");
+        runMaven(repoRoot, "-pl", "durga-runtime", "install",
+                "-DskipTests", "-Dcheckstyle.skip=true", "-Dspotbugs.skip=true", "-Djacoco.skip=true");
+        durgaRuntimeInstalled = true;
+    }
+
+    private static void runMaven(Path workingDir, String... args) throws Exception {
+        List<String> command = new ArrayList<>();
+        command.add("mvn");
+        command.add("-q");
+        command.addAll(Arrays.asList(args));
+        Process process = new ProcessBuilder(command)
+                .directory(workingDir.toFile())
                 .redirectErrorStream(true)
                 .start();
         ByteArrayOutputStream captured = new ByteArrayOutputStream();
         process.getInputStream().transferTo(captured);
         boolean finished = process.waitFor(5, TimeUnit.MINUTES);
-        assertTrue("durga-runtime install timed out\n" + captured.toString(StandardCharsets.UTF_8), finished);
-        assertEquals(
-                "Failed to install durga-runtime to the local repository\n"
-                        + captured.toString(StandardCharsets.UTF_8),
-                0,
-                process.exitValue());
-        durgaRuntimeInstalled = true;
+        String label = "mvn " + String.join(" ", args);
+        assertTrue(label + " timed out\n" + captured.toString(StandardCharsets.UTF_8), finished);
+        assertEquals(label + " failed\n" + captured.toString(StandardCharsets.UTF_8), 0, process.exitValue());
     }
 
     private static Path findRepoRoot() {
