@@ -125,7 +125,7 @@ Feed the pipeline by publishing a `PROCESS_STARTED` `ProcessEvent` to the first
 task's input topic (`%processId%_<firstTask>_in`).
 >>
 
-libRs(processId, eventsTopic, hasCustom) ::= <<
+libRs(processId, eventsTopic, hasCustom, validation) ::= <<
 //! Generated worker runtime for process "%processId%".
 //!
 //! Thin Kafka glue around durga-rust: consume an input topic, run the plugin
@@ -136,7 +136,8 @@ libRs(processId, eventsTopic, hasCustom) ::= <<
 use std::time::Duration;
 
 use durga_rust::{eval_condition, plan_worker_output, Category, Plugin, ProcessEvent};
-use rdkafka::config::ClientConfig;
+%if(validation)%use durga_rust::plan_validation_output;
+%endif%use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
 use rdkafka::message::Message;
 use rdkafka::producer::{FutureProducer, FutureRecord};
@@ -285,6 +286,76 @@ pub async fn run_gateway_worker(brokers: &str, cfg: GatewayWorker) {
         }
     }
 }
+%if(validation)%
+pub const VALIDATION_TOPIC: &str = "validation-candidate-outputs";
+
+/// Configuration for a validation-mode shadow worker.
+pub struct ValidationWorker {
+    pub group_id: String,
+    pub input_topic: String,
+    pub activity_id: String,
+    pub plugin_config: String,
+    pub candidate_version: String,
+}
+
+/// Runs a validation shadow worker: consume the production input topic through
+/// a dedicated consumer group (so the production offset is never advanced), run
+/// the candidate plugin with downstream side effects suppressed, and divert the
+/// candidate output to the shared validation topic. No lifecycle events, no
+/// forward, no DLQ. The offset reset defaults to `latest` (live concurrent) and
+/// is overridable via `DURGA_VALIDATION_OFFSET_RESET`.
+pub async fn run_validation_worker(
+    brokers: &str,
+    cfg: ValidationWorker,
+    plugin: Box<dyn Plugin + Send + Sync>,
+) {
+    let offset_reset =
+        std::env::var("DURGA_VALIDATION_OFFSET_RESET").unwrap_or_else(|_| "latest".to_string());
+    let consumer: StreamConsumer = ClientConfig::new()
+        .set("bootstrap.servers", brokers)
+        .set("group.id", &cfg.group_id)
+        .set("enable.auto.commit", "false")
+        .set("auto.offset.reset", &offset_reset)
+        .create()
+        .expect("consumer creation failed");
+    consumer
+        .subscribe(&[cfg.input_topic.as_str()])
+        .expect("subscribe failed");
+    let producer = build_producer(brokers);
+    eprintln!("[durga] validation {} shadowing {}", cfg.activity_id, cfg.input_topic);
+    loop {
+        match consumer.recv().await {
+            Err(e) => eprintln!("[durga] consume error: {e}"),
+            Ok(msg) => {
+                let raw = msg.payload().unwrap_or_default();
+                let text = String::from_utf8_lossy(raw);
+                let Ok(event) = ProcessEvent::from_json(&text) else {
+                    let _ = consumer.commit_message(&msg, CommitMode::Async);
+                    continue;
+                };
+                let payload_bytes = serde_json::to_vec(
+                    &event.payload.clone().unwrap_or(serde_json::json!({})),
+                )
+                .unwrap_or_else(|_| b"{}".to_vec());
+
+                let result = plugin
+                    .execute_with_result(&payload_bytes, &cfg.plugin_config)
+                    .map_err(|e| e.to_string());
+
+                let candidate = plan_validation_output(
+                    &event,
+                    &cfg.activity_id,
+                    &cfg.candidate_version,
+                    result,
+                );
+                let key = candidate.key();
+                send(&producer, VALIDATION_TOPIC, &key, &candidate.to_json()).await;
+                let _ = consumer.commit_message(&msg, CommitMode::Async);
+            }
+        }
+    }
+}
+%endif%
 >>
 
 pluginWorkerBin(processId, crateLib, activityId, structName, pluginConfig, inputTopic, outputTopic, dlqTopic, groupId, categoryVariant, terminal) ::= <<
@@ -322,5 +393,25 @@ async fn main() {
         branches: %branchesBlock%,
     };
     run_gateway_worker(&brokers, cfg).await;
+}
+>>
+
+validationWorkerBin(processId, crateLib, activityId, structName, pluginConfig, inputTopic, groupId) ::= <<
+use %crateLib%::{run_validation_worker, ValidationWorker};
+use durga_rust::plugins::%structName%;
+
+#[tokio::main]
+async fn main() {
+    let brokers = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9094".to_string());
+    let candidate_version = std::env::var("DURGA_VALIDATION_CANDIDATE_VERSION")
+        .unwrap_or_else(|_| "candidate".to_string());
+    let cfg = ValidationWorker {
+        group_id: "%groupId%".to_string(),
+        input_topic: "%inputTopic%".to_string(),
+        activity_id: "%activityId%".to_string(),
+        plugin_config: "%pluginConfig%".to_string(),
+        candidate_version,
+    };
+    run_validation_worker(&brokers, cfg, Box::new(%structName%::new())).await;
 }
 >>

@@ -19,8 +19,17 @@ java -jar target/durga-0.1.0-beta.1.jar path/to/process.bpmn [flags...]
 
 Available flags: \texttt{--dry-run}, \texttt{--out <dir>},
 \texttt{--transactions}, \texttt{--separate-workers}, \texttt{--strimzi},
-\texttt{--connect}, \texttt{--event-topic <topic>}, \texttt{--process-id <id>},
+\texttt{--connect}, \texttt{--validation}, \texttt{--target java|rust},
+\texttt{--event-topic <topic>}, \texttt{--process-id <id>},
 \texttt{--package <pkg>}, \texttt{--retention <hours>}.
+
+\texttt{--validation} additionally generates a validation-mode shadow worker for
+each plugin task (Java or Rust), so a candidate implementation can be run against
+real input on a dedicated consumer group with side effects suppressed and its
+output compared against production. It also registers the \\
+\texttt{validation-candidate-outputs} and \texttt{validation-results} topics. See
+Section~\ref{sec:ValidationMode}. The default output (without the flag) is
+unchanged.
 
 \texttt{--retention <hours>} sets Kafka topic retention in hours
 (defaults to 168\,h/7\,days with a warning). Use \texttt{-1} for
@@ -37,7 +46,7 @@ diagnostic history, storage cost and monitoring recovery. Infinite retention
 requires an explicit storage and compaction strategy.
 
 \texttt{--package <pkg>} sets the Java package for generated code
-(defaults to \texttt{org.gautelis.durga.generated} with a warning).
+(defaults to \texttt{org.gautelis.durga.\\generated} with a warning).
 Operational classes are placed directly in the package; probe and
 exerciser classes in \texttt{<pkg>.probes}.
 

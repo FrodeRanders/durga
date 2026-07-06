@@ -567,6 +567,52 @@ public class BpmnScaffolderTest {
         }
     }
 
+    private static void runRustGeneration(String relativeBpmnPath, Path outputDir, boolean validation) throws Exception {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        PrintStream captureStream = new PrintStream(captured, true, StandardCharsets.UTF_8);
+        try {
+            System.setOut(captureStream);
+            System.setErr(captureStream);
+            java.util.List<String> args = new java.util.ArrayList<>();
+            args.add(fixturePath(relativeBpmnPath).toAbsolutePath().toString());
+            args.add("--out");
+            args.add(outputDir.toAbsolutePath().toString());
+            args.add("--target");
+            args.add("rust");
+            if (validation) {
+                args.add("--validation");
+            }
+            BpmnScaffolder.main(args.toArray(new String[0]));
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+            captureStream.close();
+        }
+    }
+
+    private static void runGenerationWithValidation(String relativeBpmnPath, Path outputDir) throws Exception {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        PrintStream captureStream = new PrintStream(captured, true, StandardCharsets.UTF_8);
+        try {
+            System.setOut(captureStream);
+            System.setErr(captureStream);
+            BpmnScaffolder.main(new String[]{
+                    fixturePath(relativeBpmnPath).toAbsolutePath().toString(),
+                    "--out",
+                    outputDir.toAbsolutePath().toString(),
+                    "--validation"
+            });
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+            captureStream.close();
+        }
+    }
+
     private static void runGeneratedMavenTest(Path outputDir) throws Exception {
         Process process = new ProcessBuilder("mvn", "-q", "test")
                 .directory(outputDir.toFile())
@@ -654,8 +700,7 @@ public class BpmnScaffolderTest {
     }
 
     @Test
-    public void generatedDataPipelineProjectContainsPluginExecutors() throws Exception {
-        System.out.println("TC: generated data pipeline project contains plugin executor with plugin import and execution");
+    public void generatedDataPipelineProjectContainsPluginExecutors() throws Exception {        System.out.println("TC: generated data pipeline project contains plugin executor with plugin import and execution");
         Path outputDir = Files.createTempDirectory("durga-pipeline-test-");
         runGeneration("src/test/resources/bpmn/data_pipeline_demo.bpmn", outputDir);
         Path transformFile = outputDir.resolve(
@@ -677,6 +722,89 @@ public class BpmnScaffolderTest {
 
         String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
         assertTrue(applicationYaml.contains("vannak-metadata-events"));
+    }
+
+    @Test
+    public void validationModeGeneratesShadowWorkersChannelsAndTopics() throws Exception {
+        System.out.println("TC: --validation generates shadow workers, dedicated validation channels, and topics for plugin tasks");
+        Path outputDir = Files.createTempDirectory("durga-validation-test-");
+        runGenerationWithValidation("src/test/resources/bpmn/data_pipeline_demo.bpmn", outputDir);
+
+        Path shadow = outputDir.resolve(
+                "src/main/java/org/example/generated/TransformDataValidationWorker.java");
+        assertTrue("shadow worker not generated", Files.exists(shadow));
+        String shadowContent = Files.readString(shadow);
+        assertTrue(shadowContent.contains("@Incoming(\"data_pipeline_demo_transform_data_validation_in\")"));
+        assertTrue(shadowContent.contains("@Channel(\"validation-candidate-outputs\")"));
+        assertTrue(shadowContent.contains("ValidationCandidateOutput"));
+        assertTrue(shadowContent.contains("plugin.executeWithResult("));
+        assertFalse("shadow worker must not emit lifecycle events", shadowContent.contains("processEventsEmitter"));
+        assertFalse("shadow worker must not emit to the task output channel", shadowContent.contains("_out\")"));
+
+        assertTrue("ValidationCandidateOutput runtime type not generated", Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/validation/ValidationCandidateOutput.java")));
+
+        String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
+        assertTrue(applicationYaml.contains("data_pipeline_demo_transform_data_validation_in"));
+        assertTrue(applicationYaml.contains("validation-candidate-outputs"));
+        assertTrue("dedicated consumer group missing",
+                applicationYaml.contains("data_pipeline_demo_transform_data_validation"));
+        assertTrue("configurable offset reset missing", applicationYaml.contains("DURGA_VALIDATION_OFFSET_RESET"));
+
+        String topics = Files.readString(outputDir.resolve("topics.sh"));
+        assertTrue(topics.contains("validation-candidate-outputs"));
+        assertTrue(topics.contains("validation-results"));
+    }
+
+    @Test
+    public void rustValidationTargetGeneratesShadowBinsAndRuntime() throws Exception {
+        System.out.println("TC: --target rust --validation generates shadow worker bins and validation runtime glue");
+        Path outputDir = Files.createTempDirectory("durga-rust-validation-test-");
+        runRustGeneration("src/test/resources/bpmn/e2e_pipeline.bpmn", outputDir, true);
+
+        Path shadowBin = outputDir.resolve("src/bin/transform_order_validation.rs");
+        assertTrue("rust shadow worker bin not generated", Files.exists(shadowBin));
+        String binContent = Files.readString(shadowBin);
+        assertTrue(binContent.contains("run_validation_worker"));
+        assertTrue(binContent.contains("ValidationWorker"));
+        assertTrue(binContent.contains("e2e_pipeline-transform_order-validation"));
+        assertTrue(binContent.contains("DURGA_VALIDATION_CANDIDATE_VERSION"));
+
+        String lib = Files.readString(outputDir.resolve("src/lib.rs"));
+        assertTrue(lib.contains("pub async fn run_validation_worker"));
+        assertTrue(lib.contains("validation-candidate-outputs"));
+        assertTrue(lib.contains("DURGA_VALIDATION_OFFSET_RESET"));
+
+        assertFalse("gateway must not get a validation bin",
+                Files.exists(outputDir.resolve("src/bin/route_by_amount_validation.rs")));
+    }
+
+    @Test
+    public void rustDefaultTargetHasNoValidationArtifacts() throws Exception {
+        System.out.println("TC: rust generation without --validation produces no shadow bins or validation runtime");
+        Path outputDir = Files.createTempDirectory("durga-rust-no-validation-test-");
+        runRustGeneration("src/test/resources/bpmn/e2e_pipeline.bpmn", outputDir, false);
+
+        assertFalse(Files.exists(outputDir.resolve("src/bin/transform_order_validation.rs")));
+        String lib = Files.readString(outputDir.resolve("src/lib.rs"));
+        assertFalse(lib.contains("run_validation_worker"));
+        assertFalse(lib.contains("validation-candidate-outputs"));
+    }
+
+    @Test
+    public void defaultGenerationHasNoValidationArtifacts() throws Exception {
+        System.out.println("TC: generation without --validation produces no shadow workers or validation topics");
+        Path outputDir = Files.createTempDirectory("durga-no-validation-test-");
+        runGeneration("src/test/resources/bpmn/data_pipeline_demo.bpmn", outputDir);
+
+        assertFalse(Files.exists(outputDir.resolve(
+                "src/main/java/org/example/generated/TransformDataValidationWorker.java")));
+        assertFalse(Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/validation/ValidationCandidateOutput.java")));
+        String topics = Files.readString(outputDir.resolve("topics.sh"));
+        assertFalse(topics.contains("validation-candidate-outputs"));
+        String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
+        assertFalse(applicationYaml.contains("validation-candidate-outputs"));
     }
 
     @Test

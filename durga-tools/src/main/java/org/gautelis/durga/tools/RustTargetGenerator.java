@@ -112,6 +112,19 @@ final class RustTargetGenerator {
             bin.add("terminal", terminal);
             write(parsed, binDir.resolve(task.name + ".rs"), bin.render());
             workers++;
+
+            if (parsed.validation) {
+                ST validationBin = group.getInstanceOf("validationWorkerBin");
+                validationBin.add("processId", processId);
+                validationBin.add("crateLib", crateLib);
+                validationBin.add("activityId", task.name);
+                validationBin.add("structName", structName);
+                validationBin.add("pluginConfig", escapeRust(task.pluginConfig != null ? task.pluginConfig : "."));
+                validationBin.add("inputTopic", inputTopicFor(processId, taskNode, nodes));
+                validationBin.add("groupId", processId + "-" + task.name + "-validation");
+                write(parsed, binDir.resolve(task.name + "_validation.rs"), validationBin.render());
+                workers++;
+            }
         }
 
         boolean hasCustom = !customModules.isEmpty();
@@ -120,6 +133,7 @@ final class RustTargetGenerator {
         lib.add("processId", processId);
         lib.add("eventsTopic", eventsTopic);
         lib.add("hasCustom", hasCustom);
+        lib.add("validation", parsed.validation);
         write(parsed, outputRoot.resolve("src/lib.rs"), lib.render());
 
         if (hasCustom) {

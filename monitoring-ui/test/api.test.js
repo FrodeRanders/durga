@@ -7,7 +7,9 @@ import {
   instanceAlarmsRequestPath,
   instanceRequestPath,
   normalizeDashboardResponses,
-  processListRequestPath
+  processListRequestPath,
+  validationResultsRequestPath,
+  validationSummaryRequestPath
 } from '../src/api.js'
 
 test('dashboardRequestPaths URL-encodes process id and threshold', () => {
@@ -42,6 +44,20 @@ test('instanceRequestPath returns null for empty input and encodes ids', () => {
 test('instanceAlarmsRequestPath returns null for empty input and encodes ids', () => {
   assert.equal(instanceAlarmsRequestPath(''), null)
   assert.equal(instanceAlarmsRequestPath('instance/1'), '/api/instances/instance%2F1/alarms')
+})
+
+test('validationSummaryRequestPath returns endpoint with optional processId', () => {
+  assert.equal(validationSummaryRequestPath(), '/api/validation/summary')
+  assert.equal(validationSummaryRequestPath(''), '/api/validation/summary')
+  assert.equal(validationSummaryRequestPath('order/fulfill'), '/api/validation/summary?processId=order%2Ffulfill')
+})
+
+test('validationResultsRequestPath omits blank params and encodes the rest', () => {
+  assert.equal(validationResultsRequestPath(), '/api/validation/results')
+  assert.equal(validationResultsRequestPath('order/fulfill'), '/api/validation/results?processId=order%2Ffulfill')
+  assert.equal(
+    validationResultsRequestPath('proc', 'transform data', 'DIFF'),
+    '/api/validation/results?processId=proc&taskId=transform%20data&status=DIFF')
 })
 
 test('normalizeDashboardResponses defaults missing collections to arrays', () => {

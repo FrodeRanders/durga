@@ -125,7 +125,7 @@ mp:
 }%
 >>
 
-topicsScript(processId, tasks, timers, messageTopics, callActivities, subProcesses, retentionMs, eventsTopic) ::= <<
+topicsScript(processId, tasks, timers, messageTopics, callActivities, subProcesses, retentionMs, eventsTopic, validationEnabled) ::= <<
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -155,7 +155,9 @@ topics=(
   "%processId%_%t%_input"
   "%processId%_%t%_output"
 }%
-)
+%if(validationEnabled)%  "validation-candidate-outputs"
+  "validation-results"
+%endif%)
 
 for topic in "${topics[@]}"; do
   if [[ "$topic" == "%processId%_state" ]]; then
@@ -3817,13 +3819,79 @@ groups:
           summary: "Consumer lag exceeds 10,000 records"
           description: "Worker {{ $labels.client_id }} is falling behind. Consider scaling up or investigating processing time."
 
-      - alert: "%processId%_worker_down"
-        expr: up{job="%processId%-worker"} == 0
-        for: 5m
-        labels:
-          severity: critical
-          process: "%processId%"
-        annotations:
-          summary: "Worker instance is down"
-          description: "Worker {{ $labels.instance }} has been unreachable for 5 minutes."
+       - alert: "%processId%_worker_down"
+         expr: up{job="%processId%-worker"} == 0
+         for: 5m
+         labels:
+           severity: critical
+           process: "%processId%"
+         annotations:
+           summary: "Worker instance is down"
+           description: "Worker {{ $labels.instance }} has been unreachable for 5 minutes."
+>>
+
+validationCandidateOutputClass() ::= <<
+package org.gautelis.durga.validation;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.gautelis.durga.ProcessEvent;
+
+import java.time.Instant;
+import java.util.Map;
+
+/**
+ * Output of a task run in validation mode by a shadow worker. Carries both the shared input and the
+ * candidate output so the monitor can pair it against the prior/production output for the same
+ * (processId, activityId, processInstanceId) and produce a comparison report.
+ */
+public record ValidationCandidateOutput(
+        String processId,
+        String taskId,
+        String processInstanceId,
+        String activityId,
+        String tokenId,
+        String correlationId,
+        String businessKey,
+        String candidateVersion,
+        Map<String, Object> inputPayload,
+        Map<String, Object> outputPayload,
+        String disposition,
+        String sideEffectDescription,
+        String idempotencyKey,
+        String errorStrategy,
+        ProcessEvent.ErrorInfo error,
+        String timestamp
+) {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public ValidationCandidateOutput {
+        timestamp = timestamp != null ? timestamp : Instant.now().toString();
+    }
+
+    public String key() {
+        return key(processId, taskId, processInstanceId);
+    }
+
+    public static String key(String processId, String taskId, String processInstanceId) {
+        return processId + ":" + taskId + ":" + processInstanceId;
+    }
+
+    public String toJson() {
+        try {
+            return MAPPER.writeValueAsString(this);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize ValidationCandidateOutput", e);
+        }
+    }
+
+    public static ValidationCandidateOutput fromJson(String json) {
+        try {
+            return MAPPER.readValue(json, ValidationCandidateOutput.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Failed to parse ValidationCandidateOutput", e);
+        }
+    }
+}
 >>

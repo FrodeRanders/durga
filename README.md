@@ -69,6 +69,8 @@ Flags:
 - `--out <dir>` — custom output directory
 - `--event-topic <topic>` — override the canonical lifecycle event topic (default: `process-events-{processId}`). Each pipeline gets an isolated topic by default; use this flag to share a topic across pipelines or use a custom name.
 - `--transactions` — generate transactional workers using Kafka producer/consumer APIs
+- `--target java|rust` — code-generation target (default `java`)
+- `--validation` — additionally generate a validation-mode shadow worker per plugin task (see [Validation mode](#validation-mode))
 
 The generator skips existing files in `src/main/java/`, merges new channels into
 `application.yml`, and evaluates gateway conditions from BPMN `conditionExpression` at runtime.
@@ -122,6 +124,40 @@ A Kafka Streams topology consumes per-process lifecycle events and materializes:
 Processes **self-register** by publishing their BPMN 2.0 XML to the
 `process-models` Kafka topic on startup. The monitor discovers processes
 from this registry — no pre-configured process ID list needed.
+
+## Validation mode
+
+Validation mode runs a **not-yet-released** implementation of a task against real
+input, alongside the current/prior version, and reports where the candidate
+produces the **same** output and where it **diverges** — handled **per task**, so a
+change in an early task never contaminates the comparison of later ones.
+
+Scaffold with `--validation` to generate, for each plugin task, a **shadow worker**
+beside the production worker. The shadow worker:
+
+- consumes the same production input via a **dedicated consumer group**
+  (`{processId}_{taskId}_validation`), so the production input index is never
+  disturbed (start at `latest` by default, or set `DURGA_VALIDATION_OFFSET_RESET`
+  for a bounded recent replay);
+- runs the candidate with **side effects suppressed**;
+- writes nothing to the task output topic or `process-events` — its output is
+  diverted to `validation-candidate-outputs`.
+
+The monitor's `ValidationTopology` pairs each candidate output against the
+prior/production output for the **same input** (keyed by
+`processId:activityId:processInstanceId`, robust to arrival order) and classifies
+each comparison as `EQUAL`, `DIFF`, `PRIOR_MISSING`, or `CANDIDATE_ERROR` using a
+normalized JSON diff with configurable ignore-paths (`durga.validation.ignore.paths`).
+Results land in `validation-results` and are exposed via:
+
+- `GET /api/validation/summary?processId=<id>` — per-task outcome counts
+- `GET /api/validation/results?processId=&taskId=&status=` — individual comparisons
+- `GET /api/validation/instances/{instanceId}` — comparisons for one instance
+- a **Validation Report** panel in the dashboard (per-task summary + per-instance
+  input/prior/candidate diff), and `durga_validation_*` Prometheus metrics
+
+Both the Java and Rust targets emit shadow workers; the `ValidationCandidateOutput`
+wire record is identical across targets, so a mixed fleet feeds the same comparator.
 
 ### Full-stack dev demo (one command)
 

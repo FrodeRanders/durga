@@ -4,7 +4,9 @@ import {
   instanceAlarmsRequestPath,
   instanceRequestPath,
   normalizeDashboardResponses,
-  processListRequestPath
+  processListRequestPath,
+  validationResultsRequestPath,
+  validationSummaryRequestPath
 } from './api.js'
 
 let processId = $state('')
@@ -25,6 +27,10 @@ let instanceAlarms = $state([])
 let diagramAvailable = $state(false)
 let error = $state(null)
 let processList = $state([])
+
+let validationSummary = $state([])
+let validationResults = $state([])
+let validationTask = $state('')
 
 let interval = null
 
@@ -93,6 +99,28 @@ export async function checkDiagramAvailable() {
   }
 }
 
+export async function refreshValidation() {
+  if (!processId) {
+    validationSummary = []
+    validationResults = []
+    return
+  }
+  const summary = await safeFetchJson(validationSummaryRequestPath(processId))
+  validationSummary = Array.isArray(summary?.body) ? summary.body : []
+  const results = await safeFetchJson(
+    validationResultsRequestPath(processId, validationTask || null, null))
+  validationResults = Array.isArray(results?.body) ? results.body : []
+}
+
+export function selectValidationTask(taskId) {
+  validationTask = validationTask === taskId ? '' : taskId
+  refreshValidation()
+}
+
+export function clearValidationTask() {
+  validationTask = ''
+}
+
 export function scheduleRefresh(getRefresh) {
   if (interval) clearInterval(interval)
   getRefresh()
@@ -128,10 +156,16 @@ export function getState() {
     get diagramAvailable() { return diagramAvailable },
     get error() { return error },
     get processList() { return processList },
+    get validationSummary() { return validationSummary },
+    get validationResults() { return validationResults },
+    get validationTask() { return validationTask },
     refresh,
     refreshInstance,
     scheduleRefresh,
     lookupInstance,
-    fetchProcessList
+    fetchProcessList,
+    refreshValidation,
+    selectValidationTask,
+    clearValidationTask
   }
 }

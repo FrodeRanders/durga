@@ -36,6 +36,19 @@ export function instanceAlarmsRequestPath(instanceId) {
   return `/api/instances/${encodeURIComponent(instanceId)}/alarms`
 }
 
+export function validationSummaryRequestPath(processId) {
+  const pid = processId ? encodeURIComponent(processId) : ''
+  return pid ? `/api/validation/summary?processId=${pid}` : '/api/validation/summary'
+}
+
+export function validationResultsRequestPath(processId, taskId, status) {
+  const parts = []
+  if (processId) parts.push(`processId=${encodeURIComponent(processId)}`)
+  if (taskId) parts.push(`taskId=${encodeURIComponent(taskId)}`)
+  if (status) parts.push(`status=${encodeURIComponent(status)}`)
+  return parts.length ? `/api/validation/results?${parts.join('&')}` : '/api/validation/results'
+}
+
 export function normalizeDashboardResponses(responses) {
   const [health, allCounts, allAlarms, counts, alarms, latency, stuck, trends] = responses
   return {

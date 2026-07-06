@@ -19,7 +19,8 @@
         s.fetchProcessList().then(() => {
             s.scheduleRefresh(() => {
                 s.refresh();
-                s.fetchProcessList()
+                s.fetchProcessList();
+                s.refreshValidation()
             })
         })
     })
@@ -201,17 +202,21 @@
 
     function selectProcess(pid) {
         s.processId = pid
+        s.clearValidationTask()
         s.scheduleRefresh(() => {
             s.refresh();
-            s.fetchProcessList()
+            s.fetchProcessList();
+            s.refreshValidation()
         })
     }
 
     function deselectProcess() {
         s.processId = ''
+        s.clearValidationTask()
         s.scheduleRefresh(() => {
             s.refresh();
-            s.fetchProcessList()
+            s.fetchProcessList();
+            s.refreshValidation()
         })
     }
 
@@ -228,6 +233,57 @@
     function healthSummary() {
         const h = s.health ?? {}
         return `core ${h.streamsState ?? 'UNKNOWN'} / fault ${h.faultStreamsState ?? 'UNKNOWN'} / alarms ${h.alarmStateStreamsState ?? 'UNKNOWN'}`
+    }
+
+    function validationSummaryRows() {
+        return [...s.validationSummary].sort((a, b) =>
+            (Number(b.diff || 0) + Number(b.candidateError || 0)) - (Number(a.diff || 0) + Number(a.candidateError || 0))
+            || String(a.taskId ?? '').localeCompare(String(b.taskId ?? '')))
+    }
+
+    function validationTotals() {
+        return s.validationSummary.reduce((acc, row) => ({
+            total: acc.total + Number(row.total || 0),
+            equal: acc.equal + Number(row.equal || 0),
+            diff: acc.diff + Number(row.diff || 0),
+            priorMissing: acc.priorMissing + Number(row.priorMissing || 0),
+            candidateError: acc.candidateError + Number(row.candidateError || 0)
+        }), {total: 0, equal: 0, diff: 0, priorMissing: 0, candidateError: 0})
+    }
+
+    const validationOrder = {DIFF: 0, CANDIDATE_ERROR: 1, PRIOR_MISSING: 2, EQUAL: 3}
+
+    function validationResultRows() {
+        return [...s.validationResults].sort((a, b) =>
+            (validationOrder[a.matchStatus] ?? 9) - (validationOrder[b.matchStatus] ?? 9)
+            || String(a.processInstanceId ?? '').localeCompare(String(b.processInstanceId ?? '')))
+    }
+
+    function validationStatusClass(status) {
+        switch (status) {
+            case 'EQUAL':
+                return 'completed'
+            case 'DIFF':
+                return 'warn'
+            case 'CANDIDATE_ERROR':
+                return 'danger'
+            default:
+                return 'cancelled'
+        }
+    }
+
+    function prettyJson(value) {
+        if (value === null || value === undefined) return '-'
+        try {
+            return JSON.stringify(value, null, 2)
+        } catch {
+            return String(value)
+        }
+    }
+
+    function diffValue(value) {
+        if (value === null || value === undefined) return '∅'
+        return value
     }
 </script>
 
@@ -561,6 +617,116 @@
                     {/if}
                 </section>
             </div>
+
+            <section class="panel wide validation-panel">
+                <div class="panel-title">
+                    <h2>Validation Report</h2>
+                    <span>
+                        {#if validationTotals().total}
+                            {number(validationTotals().diff)} diff · {number(validationTotals().candidateError)} error · {number(validationTotals().equal)} equal
+                        {:else}
+                            no candidate runs
+                        {/if}
+                    </span>
+                </div>
+                {#if validationSummaryRows().length}
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Task</th>
+                            <th>Equal</th>
+                            <th>Diff</th>
+                            <th>Prior missing</th>
+                            <th>Candidate error</th>
+                            <th>Total</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {#each validationSummaryRows() as row}
+                            <tr class:selected={row.taskId === s.validationTask}>
+                                <td>
+                                    <button class="link" onclick={() => s.selectValidationTask(row.taskId)}>
+                                        {row.taskId}
+                                    </button>
+                                </td>
+                                <td>{number(row.equal)}</td>
+                                <td class:danger={row.diff > 0}>{number(row.diff)}</td>
+                                <td>{number(row.priorMissing)}</td>
+                                <td class:danger={row.candidateError > 0}>{number(row.candidateError)}</td>
+                                <td>{number(row.total)}</td>
+                            </tr>
+                        {/each}
+                        </tbody>
+                    </table>
+
+                    {#if s.validationTask}
+                        <div class="validation-detail">
+                            <div class="panel-title">
+                                <h2>{s.validationTask} — comparisons</h2>
+                                <span>{number(validationResultRows().length)} instances</span>
+                            </div>
+                            {#if validationResultRows().length}
+                                {#each validationResultRows() as r}
+                                    <details class="cmp" open={r.matchStatus === 'DIFF' || r.matchStatus === 'CANDIDATE_ERROR'}>
+                                        <summary>
+                                            <span class="badge {validationStatusClass(r.matchStatus)}">{r.matchStatus}</span>
+                                            <span class="mono">{r.processInstanceId}</span>
+                                            <span class="cmp-versions">{r.priorVersion ?? '—'} → {r.candidateVersion ?? '—'}</span>
+                                        </summary>
+                                        {#if r.matchStatus === 'CANDIDATE_ERROR'}
+                                            <div class="error-block">
+                                                <strong>{r.candidateErrorCode ?? 'error'}</strong>
+                                                <span>{r.candidateErrorMessage}</span>
+                                            </div>
+                                        {/if}
+                                        {#if r.diffs?.length}
+                                            <table class="diff-table">
+                                                <thead>
+                                                <tr>
+                                                    <th>Path</th>
+                                                    <th>Prior</th>
+                                                    <th>Candidate</th>
+                                                    <th>Kind</th>
+                                                </tr>
+                                                </thead>
+                                                <tbody>
+                                                {#each r.diffs as d}
+                                                    <tr>
+                                                        <td class="mono">{d.path || '(root)'}</td>
+                                                        <td class="mono">{diffValue(d.priorValue)}</td>
+                                                        <td class="mono">{diffValue(d.candidateValue)}</td>
+                                                        <td>{d.kind}</td>
+                                                    </tr>
+                                                {/each}
+                                                </tbody>
+                                            </table>
+                                        {/if}
+                                        <div class="payloads">
+                                            <div>
+                                                <h3>Input (shared)</h3>
+                                                <pre>{prettyJson(r.inputPayload)}</pre>
+                                            </div>
+                                            <div>
+                                                <h3>Prior output</h3>
+                                                <pre>{prettyJson(r.priorOutput)}</pre>
+                                            </div>
+                                            <div>
+                                                <h3>Candidate output</h3>
+                                                <pre>{prettyJson(r.candidateOutput)}</pre>
+                                            </div>
+                                        </div>
+                                    </details>
+                                {/each}
+                            {:else}
+                                <p class="empty">No comparisons captured for this task yet.</p>
+                            {/if}
+                        </div>
+                    {/if}
+                {:else}
+                    <p class="empty">No validation runs for this process. Deploy a shadow worker (scaffold with
+                        <code>--validation</code>) to compare a candidate task against production.</p>
+                {/if}
+            </section>
 
             <section class="panel wide">
                 <div class="panel-title">
@@ -1098,6 +1264,78 @@
         color: #8a5917;
     }
 
+    .validation-detail {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+    }
+
+    .cmp {
+        margin-bottom: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface-soft);
+    }
+
+    .cmp > summary {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+        list-style: none;
+    }
+
+    .cmp > summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .cmp-versions {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+
+    .diff-table {
+        margin: 10px 0;
+    }
+
+    .diff-table td.mono {
+        max-width: 260px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .payloads {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 8px;
+    }
+
+    .payloads h3 {
+        margin: 0 0 4px;
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    .payloads pre {
+        max-height: 220px;
+        margin: 0;
+        padding: 8px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--surface);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.74rem;
+        line-height: 1.4;
+    }
+
     @media (max-width: 1050px) {
         .layout {
             grid-template-columns: 1fr 1fr;
@@ -1130,6 +1368,10 @@
         .kpis,
         .layout,
         .details {
+            grid-template-columns: 1fr;
+        }
+
+        .payloads {
             grid-template-columns: 1fr;
         }
 

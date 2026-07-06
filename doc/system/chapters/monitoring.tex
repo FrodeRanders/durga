@@ -20,7 +20,7 @@ recover and how safely downstream tools can consume process state.
 \subsection{Process self-registration}
 
 Processes self-register with the monitoring server by publishing their BPMN 2.0 model
-to the \texttt{process-models} Kafka topic. Each generated project includes a
+to the \texttt{process-\\models} Kafka topic. Each generated project includes a
 \texttt{ModelRegistration} CDI bean that runs at startup:
 
 \begin{itemize}
@@ -29,7 +29,7 @@ to the \texttt{process-models} Kafka topic. Each generated project includes a
 \item logs success or failure without blocking the process startup.
 \end{itemize}
 
-The monitoring server caches models in the \texttt{process-models-store} state store.
+The monitoring server caches models in the \texttt{process-models-store} state store. \\
 The \texttt{/api/diagram?processId=\textit{id}} endpoint serves the cached model.
 Model updates overwrite previous versions (latest-wins semantics).
 
@@ -99,11 +99,11 @@ takes precedence.
 \begin{description}
 \item[Automatic] Monitor-owned, always active, requiring no process configuration.
   Includes built-in stall and cascade detection (see STUCK / CASCADE below).
-  Tunable via system properties (\texttt{durga.alarm.stuck.timeoutSeconds} etc.).
+  Tunable via system properties \\ (\texttt{durga.alarm.stuck.timeoutSeconds} etc.).
 \item[Opt-in] A monitor-provided default that a process enables and may tune by
   including the alarm's properties in its BPMN model.
 \item[Explicit] Fully specified by a process, typically through BPMN extension
-  properties (\texttt{durga:alarm:<id>:<field>}) or authored directly in the
+  properties \\ (\texttt{durga:alarm:<id>:<field>}) or authored directly in the
   Camunda Modeler plugin.
 \end{description}
 
@@ -118,7 +118,7 @@ message template:
   A null \texttt{processId} matches every process; a null \texttt{activityId}
   matches process-level aggregates.
 \item[Event type] Which \texttt{ProcessEvent.EventType} triggers evaluation
-  (e.g. \texttt{PROCESS\_FAILED}, \texttt{ACTIVITY\_ESCALATED}). Optional for
+  (e.g. \texttt{PROCESS\_FAILED}, \\ \texttt{ACTIVITY\_ESCALATED}). Optional for
   STUCK and CASCADE, which are evaluated by a wall-clock punctuator rather than
   per incoming event.
 \item[Syndrome] How observed behaviour is aggregated into an alarm (see below).
@@ -136,7 +136,7 @@ message template:
 
 \subsubsection{Syndromes}
 
-\subsubsection{Event-driven syndromes}
+\paragraph{Event-driven syndromes}
 
 The three event-driven syndromes are evaluated for each incoming lifecycle
 event.
@@ -163,7 +163,7 @@ burst detection (e.g. more than 3 \texttt{PROCESS\_FAILED} events in a
 
 \end{description}
 
-\subsubsection{Absent-progress syndromes}
+\paragraph{Absent-progress syndromes}
 
 The two absent-progress syndromes react to the \emph{absence} of lifecycle
 events rather than events that arrive. They are evaluated by a wall-clock

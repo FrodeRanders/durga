@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Shared plugin execution policy used by generated workers.
@@ -18,6 +20,22 @@ public final class PluginExecutionSupport {
     }
 
     public static Result execute(Plugin plugin, byte[] payload, String config) throws Exception {
+        return execute(plugin, payload, config, false);
+    }
+
+    /**
+     * Executes the plugin in validation (sandbox) mode: the plugin transform still runs against the
+     * real input (materialized handles are still read so the candidate sees identical input), but
+     * framework-managed side effects are suppressed. In {@code materialize} mode no object is
+     * written to the store; a synthetic handle is produced whose content hash still reflects the
+     * real transform output, so the meaningful part of the output remains comparable while volatile
+     * fields (uri, createdAt) can be excluded via comparison ignore paths.
+     */
+    public static Result executeSandboxed(Plugin plugin, byte[] payload, String config) throws Exception {
+        return execute(plugin, payload, config, true);
+    }
+
+    private static Result execute(Plugin plugin, byte[] payload, String config, boolean sandbox) throws Exception {
         Map<String, String> options = ObjectStoreSupport.parseConfig(config);
         String mode = options.getOrDefault("handleMode", options.getOrDefault("dataHandleMode", "payload"));
         String pluginConfig = options.getOrDefault("pluginConfig", config);
@@ -41,7 +59,9 @@ public final class PluginExecutionSupport {
             rawOutput = rawInput;
         }
 
-        ObjectStoreSupport.StoredObject stored = ObjectStoreSupport.store(rawOutput, options);
+        ObjectStoreSupport.StoredObject stored = sandbox
+                ? sandboxStored(rawOutput)
+                : ObjectStoreSupport.store(rawOutput, options);
         FormatDetector.Detection detection = FormatDetector.detect(rawOutput);
         String assetName = options.getOrDefault("asset", inputHandle.name() != null ? inputHandle.name() : "payload");
         String schema = options.getOrDefault("schema", inputHandle.schema());
@@ -76,6 +96,16 @@ public final class PluginExecutionSupport {
         return new Result(output.toString().getBytes(StandardCharsets.UTF_8), rawInput, true,
                 pluginResult.idempotencyKey(), pluginResult.errorStrategy(),
                 pluginResult.sideEffectDescription(), pluginResult.metadata());
+    }
+
+    private static ObjectStoreSupport.StoredObject sandboxStored(byte[] payload) {
+        String id = UUID.randomUUID().toString();
+        return new ObjectStoreSupport.StoredObject(
+                id,
+                "sandbox:validation/" + id,
+                payload.length,
+                ObjectStoreSupport.sha256(payload),
+                Instant.now().toString());
     }
 
     static Handle findHandle(byte[] payload, String handleField) throws Exception {

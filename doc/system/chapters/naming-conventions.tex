@@ -18,6 +18,10 @@ The generator generally follows these patterns:
 \filepath{process-state}\\
 \filepath{process-state-counts}
 \end{quote}
+\item validation mode uses a dedicated consumer group
+\texttt{\%processId\%\_\%taskId\%\_validation} on the production input topic and the
+shared topics \filepath{validation-candidate-outputs} and \\ \filepath{validation-results}
+(Section~\ref{sec:ValidationMode}).
 \end{itemize}
 
 \subsection{Why this matters}

@@ -1,0 +1,145 @@
+\section{Validation Mode}
+\label{sec:ValidationMode}
+
+\subsection{Purpose}
+
+Validation mode runs a not-yet-released implementation of a process task against
+real input, alongside the current (or prior) version, and reports where the new
+version produces the same output and where it diverges. It answers a concrete
+release question: \emph{if I deploy this candidate task, what changes downstream?}
+Sometimes an identical input$\rightarrow$output is expected (a refactor); sometimes
+divergence is intended (a functional correction). Validation mode does not judge ---
+it produces the evidence and lets a human decide.
+
+\subsection{Per-task isolation}
+
+Validation is handled \emph{per task}. Each candidate task is fed the production
+input \emph{for that task} --- the prior version's output of its predecessor --- not
+the candidate's own reworked output. Candidate outputs are therefore never chained
+together. A divergence introduced by a modified early task cannot cascade into and
+contaminate the comparison of later tasks: every task is compared in isolation
+against production for the identical shared input.
+
+\subsection{Shadow worker and the dedicated index}
+
+For each plugin task, scaffolding with \texttt{--validation} generates an additional
+\emph{shadow worker} beside the production worker. The shadow worker:
+\begin{itemize}
+\item consumes the same production input topic through a \emph{dedicated consumer
+  group} (\texttt{\%processId\%\_\\\%taskId\%\_validation}), so the production consumer
+  offset --- the current input index --- is never advanced or disturbed;
+\item starts at \texttt{latest} by default (live-concurrent shadowing) and can be
+  pointed at recent history via \texttt{DURGA\_VALIDATION\_OFFSET\_RESET} (a bounded
+  replay near the tail --- not from the very beginning, since old input may not be
+  representative);
+\item runs the candidate implementation with side effects suppressed;
+\item writes nothing to the task output topic, \texttt{process-events}, or the
+  dead-letter queue. Its output is diverted to the shared
+  \texttt{validation-candidate-outputs} topic as a \\ \texttt{ValidationCandidateOutput}
+  record carrying the shared input, the candidate output, disposition, idempotency
+  key, and any error.
+\end{itemize}
+
+Live-concurrent and historic replay differ only in where the dedicated consumer
+starts; the matching mechanism is identical in both.
+
+\subsection{Side-effect suppression}
+
+Because the shadow worker never publishes to the task output topic,
+\texttt{process-events}, or the DLQ, downstream tasks never observe a candidate
+result. For handle-aware (\texttt{materialize}) execution, \\
+\texttt{PluginExecutionSupport.executeSandboxed} runs the transform but writes no
+object to the store: it returns a synthetic handle whose content hash still reflects
+the real output, so the meaningful part stays comparable while volatile fields (uri,
+timestamps) are excluded by comparison ignore paths. Version~1 targets pure transform
+(plugin) tasks; tasks that perform their own external effects (send tasks, external
+calls, object-store writes inside a plugin body) are out of scope for validation and
+must not be shadowed.
+
+\subsection{Comparison and report}
+
+The monitor's \texttt{ValidationTopology} pairs each candidate output against the
+prior/production output for the same input --- the \texttt{ACTIVITY\_COMPLETED}
+lifecycle event --- keyed identically on
+\texttt{processId:\\activityId:processInstanceId}. The two sides are merged into a
+single aggregate so the comparison is robust to arrival order: in live mode the
+candidate may arrive before or after the production output. A candidate seen before
+any prior output yields \texttt{PRIOR\_MISSING}, superseded when the prior output
+later arrives.
+
+Comparison is a structural, order-sensitive JSON diff (\texttt{JsonComparison}) with
+configurable \emph{ignore paths} (dot-notation, with \texttt{*} and \texttt{[*]}
+wildcards; set via \texttt{durga.validation.ignore.paths}) so volatile fields such as
+generated timestamps or identifiers do not register as divergence. Each comparison
+produces a \texttt{ValidationResult} with one of four outcomes:
+
+\begin{description}
+\item[\texttt{EQUAL}] candidate output identical to prior after ignore paths.
+\item[\texttt{DIFF}] candidate output differs; the located differences (path, kind,
+  prior value, candidate value) are attached.
+\item[\texttt{PRIOR\_MISSING}] no production output found for the shared input.
+\item[\texttt{CANDIDATE\_ERROR}] the candidate failed or requested a non-success
+  error strategy.
+\end{description}
+
+Results are written to \texttt{validation-results} and materialized in the
+\texttt{validation-results-store} global table for query.
+
+\subsection{Topics and naming}
+
+\begin{itemize}
+\item \texttt{\%processId\%\_\%taskId\%\_validation} --- dedicated consumer group for
+  the shadow worker (reads the production input topic).
+\item \texttt{validation-candidate-outputs} --- shared topic carrying candidate
+  outputs from every shadow worker (Java and Rust).
+\item \texttt{validation-results} --- comparison results, materialized in
+  \texttt{validation-results-store}.
+\end{itemize}
+
+\subsection{Reporting interfaces}
+
+The monitor exposes the report under \texttt{/api/validation/}:
+\begin{itemize}
+\item \texttt{/api/validation/summary?processId=\textit{id}} --- per-task counts
+  (equal / diff / prior-missing / candidate-error / total),
+\item \texttt{/api/validation/results?processId=\&taskId=\&status=} --- individual
+  comparisons, optionally filtered,
+\item \texttt{/api/validation/instances/\{processInstanceId\}} --- all validated
+  tasks for one instance.
+\end{itemize}
+
+The dashboard adds a \emph{Validation Report} panel to the per-process drill-down: a
+per-task summary table and, per instance, an expandable comparison showing the shared
+input, prior output, candidate output, and a highlighted diff table. Prometheus
+metrics \texttt{durga\_validation\_total}, \texttt{durga\_validation\_diff}, and
+\texttt{durga\_validation\_candidate\_error} are exported per
+\texttt{process\_id,task\_id} on \\ \texttt{/api/metrics}.
+
+\subsection{Java and Rust parity}
+
+Both code-generation targets emit shadow workers. The
+\texttt{ValidationCandidateOutput} wire record is byte-compatible across targets
+(camelCase fields matching the Java record), so a mixed Java/Rust fleet feeds the same
+\texttt{validation-candidate-outputs} topic and the same monitor comparator. The Rust
+runtime crate (\filepath{durga-rust}) provides the matching
+\texttt{ValidationCandidateOutput} type and a \texttt{plan\_validation\_output}
+function; generated Rust projects add a \texttt{\%taskId\%\_validation} binary per
+plugin task using \texttt{run\_validation\_worker} with the same dedicated-group and
+offset-reset behaviour.
+
+\subsection{Comparison model summary}
+
+\begin{longtable}{|>{\raggedright\arraybackslash}p{0.35\textwidth}|>{\raggedright\arraybackslash}p{0.57\textwidth}|}
+\hline
+\rowcolor[gray]{0.9}\textbf{Type} & \textbf{Role} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor[gray]{0.9}\textbf{Type} & \textbf{Role} \\
+\hline
+\endhead
+\texttt{ValidationCandidateOutput} & Shadow worker $\rightarrow$ comparator wire record: shared input, candidate output, disposition, error. \\
+\texttt{JsonComparison} & Structural JSON diff with ignore-path normalization. \\
+\texttt{ValidationResult} & Comparator $\rightarrow$ report record: outcome plus located differences and both payloads. \\
+\texttt{ValidationSummary} & Per-task aggregate counts surfaced to the API, dashboard, and metrics. \\
+\end{longtable}

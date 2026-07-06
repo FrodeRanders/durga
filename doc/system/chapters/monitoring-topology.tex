@@ -20,7 +20,7 @@ Execution topics show how work is routed. The monitoring topology answers:
 \subsection{Topology structure}
 
 The entry point is \texttt{ProcessMonitoringTopology.buildTopology()}. It
-subscribes to \texttt{process-events-.*} via regex, monitoring all processes
+subscribes to \\ \texttt{process-events-.*} via regex, monitoring all processes
 in a single instance.
 It consumes events, filters null keys and values, and forks the stream into
 five parallel sub-topologies plus a BPMN model cache, each with a dedicated
@@ -44,7 +44,7 @@ and \texttt{PROCESS\_FAILED} events, maps them to hourly trend bucket keys,
 counts per bucket, and outputs \texttt{ProcessTrendPoint} records to
 \texttt{process-trends}. Materialized in \texttt{process-trends-store}.
 \item[Queryable replicas] Six \texttt{builder.globalTable()} calls consume the
-output topics above plus \texttt{process-models}, each materialized as a global table
+output topics above plus \\ \texttt{process-models}, each materialized as a global table
 with a \texttt{-global-store} or \texttt{-store} suffix. These are full replicas on
 every monitoring instance and are what the query service reads.
 \item[BPMN model cache] A global table on \texttt{process-models} stores the latest
@@ -62,12 +62,20 @@ then consumes \texttt{fault-alarms} and folds repeated firings into
 application runs these as separate \texttt{KafkaStreams} instances with separate
 application IDs and state directories.
 
+Validation mode adds a fourth separate topology. \texttt{ValidationTopology}
+merges candidate task outputs (\texttt{validation-candidate-outputs}) with the
+prior/production output (the \texttt{ACTIVITY\_COMPLETED} lifecycle event),
+keyed on \texttt{processId:activityId:processInstanceId}, and materializes a \\
+\texttt{ValidationResult} per task per instance in \texttt{validation-results-store}.
+It runs as its own \texttt{KafkaStreams} instance and is described in
+Section~\ref{sec:ValidationMode}.
+
 \subsection{State stores}
 
 The topology maintains ten state stores:
 
 \newcommand{\storetable}[1]{%
-\begin{longtable}{|>{\raggedright\arraybackslash}p{0.38\textwidth}|>{\raggedright\arraybackslash}p{0.22\textwidth}|>{\raggedright\arraybackslash}p{0.32\textwidth}|}
+\begin{longtable}{|>{\raggedright\arraybackslash}p{0.40\textwidth}|>{\raggedright\arraybackslash}p{0.20\textwidth}|>{\raggedright\arraybackslash}p{0.32\textwidth}|}
 \hline
 \rowcolor[gray]{0.9}\textbf{Store} & \textbf{Type} & \textbf{Purpose} \\
 \hline
@@ -158,7 +166,10 @@ The monitoring path now supports:
 \item coarse history as bucketed trend counts for process starts, completions, and failures,
 \item per-process BPMN diagrams served from the model cache with activity overlays,
 \item fault detection from BPMN alarm configuration,
-\item queryable active-alarm state derived from \texttt{fault-alarms}.
+\item queryable active-alarm state derived from \texttt{fault-alarms},
+\item per-task validation comparisons (candidate vs.\ prior output) derived from
+      \texttt{validation-\\candidate-outputs}, materialized in
+      \texttt{validation-results-store}.
 \end{itemize}
 
 History is intentionally coarse — Durga supports basic trend reporting but is

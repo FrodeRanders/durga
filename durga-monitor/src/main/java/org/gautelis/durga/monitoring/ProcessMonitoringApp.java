@@ -96,15 +96,29 @@ public final class ProcessMonitoringApp {
                         AlarmStateTopology.DEFAULT_ALARM_STATE_STORE),
                 alarmStateProps);
         configureStreamsLogging("alarm-state", alarmStateStreams);
+        Properties validationProps = new Properties();
+        validationProps.putAll(props);
+        validationProps.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId + "-validation");
+        validationProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        validationProps.put(StreamsConfig.STATE_DIR_CONFIG,
+                System.getProperty("durga.validation.streams.state.dir", "target/kafka-streams-validation-state"));
+        ValidationTopology.ValidationTopics validationTopics =
+                ValidationTopology.ValidationTopics.forAllProcesses();
+        KafkaStreams validationStreams = new KafkaStreams(
+                ValidationTopology.buildTopology(validationTopics), validationProps);
+        configureStreamsLogging("validation", validationStreams);
         ProcessMonitoringQueryService queryService =
                 new ProcessMonitoringQueryService(streams, topics);
         AlarmStateQueryService alarmQueryService =
                 new AlarmStateQueryService(alarmStateStreams, AlarmStateTopology.DEFAULT_ALARM_STATE_STORE);
+        ValidationQueryService validationQueryService =
+                new ValidationQueryService(validationStreams, validationTopics.resultsStore());
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             streams.close(Duration.ofSeconds(30));
             faultStreams.close(Duration.ofSeconds(30));
             alarmStateStreams.close(Duration.ofSeconds(30));
+            validationStreams.close(Duration.ofSeconds(30));
         }));
 
         createTopicsIfNeeded(bootstrapServers, topics);
@@ -112,11 +126,14 @@ public final class ProcessMonitoringApp {
         streams.start();
         faultStreams.start();
         alarmStateStreams.start();
+        validationStreams.start();
         LOG.info("Monitoring topology started (state dir: {})", props.getProperty(StreamsConfig.STATE_DIR_CONFIG));
         LOG.info("Fault detection topology started (state dir: {})", faultProps.getProperty(StreamsConfig.STATE_DIR_CONFIG));
         LOG.info("Alarm state topology started (state dir: {})", alarmStateProps.getProperty(StreamsConfig.STATE_DIR_CONFIG));
+        LOG.info("Validation topology started (state dir: {})", validationProps.getProperty(StreamsConfig.STATE_DIR_CONFIG));
 
-        return new MonitoringState(streams, faultStreams, alarmStateStreams, queryService, alarmQueryService);
+        return new MonitoringState(streams, faultStreams, alarmStateStreams, validationStreams,
+                queryService, alarmQueryService, validationQueryService);
     }
 
     private static void configureStreamsLogging(String name, KafkaStreams streams) {
@@ -136,7 +153,9 @@ public final class ProcessMonitoringApp {
                 topics.latencyTopic(),
                 topics.trendsTopic(),
                 topics.modelsTopic(),
-                FaultDetectionTopology.DEFAULT_ALARMS_TOPIC);
+                FaultDetectionTopology.DEFAULT_ALARMS_TOPIC,
+                ValidationTopology.DEFAULT_CANDIDATE_TOPIC,
+                ValidationTopology.DEFAULT_RESULTS_TOPIC);
         Properties adminProps = new Properties();
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         Exception lastFailure = null;
@@ -178,8 +197,10 @@ public final class ProcessMonitoringApp {
             KafkaStreams streams,
             KafkaStreams faultStreams,
             KafkaStreams alarmStateStreams,
+            KafkaStreams validationStreams,
             ProcessMonitoringQueryService queryService,
-            AlarmStateQueryService alarmQueryService
+            AlarmStateQueryService alarmQueryService,
+            ValidationQueryService validationQueryService
     ) {
     }
 

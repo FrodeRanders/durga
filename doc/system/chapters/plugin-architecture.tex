@@ -54,14 +54,13 @@ lifecycle.
 
 All 16 processing plugins implement \filepath{org.gautelis.durga.plugins.Plugin},
 which provides two \texttt{default} methods. The two connect catalog descriptors
-(\texttt{kafka-connect-source} and \texttt{kafka-connect-sink}) are code-generation
+(\texttt{kafka-connect-source} and \\ \texttt{kafka-connect-sink}) are code-generation
 descriptors that reference the scaffolder, not runtime \texttt{Plugin}
 implementations.
 
 \begin{quote}
-\shellcmd{byte[] execute(byte[] payload, String config) throws Exception}
-
-\shellcmd{String execute(String payload, String config) throws Exception}
+\texttt{byte[] execute(byte[] payload, String config) throws Exception} \\
+\texttt{String execute(String payload, String config) throws Exception}
 \end{quote}
 
 The generated worker calls the \texttt{byte[]} overload. Text / JSON plugins
@@ -70,9 +69,9 @@ the \texttt{byte[]} default. Binary plugins override the \texttt{byte[]} variant
 directly. Only one of the two needs to be overridden.
 
 Generated executor classes instantiate the plugin at field level and delegate
-through \texttt{PluginExecutionSupport.execute(...)} for each message. The config
+through \\ \texttt{PluginExecutionSupport.execute(...)} for each message. The config
 string comes from the BPMN \texttt{camunda:pluginConfig} property.
-Default execution is unchanged: the current \texttt{ProcessEvent.payload} JSON is
+Default execution is unchanged: the current \\ \texttt{ProcessEvent.payload} JSON is
 passed to the plugin. Handle-aware execution can also be requested:
 
 \begin{itemize}
@@ -204,7 +203,8 @@ marker triggers a different code generation path designed for hand-written imple
   <bpmn:extensionElements>
     <camunda:properties>
       <camunda:property name="plugin" value="custom" />
-      <camunda:property name="pluginConfig" value="org.example.CustomTransformContract" />
+      <camunda:property name="pluginConfig" 
+                        value="org.example.CustomTransformContract" />
     </camunda:properties>
   </bpmn:extensionElements>
 </bpmn:serviceTask>
@@ -217,7 +217,7 @@ Instead of generating a self-contained worker, the scaffolder produces:
 \item A \textbf{delegating worker} (\texttt{CustomTransformWorkerService}) that injects the contract via CDI (\texttt{@Inject}) and delegates each message through \texttt{PluginExecutionSupport.execute(...)}. The worker includes a null guard that routes to the dead-letter queue if no implementation is present.
 \end{enumerate}
 
-The developer writes an implementation class (\texttt{CustomTransformImpl implements CustomTransformContract}) in a standard Java source file. It is compiled and tested with the rest of the project. The generated contract and worker are not modified by hand.
+The developer writes an implementation class (\texttt{CustomTransformImpl implements \\ CustomTransformContract}) in a standard Java source file. It is compiled and tested with the rest of the project. The generated contract and worker are not modified by hand.
 
 \subsubsection{Round-trip model enrichment}
 

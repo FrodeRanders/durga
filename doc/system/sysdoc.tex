@@ -11,6 +11,15 @@
 \usepackage{textcomp}
 \usepackage[useregional]{datetime2}
 
+% 
+\usepackage{titlesec}
+\setcounter{secnumdepth}{4}
+\titleformat{\paragraph}
+{\normalfont\normalsize\bfseries}{\theparagraph}{1em}{}
+\titlespacing*{\paragraph}
+{0pt}{3.25ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+
+%
 \date{\today}
 \title{durga}
 \subtitle{System and development manual}
@@ -75,6 +84,9 @@
     \newpage
 
     \input{chapters/monitoring-interfaces.tex}
+    \newpage
+
+    \input{chapters/validation-mode.tex}
     \newpage
 
     \input{chapters/generated-projects.tex}

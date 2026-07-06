@@ -1848,7 +1848,129 @@ public class %className% {
                     null
             ).toJson()).toCompletableFuture()
             ).thenCompose(ignored -> msg.ack());
-            %endif%
+             %endif%
+        }
+    }
+}
+>>
+
+validationWorkerClass(packageName, className, processId, taskId, pluginConfig, pluginImplClass, pluginRef) ::= <<
+package %packageName%;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.gautelis.durga.ProcessEvent;
+import org.gautelis.durga.ScopeCancellationRegistry;
+import org.gautelis.durga.plugins.Plugin;
+import org.gautelis.durga.plugins.PluginResult;
+import org.gautelis.durga.validation.ValidationCandidateOutput;
+import %pluginImplClass%;
+import java.util.concurrent.CompletionStage;
+
+/**
+ * Validation-mode shadow worker for task "%taskId%".
+ * <p>
+ * Consumes the same production input as the deployed task via a dedicated consumer group
+ * ("%processId%_%taskId%_validation"), so the production input index is never advanced. Runs the
+ * candidate plugin with all downstream side effects suppressed: nothing is written to the task
+ * output topic, process-events, or the DLQ. The candidate output is diverted to the shared
+ * "validation-candidate-outputs" topic where the monitor pairs it against the prior/production
+ * output for the same input.
+ * <p>
+ * Note: v1 targets pure transform plugins. Plugins that perform their own external side effects
+ * (e.g. object-store writes) are out of scope and must not be run in validation mode.
+ */
+@ApplicationScoped
+public class %className% {
+    private static final String CANDIDATE_VERSION =
+            System.getenv().getOrDefault("DURGA_VALIDATION_CANDIDATE_VERSION", "candidate");
+
+    @Inject
+    @Channel("validation-candidate-outputs")
+    Emitter<String> validationEmitter;
+
+    @Inject
+    ScopeCancellationRegistry cancellationRegistry;
+
+    private final Plugin plugin = new %pluginImplClass%();
+
+    @Incoming("%processId%_%taskId%_validation_in")
+    public CompletionStage<Void> handle(Message<String> msg) {
+        ProcessEvent inputEvent = ProcessEvent.fromJson(msg.getPayload());
+        if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
+            return msg.ack();
+        }
+        try {
+            String payload = inputEvent.payload() != null
+                    ? new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())
+                    : "{}";
+            PluginResult pluginResult = plugin.executeWithResult(
+                    payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    "%pluginConfig%");
+            if (pluginResult.errorStrategy() != null) {
+                ValidationCandidateOutput candidate = new ValidationCandidateOutput(
+                        inputEvent.processId(), "%taskId%", inputEvent.processInstanceId(), "%taskId%",
+                        inputEvent.tokenId(), inputEvent.correlationId(), inputEvent.businessKey(),
+                        CANDIDATE_VERSION, inputEvent.payload(), null,
+                        pluginResult.disposition() != null ? pluginResult.disposition().name() : null,
+                        pluginResult.sideEffectDescription(), pluginResult.idempotencyKey(),
+                        pluginResult.errorStrategy().name(),
+                        new ProcessEvent.ErrorInfo(
+                                pluginResult.sideEffectDescription() != null
+                                        ? pluginResult.sideEffectDescription() : "Candidate requested "
+                                        + pluginResult.errorStrategy().name(),
+                                "VALIDATION_CANDIDATE_" + pluginResult.errorStrategy().name()),
+                        null);
+                return validationEmitter.send(candidate.toJson()).thenCompose(ignored -> msg.ack());
+            }
+            byte[] output = pluginResult.output();
+            java.util.Map<String, Object> outputPayload = inputEvent.payload();
+            if (output != null && output.length > 0) {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                String outputText = new String(output, java.nio.charset.StandardCharsets.UTF_8);
+                com.fasterxml.jackson.databind.JsonNode outputNode = null;
+                if (pluginResult.disposition() == PluginResult.OutputDisposition.PAYLOAD) {
+                    try {
+                        outputNode = mapper.readTree(outputText);
+                    } catch (com.fasterxml.jackson.core.JsonProcessingException parseFailure) {
+                        outputNode = null;
+                    }
+                }
+                if (outputNode != null && outputNode.isObject()) {
+                    outputPayload = mapper.convertValue(outputNode,
+                            new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>\>() {});
+                } else {
+                    java.util.Map<String, Object> annotated = new java.util.LinkedHashMap<>();
+                    if (inputEvent.payload() != null) {
+                        annotated.putAll(inputEvent.payload());
+                    }
+                    annotated.put("_pluginOutput", outputText);
+                    outputPayload = annotated;
+                }
+            }
+            ValidationCandidateOutput candidate = new ValidationCandidateOutput(
+                    inputEvent.processId(), "%taskId%", inputEvent.processInstanceId(), "%taskId%",
+                    inputEvent.tokenId(), inputEvent.correlationId(), inputEvent.businessKey(),
+                    CANDIDATE_VERSION, inputEvent.payload(), outputPayload,
+                    pluginResult.disposition() != null ? pluginResult.disposition().name() : "PAYLOAD",
+                    pluginResult.sideEffectDescription(), pluginResult.idempotencyKey(),
+                    null, null, null);
+            return validationEmitter.send(candidate.toJson()).thenCompose(ignored -> msg.ack());
+        } catch (Exception e) {
+            ValidationCandidateOutput candidate = new ValidationCandidateOutput(
+                    inputEvent.processId(), "%taskId%", inputEvent.processInstanceId(), "%taskId%",
+                    inputEvent.tokenId(), inputEvent.correlationId(), inputEvent.businessKey(),
+                    CANDIDATE_VERSION, inputEvent.payload(), null,
+                    null, e.getMessage(), null, "FAIL",
+                    new ProcessEvent.ErrorInfo(
+                            org.gautelis.durga.plugins.PipelinePlugin.sanitizeErrorMessage(e.getMessage()),
+                            "VALIDATION_CANDIDATE_FAILED"),
+                    null);
+            return validationEmitter.send(candidate.toJson()).thenCompose(ignored -> msg.ack());
         }
     }
 }

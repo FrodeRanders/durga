@@ -44,7 +44,7 @@ worker but never touches the hand-written implementation class.
 
 The BPMN model is copied into \texttt{src/main/resources/} in every generated project.
 It is version-controlled alongside the custom implementation and contract interface.
-Plugin-only workers can be \texttt{.gitignored} since they are fully regenerated from
+Plugin-only workers can be \\ \texttt{.gitignored} since they are fully regenerated from
 the model.
 
 \subsection{Strategy 3: Modify generated code directly}
@@ -65,7 +65,7 @@ Common edits in generated projects:
 \item gateway condition expressions in the BPMN model (evaluated at runtime by the
   recursive descent parser --- no code modification needed),
 \item plugin configuration strings such as \texttt{handleMode=manual},
-  \texttt{handleMode=materialize}, \texttt{store=...}, and plugin-specific
+  \texttt{handleMode=materialize}, \\ \texttt{store=...}, and plugin-specific
   \texttt{pluginConfig=...} values,
 \item payload handling and validation,
 \item integration calls inside custom implementations,

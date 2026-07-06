@@ -171,6 +171,52 @@ public class ProcessMonitoringResource {
     }
 
     @GET
+    @Path("/validation/results")
+    public Response validationResults(
+            @HeaderParam("Authorization") String authorization,
+            @QueryParam("processId") String processId,
+            @QueryParam("taskId") String taskId,
+            @QueryParam("status") String status
+    ) {
+        Response auth = requireAuth(authorization);
+        if (auth != null) return auth;
+        try {
+            return Response.ok(state.validationQueryService().results(processId, taskId, status)).build();
+        } catch (InvalidStateStoreException e) {
+            return Response.status(503).entity(Map.of("error", "validation store not queryable yet")).build();
+        }
+    }
+
+    @GET
+    @Path("/validation/instances/{instanceId}")
+    public Response validationForInstance(@HeaderParam("Authorization") String authorization,
+                                          @PathParam("instanceId") String instanceId) {
+        Response auth = requireAuth(authorization);
+        if (auth != null) return auth;
+        try {
+            return Response.ok(state.validationQueryService().resultsForInstance(instanceId)).build();
+        } catch (InvalidStateStoreException e) {
+            return Response.status(503).entity(Map.of("error", "validation store not queryable yet")).build();
+        }
+    }
+
+    @GET
+    @Path("/validation/summary")
+    public Response validationSummary(@HeaderParam("Authorization") String authorization,
+                                      @QueryParam("processId") String processId) {
+        Response auth = requireAuth(authorization);
+        if (auth != null) return auth;
+        try {
+            var summaries = processId != null && !processId.isBlank()
+                    ? state.validationQueryService().summaryForProcess(processId)
+                    : state.validationQueryService().allSummaries();
+            return Response.ok(summaries).build();
+        } catch (InvalidStateStoreException e) {
+            return Response.status(503).entity(Map.of("error", "validation store not queryable yet")).build();
+        }
+    }
+
+    @GET
     @Path("/metrics")
     @Produces("text/plain; version=0.0.4")
     public Response metrics() {
@@ -211,6 +257,28 @@ public class ProcessMonitoringResource {
             sb.append("# TYPE durga_streams_state gauge\n");
             sb.append(String.format("durga_streams_state %d\n",
                     "RUNNING".equals(state.streams().state().name()) ? 1 : 0));
+
+            try {
+                var summaries = state.validationQueryService().allSummaries();
+                if (!summaries.isEmpty()) {
+                    sb.append("# HELP durga_validation_total Validation comparisons per task\n");
+                    sb.append("# TYPE durga_validation_total gauge\n");
+                    sb.append("# HELP durga_validation_diff Validation comparisons where candidate differs from prior\n");
+                    sb.append("# TYPE durga_validation_diff gauge\n");
+                    sb.append("# HELP durga_validation_candidate_error Validation comparisons where the candidate errored\n");
+                    sb.append("# TYPE durga_validation_candidate_error gauge\n");
+                    for (ValidationSummary s : summaries) {
+                        String labels = String.format(
+                                "process_id=\"%s\",task_id=\"%s\"",
+                                prometheusLabelValue(s.processId()), prometheusLabelValue(s.taskId()));
+                        sb.append(String.format("durga_validation_total{%s} %d\n", labels, s.total()));
+                        sb.append(String.format("durga_validation_diff{%s} %d\n", labels, s.diff()));
+                        sb.append(String.format("durga_validation_candidate_error{%s} %d\n", labels, s.candidateError()));
+                    }
+                }
+            } catch (InvalidStateStoreException ignored) {
+                // validation store not queryable yet; omit validation metrics
+            }
 
             return Response.ok(sb.toString()).build();
         } catch (Exception e) {
@@ -271,7 +339,8 @@ public class ProcessMonitoringResource {
         return Map.of(
                 "streamsState", state.streams().state().name(),
                 "faultStreamsState", state.faultStreams().state().name(),
-                "alarmStateStreamsState", state.alarmStateStreams().state().name()
+                "alarmStateStreamsState", state.alarmStateStreams().state().name(),
+                "validationStreamsState", state.validationStreams().state().name()
         );
     }
 

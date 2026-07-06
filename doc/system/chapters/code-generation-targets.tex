@@ -69,13 +69,31 @@ dispatch defaults:
 the Java record, so routing and inspection plugins declare \texttt{PASSTHROUGH}
 and the generated worker preserves the payload identically on either target.
 
+\subsection{Validation shadow workers}
+
+Validation mode (Section~\ref{sec:ValidationMode}) is emitted on both targets. With
+\texttt{--validation}, each plugin task gains a shadow worker beside the production
+worker: the Java target generates a \texttt{\textit{Name}ValidationWorker} bean; the
+Rust target generates a \texttt{\%taskId\%\_validation} binary that calls
+\texttt{run\_validation\_worker}. Both consume the production input topic through a
+dedicated consumer group, suppress side effects, and emit a
+\texttt{ValidationCandidateOutput} to the shared \texttt{validation-candidate-outputs}
+topic. That record is byte-compatible across targets, so the same Java monitor
+comparator pairs Java- and Rust-produced candidates against production without
+distinction. The Rust crate provides the matching \\ \texttt{ValidationCandidateOutput}
+type and the pure \texttt{plan\_validation\_output} decision function, mirroring the
+Java \texttt{ValidationCandidateOutput} and the generated shadow-worker logic.
+
 \subsection{Status}
 
 Implemented so far: the crate contracts (\texttt{Plugin}, \texttt{PluginResult},
-\texttt{ProcessEvent}, dot-path field helpers) and the first faithful plugin ports
-(\texttt{json-transform}, \texttt{type-coercer}) with unit tests. Remaining work:
-the rest of the plugin ports, the Rust worker / gateway / orchestrator and
-project (\texttt{Cargo.toml}) templates, and the \texttt{-{}-target rust} switch in
-the CLI. The Rust workers will use a mature Kafka client
-(\texttt{rdkafka}) and an async runtime (\texttt{tokio}) for the same
-consume-transform-emit loop the plain-Kafka Java worker performs.
+\texttt{ProcessEvent}, \\ \texttt{ValidationCandidateOutput}, dot-path field helpers),
+the pipeline plugin ports, the pure worker decision logic
+(\texttt{plan\_worker\_output}, \texttt{plan\_validation\_output}), the Rust worker /
+gateway / validation and project (\texttt{Cargo.toml}, \texttt{lib.rs},
+\texttt{build.rs}) templates, and the \texttt{-{}-target rust} switch in the CLI. Rust
+workers use a mature Kafka client (\texttt{rdkafka}) and an async runtime
+(\texttt{tokio}) for the same consume--transform--emit loop the plain-Kafka Java
+worker performs. Rust remains the less-mature target: it currently covers plugin
+tasks and exclusive gateways in a start/tasks/gateways/end topology, and reports and
+skips unsupported constructs.

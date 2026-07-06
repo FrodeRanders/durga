@@ -25,13 +25,14 @@ unconsumed records according to topic durability and retention settings.
 When \texttt{--separate-workers} is enabled:
 
 \begin{verbatim}
-./durga durga-tools/src/test/resources/bpmn/invoice_receipt.bpmn --separate-workers
+./durga durga-tools/src/test/resources/bpmn/invoice_receipt.bpmn \
+--separate-workers
 \end{verbatim}
 
 Each generated project includes:
 
 \begin{itemize}
-\item \texttt{RegisterInvoiceStandalone.java}, \texttt{ReviewInvoiceStandalone.java},
+\item \texttt{RegisterInvoiceStandalone.java}, \texttt{ReviewInvoiceStandalone.java}, \\
       \texttt{NotifyRequesterStandalone.java} --- one standalone worker per BPMN
       task, each with its own Kafka consumer/producer and poll loop.
 \item \texttt{InvoiceReceiptWorkerBootstrap.java} --- entry point that reads

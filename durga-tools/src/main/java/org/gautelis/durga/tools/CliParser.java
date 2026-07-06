@@ -11,7 +11,7 @@ final class CliParser {
     private static final String USAGE =
             "Usage: BpmnScaffolder <path-to-bpmn.xml> [--out <dir>] [--process-id <id>] [--package <pkg>] "
                     + "[--event-topic <topic>] [--retention <h|d|w>] [--dry-run] [--transactions] "
-                    + "[--separate-workers] [--strimzi] [--connect] [--target java|rust]";
+                    + "[--separate-workers] [--strimzi] [--connect] [--validation] [--target java|rust]";
 
     private static final String PROCESS_ID_PATTERN = "[a-zA-Z0-9][a-zA-Z0-9_-]*";
     private static final String PACKAGE_PATTERN = "[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*";
@@ -31,6 +31,7 @@ final class CliParser {
         boolean separateWorkers = false;
         boolean connect = false;
         boolean strimzi = false;
+        boolean validation = false;
         String outputDir = null;
         String processIdOverride = null;
         String packageName = null;
@@ -51,6 +52,8 @@ final class CliParser {
                 connect = true;
             } else if ("--strimzi".equals(arg)) {
                 strimzi = true;
+            } else if ("--validation".equals(arg)) {
+                validation = true;
             } else if (arg.startsWith("--out=")) {
                 outputDir = arg.substring("--out=".length());
             } else if ("--out".equals(arg)) {
@@ -110,7 +113,7 @@ final class CliParser {
         if (outputDir == null) {
             outputDir = positional.size() > 1 ? positional.get(1) : "generated";
         }
-        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi, processIdOverride, packageName, retentionHours, eventsTopic, target);
+        return new ParsedArgs(bpmnPath, outputDir, dryRun, transactions, separateWorkers, connect, strimzi, processIdOverride, packageName, retentionHours, eventsTopic, target, validation);
     }
 
     private static String validateArg(String value, String pattern, String argName) {

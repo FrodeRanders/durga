@@ -27,6 +27,9 @@ Endpoints (all under \texttt{/api/}):
 \item \texttt{/api/processes/\{processId\}/alarms} --- process-specific active alarm-state view,
 \item \texttt{/api/instances/\{processInstanceId\}/alarms} --- active alarms whose latest firing belongs to the instance,
 \item \texttt{/api/stuck} --- stuck-instance detection,
+\item \texttt{/api/validation/summary?processId=\textit{id}} --- per-task validation outcome counts (see Section~\ref{sec:ValidationMode}),
+\item \texttt{/api/validation/results?processId=\&taskId=\&status=} --- individual validation comparisons,
+\item \texttt{/api/validation/instances/\{processInstanceId\}} --- validation comparisons for one instance,
 \item \texttt{/api/diagram?processId=\textit{id}} --- BPMN 2.0 XML from the model cache,
 \item \texttt{/api/metrics} --- Prometheus-format metrics.
 \end{itemize}
@@ -68,6 +71,7 @@ from the monitoring backend. It shows:
 \item a process inventory with all known process IDs and aggregate KPIs,
 \item alarm KPIs and process-level alarm counts,
 \item per-process drill-down: state mix, lifecycle trends, activity latency, stuck instances, and alarm state,
+\item a validation report: per-task outcome counts and per-instance input/prior/candidate diffs when candidate tasks run in validation mode (see Section~\ref{sec:ValidationMode}),
 \item instance detail lookup with latest alarm details,
 \item a BPMN diagram viewer with color-coded activity overlays (alarms, latency, and state).
 \end{itemize}

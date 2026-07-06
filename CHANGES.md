@@ -1,5 +1,31 @@
 # Changes
 
+## [Unreleased] — 2026-07-06
+
+### Validation mode
+- New opt-in `--validation` scaffolder flag generates a **shadow worker** per plugin
+  task that runs a candidate implementation against real input on a **dedicated
+  consumer group** (`{processId}_{taskId}_validation`), leaving the production input
+  index untouched, with side effects suppressed and output diverted to
+  `validation-candidate-outputs` instead of the task output topic
+- Handled **per task**: each candidate is fed the production input for that task, so
+  an early divergence never cascades into later-task comparisons
+- Runtime foundation in `durga-runtime` (`org.gautelis.durga.validation`):
+  `JsonComparison` (normalized diff with `*`/`[*]` ignore-paths),
+  `ValidationCandidateOutput`, `ValidationResult` (`EQUAL`/`DIFF`/`PRIOR_MISSING`/
+  `CANDIDATE_ERROR`), and `PluginExecutionSupport.executeSandboxed` (materialize-mode
+  side-effect suppression with a synthetic, content-hashed handle)
+- Monitor `ValidationTopology` merges candidate outputs with prior/production
+  `ACTIVITY_COMPLETED` output (keyed `processId:activityId:processInstanceId`, robust
+  to arrival order) and materializes `validation-results`; new `/api/validation/*`
+  endpoints, dashboard **Validation Report** panel, and `durga_validation_*` metrics
+- **Java and Rust parity**: both targets emit shadow workers; `durga-rust` gains
+  `ValidationCandidateOutput` and `plan_validation_output`, and generated Rust
+  projects add a `{taskId}_validation` binary using `run_validation_worker`
+- Comparison ignore-paths configurable via `durga.validation.ignore.paths`; candidate
+  version stamped via `DURGA_VALIDATION_CANDIDATE_VERSION`
+- Documented in the system manual (new "Validation Mode" chapter) and README
+
 ## [Current] — 2026-06-13
 
 ### Maturity gates and release discipline

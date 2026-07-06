@@ -118,7 +118,7 @@ fn fail_plan(input: &ProcessEvent, activity_id: &str, category: Category, messag
 /// Mirrors the generated worker's payload guardrail: only a `PAYLOAD`
 /// disposition with a JSON object replaces the payload; otherwise the input
 /// payload is preserved and any output is annotated under `_pluginOutput`.
-fn compute_output_payload(input: &ProcessEvent, output: Option<&[u8]>, disposition: OutputDisposition) -> Value {
+pub(crate) fn compute_output_payload(input: &ProcessEvent, output: Option<&[u8]>, disposition: OutputDisposition) -> Value {
     let input_payload = input.payload.clone().unwrap_or(Value::Null);
     let Some(bytes) = output.filter(|b| !b.is_empty()) else {
         return input_payload;

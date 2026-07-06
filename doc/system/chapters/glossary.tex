@@ -12,6 +12,10 @@
 \item[Process orchestrator] The generated runtime class that detects terminal flows and emits explicit completion for the enclosing process.
 \item[ProcessStateView] The repository's materialized per-instance monitoring projection.
 \item[Scope cancellation] The generated runtime behavior that suppresses or redirects normal flow after an interrupting boundary or interrupting event subprocess fires.
+\item[Validation mode] An opt-in mode (\texttt{--validation}) in which a candidate task implementation is run against real input on a dedicated consumer index with side effects suppressed, and its output is compared per task against the prior/production output (Section~\ref{sec:ValidationMode}).
+\item[Shadow worker] The generated validation-mode worker that consumes production input through a dedicated consumer group, runs the candidate implementation without side effects, and diverts its output to \texttt{validation-candidate-outputs} instead of the task output topic.
+\item[Candidate output] A \texttt{ValidationCandidateOutput} record emitted by a shadow worker, carrying the shared input and the candidate's output for comparison against production.
+\item[Validation result] A \texttt{ValidationResult} record classifying one comparison as \texttt{EQUAL}, \texttt{DIFF}, \\ \texttt{PRIOR\_MISSING}, or \texttt{CANDIDATE\_ERROR}, with the located differences.
 \item[Scaffolder] The BPMN-driven generator entry point, implemented by:
 \begin{quote}
 \filepath{org.gautelis.durga.tools.BpmnScaffolder}

@@ -31,7 +31,7 @@ Kafka produce-consume round-trip with full wire-format fidelity.
 
 \textbf{Topic:} A single non-compacted topic created per test class.
 The test uses a plain \texttt{KafkaProducer} and \texttt{KafkaConsumer} with
-manual offset management (\texttt{enable.auto.commit=false},
+manual offset management (\texttt{enable.auto.commit=false}, \\
 \texttt{auto.offset.reset=earliest}).
 
 \textbf{Scenarios (3):}
@@ -122,10 +122,10 @@ topic and materialises results into state stores queried through
 \begin{description}
 
 \item[shouldMaterializeProcessStateFromLifecycleEvents] Publishes three
-events (\texttt{PROCESS\_STARTED}, \texttt{ACTIVITY\_ENTERED},
+events (\texttt{PROCESS\_STARTED}, \\ \texttt{ACTIVITY\_ENTERED},
 \texttt{ACTIVITY\_COMPLETED}) for one instance, waits for state
 materialisation, and asserts the lifecycle is \texttt{"active"} with the
-correct \texttt{currentActivityId} and a populated
+correct \texttt{currentActivityId} and a populated \\
 \texttt{activityDurationsMs} map.
 
 \item[shouldProduceStateCounts] Publishes events for two instances of the
@@ -133,16 +133,16 @@ same process, then queries the count store. Asserts at least one instance
 appears in the count aggregation.
 
 \item[shouldProduceLatencySummaries] Publishes an
-\texttt{ACTIVITY\_ENTERED} followed 4~minutes later by
+\texttt{ACTIVITY\_ENTERED} followed 4~minutes later by \\
 \texttt{ACTIVITY\_COMPLETED} for the same activity. Queries the latency
-store and asserts the returned \texttt{ActivityLatencySummary} has a
+store and asserts the returned \\ \texttt{ActivityLatencySummary} has a
 \texttt{sampleCount} $\ge 1$ and \texttt{maxDurationMs} $\ge 240\,000$~ms.
 This validates the entry-store-based latency computation pipeline.
 
 \item[shouldDetectStuckInstances] Publishes an
 \texttt{ACTIVITY\_ENTERED} that is never completed, then queries
 \texttt{stuckInstances()} with a 1-second threshold. Asserts the instance
-appears as stuck with \texttt{lifecycleState} \texttt{"active"}.
+appears as stuck with \\ \texttt{lifecycleState} \texttt{"active"}.
 
 \item[shouldMaterializeProcessStateFromUnkeyedLifecycleEvents] Publishes
 a \texttt{PROCESS\_STARTED} event with a \texttt{null} Kafka message key.
@@ -166,7 +166,7 @@ unkeyed events --- all over a real Kafka broker.
 crash-and-restart cycles.
 
 \textbf{Infrastructure:} Same topic set as \texttt{MonitoringTopologyIntegrationTest}.
-Uses a fixed \texttt{application.id} across restarts so that Kafka Streams
+Uses a fixed \\ \texttt{application.id} across restarts so that Kafka Streams
 rebalances and replays from the changelog topics.
 
 \textbf{Scenarios (3):}
@@ -174,7 +174,7 @@ rebalances and replays from the changelog topics.
 \begin{description}
 
 \item[shouldRecoverStateAfterTopologyRestart] Publishes a complete task
-flow (\texttt{PROCESS\_STARTED} $\to$ \texttt{ACTIVITY\_ENTERED} $\to$
+flow (\texttt{PROCESS\_STARTED} $\to$ \\ \texttt{ACTIVITY\_ENTERED} $\to$
 \texttt{ACTIVITY\_COMPLETED} $\to$ \texttt{PROCESS\_COMPLETED}), waits for
 the state to reach \texttt{"completed"}, kills the topology, restarts it,
 waits for re-materialisation, and asserts the recovered state matches the
@@ -209,7 +209,7 @@ all category-specific lifecycle events introduced in the current release.
 
 \textbf{Fixture:} \filepath{durga-tools/src/test/resources/bpmn/e2e\_pipeline.bpmn} ---
 a pipeline exercising \texttt{json-transform}, \texttt{type-coercer},
-\texttt{field-router} (route), \texttt{kv-enricher} (enrich),
+\texttt{field-router} (route), \texttt{kv-enricher} (enrich), \\
 \texttt{json-schema-validator} (validate), and \texttt{window-counter}
 (aggregate), with an XOR gateway branching on the \texttt{amount} field.
 
@@ -221,18 +221,18 @@ a pipeline exercising \texttt{json-transform}, \texttt{type-coercer},
 scaffolder on the E2E fixture and inspects the generated executor classes:
 \begin{itemize}
 \item \texttt{RouteDecisionPluginExecutor.java} must contain
-\texttt{ProcessEvent.EventType.GATEWAY\_TAKEN} (route category).
+\texttt{ProcessEvent.EventType.\\GATEWAY\_TAKEN} (route category).
 \item \texttt{ValidateHighValuePluginExecutor.java} must contain
-\texttt{ProcessEvent.EventType.ACTIVITY\_ESCALATED},
-\texttt{ProcessEvent.Status.ESCALATED}, and error code
+\texttt{ProcessEvent.EventType.\\ACTIVITY\_ESCALATED},
+\texttt{ProcessEvent.Status.ESCALATED}, and error code \\
 \texttt{"VALIDATION\_FAILED"} (validate category).
 \item \texttt{AggregateHighValuePluginExecutor.java} must contain
-\texttt{ProcessEvent.EventType.ACTIVITY\_ENTERED} (aggregate category,
+\texttt{ProcessEvent.EventType.\\ACTIVITY\_ENTERED} (aggregate category,
 null-output path).
 \end{itemize}
 
 \item[shouldHandleGatewayTakenEvents] Publishes
-\texttt{PROCESS\_STARTED} $\to$ \texttt{ACTIVITY\_ENTERED} $\to$
+\texttt{PROCESS\_STARTED} $\to$ \texttt{ACTIVITY\_ENTERED} $\to$ \\
 \texttt{GATEWAY\_TAKEN} for \texttt{route\_decision} and verifies the
 monitoring state view records a duration for the routed activity with
 lifecycle \texttt{"active"}.
@@ -244,10 +244,10 @@ verifies the monitoring topology records the escalated activity's
 duration correctly.
 
 \item[shouldHandleActivityEnteredThenCompletedEvents] Publishes
-\texttt{PROCESS\_STARTED} $\to$ \texttt{ACTIVITY\_ENTERED} $\to$
+\texttt{PROCESS\_STARTED} $\to$ \\ \texttt{ACTIVITY\_ENTERED} $\to$
 \texttt{ACTIVITY\_COMPLETED} for \texttt{aggregate\_high\_value} (30~s
 gap) and asserts that the latency query returns an
-\texttt{ActivityLatencySummary} with $\ge 1$ sample and
+\texttt{ActivityLatencySummary} with $\ge 1$ sample and \\
 \texttt{maxDurationMs} $\ge 30\,000$~ms. This validates the entry-store
 latency pipeline for aggregate window-start events.
 
@@ -292,7 +292,7 @@ interface.
 \begin{description}
 
 \item[shouldFireHardErrorOnFirstOccurrence] Config with scope
-(\texttt{processId="order-proc"}, \texttt{activityId="validate\_order"}),
+(\texttt{processId="order-proc"}, \\ \texttt{activityId="validate\_order"}),
 \texttt{HARD\_ERROR} syndrome, \texttt{CRITICAL} severity. Asserts alarm
 fires with correct message rendering, scope fields, and count=1.
 
@@ -301,7 +301,7 @@ fires with correct message rendering, scope fields, and count=1.
 \texttt{PROCESS\_FAILED} event regardless of process or activity.
 
 \item[shouldNotFireHardErrorForNonMatchingEventType] Config targeting
-\texttt{ACTIVITY\_ESCALATED} ignores a \texttt{PROCESS\_FAILED} event.
+\texttt{ACTIVITY\_ESCALATED} \\ ignores a \texttt{PROCESS\_FAILED} event.
 
 \item[shouldMatchByProcessOnly] Config scoped to \texttt{"order-proc"}
 fires for events in that process, ignores events in \texttt{"other-proc"}.
@@ -345,7 +345,7 @@ rejects a \texttt{SLIDING\_WINDOW} config with \texttt{null}
 \texttt{windowDuration}.
 
 \item[shouldRejectCountedWithoutThreshold] Constructor validation
-rejects a \texttt{COUNTED} config with \texttt{threshold=0}.
+rejects a \texttt{COUNTED} config with \\ \texttt{threshold=0}.
 
 \end{description}
 
@@ -375,7 +375,7 @@ an \texttt{ACTIVE} state view with the expected key, timestamps, fire count, and
 message.
 
 \item[shouldMergeRepeatedAlarmEventsAndKeepLatestDetails] Folds repeated firings
-for the same process/activity/config into one view, increments \texttt{fireCount},
+for the same \\ process/activity/config into one view, increments \texttt{fireCount},
 keeps the strongest severity, and records the latest firing details.
 
 \item[shouldNotLetLateOlderEventOverwriteLatestDetails] Ensures an older event
@@ -406,16 +406,16 @@ The Docker-backed suites share a common base class:
 library to start a single Confluent CP Kafka 7.8.0 broker in KRaft mode
 (no ZooKeeper). The broker listens on a random free host port and
 advertises \fbox{\texttt{localhost:<port>}}. Docker availability is
-auto-detected; if Docker is missing, tests are skipped unless
+auto-detected; if Docker is missing, tests are skipped unless \\
 \texttt{DURGA\_REQUIRE\_DOCKER\_TESTS=true} is set.
 
 \begin{itemize}
 \item \textbf{Environment variables:}
-\texttt{DURGA\_DOCKER\_HOST\_IP} (override advertised listener host),
+\texttt{DURGA\_DOCKER\_HOST\_IP} (override advertised listener host), \\
 \texttt{DURGA\_REQUIRE\_DOCKER\_TESTS} (fail if Docker unavailable),
 \texttt{DURGA\_IT\_TIMEOUT\_SECONDS} (override 60~s default).
 \item \textbf{System properties:}
-\texttt{durga.it.timeout.seconds} (same as env var, takes precedence),
+\texttt{durga.it.timeout.seconds} (same as env var, takes precedence), \\
 \texttt{DOCKER\_HOST} (Docker socket URI, auto-detected if unset).
 \end{itemize}
 
@@ -433,5 +433,5 @@ or \texttt{KafkaStreams} instances in \texttt{@Before} and close them in
 \texttt{mvn test -Dtest='E2EPipelineIntegrationTest'}
 
 \item \textbf{Require Docker (fail if unavailable):}
-\texttt{mvn test -Dtest='*IntegrationTest' -Ddurga.integration.requireDocker=true}
+\texttt{mvn test -Ddurga.integration.requireDocker=true \\-Dtest='*IntegrationTest' }
 \end{itemize}

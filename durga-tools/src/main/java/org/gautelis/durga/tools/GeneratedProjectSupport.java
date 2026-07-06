@@ -45,7 +45,8 @@ final class GeneratedProjectSupport {
             List<String> callActivities,
             List<String> subProcesses,
             Path outputRoot,
-            Map<String, String> taskInputChannels
+            Map<String, String> taskInputChannels,
+            List<String> validationTasks
     ) {
         Path outputPath = outputRoot.resolve("src/main/resources/application.yml");
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
@@ -206,6 +207,23 @@ final class GeneratedProjectSupport {
                     outputChannel,
                     "org.apache.kafka.common.serialization.StringSerializer"
             ));
+        }
+
+        if (validationTasks != null && !validationTasks.isEmpty()) {
+            // Validation-mode shadow workers consume the production input topic through a dedicated
+            // consumer group (a separate index) so the production offset is never advanced, and
+            // divert their output to a shared topic rather than the task output channel.
+            outgoing.putIfAbsent("validation-candidate-outputs", channelConfig(
+                    "smallrye-kafka",
+                    "validation-candidate-outputs",
+                    "org.apache.kafka.common.serialization.StringSerializer"
+            ));
+            for (String task : validationTasks) {
+                String validationChannel = processId + "_" + task + "_validation_in";
+                String inputTopic = taskInputChannels.getOrDefault(task, processId + "_" + task + "_input");
+                String groupId = processId + "_" + task + "_validation";
+                incoming.putIfAbsent(validationChannel, validationIncomingConfig(inputTopic, groupId));
+            }
         }
 
         try {
@@ -655,6 +673,26 @@ final class GeneratedProjectSupport {
             value.put("serializer", serializerOrDeserializer);
         }
         config.put("value", value);
+        return config;
+    }
+
+    /**
+     * Incoming channel for a validation shadow worker: reads the production input topic through a
+     * dedicated consumer group so the production offset is untouched. The offset reset defaults to
+     * {@code latest} (live concurrent) and is overridable via {@code DURGA_VALIDATION_OFFSET_RESET}
+     * (e.g. {@code earliest} for a bounded historic replay near the tail).
+     */
+    private static Map<String, Object> validationIncomingConfig(String topic, String groupId) {
+        Map<String, Object> config = channelConfig(
+                "smallrye-kafka", topic, "org.apache.kafka.common.serialization.StringDeserializer");
+        Map<String, Object> group = new LinkedHashMap<>();
+        group.put("id", groupId);
+        config.put("group", group);
+        Map<String, Object> auto = new LinkedHashMap<>();
+        Map<String, Object> offset = new LinkedHashMap<>();
+        offset.put("reset", "${DURGA_VALIDATION_OFFSET_RESET:latest}");
+        auto.put("offset", offset);
+        config.put("auto", auto);
         return config;
     }
 

@@ -92,6 +92,38 @@ public class PluginExecutionSupportTest {
         assertEquals("raw:hello", Files.readString(stored));
     }
 
+    @Test
+    public void shouldSuppressObjectStoreWriteWhenSandboxed() throws Exception {
+        System.out.println("TC: sandboxed materialize mode runs the transform but writes no object and yields a synthetic handle");
+        Path root = temporaryFolder.newFolder("sandbox").toPath();
+        byte[] handlePayload = new ObjectStoreCollector().execute(
+                Plugin.toBytes("hello"),
+                "store=" + root + ";asset=Greeting");
+
+        PluginExecutionSupport.Result result = PluginExecutionSupport.executeSandboxed(
+                new UppercasePlugin(),
+                handlePayload,
+                "handleMode=materialize;store=" + root + ";asset=GreetingUpper");
+
+        assertTrue(result.materializedHandle());
+        assertEquals("hello", Plugin.toString(result.pluginInput()));
+
+        JsonNode output = mapper.readTree(result.output());
+        JsonNode handle = output.get("dataHandle");
+        String uri = handle.get("uri").asText();
+        assertTrue("expected synthetic sandbox uri but was " + uri, uri.startsWith("sandbox:validation/"));
+
+        String expectedHash = org.gautelis.durga.plugins.PipelinePlugin.sha256("HELLO");
+        assertEquals(expectedHash, handle.get("metadata").get("sha256").asText());
+
+        long writtenObjects;
+        try (java.util.stream.Stream<Path> files = Files.walk(root)) {
+            writtenObjects = files.filter(Files::isRegularFile).count();
+        }
+        assertEquals("sandbox mode must reuse the single input object and write no output object",
+                1, writtenObjects);
+    }
+
     static final class UppercasePlugin implements Plugin {
         @Override
         public byte[] execute(byte[] payload, String config) {

@@ -615,11 +615,12 @@ final class ParsedArgs {
     final String retentionHours;
     final String eventsTopic;
     final String target;
+    final boolean validation;
 
     ParsedArgs(String bpmnPath, String outputDir, boolean dryRun, boolean transactions,
                boolean separateWorkers, boolean connect, boolean strimzi,
                String processIdOverride, String packageName, String retentionHours,
-               String eventsTopic, String target) {
+               String eventsTopic, String target, boolean validation) {
         this.bpmnPath = bpmnPath;
         this.outputDir = outputDir;
         this.dryRun = dryRun;
@@ -632,6 +633,7 @@ final class ParsedArgs {
         this.retentionHours = retentionHours;
         this.eventsTopic = eventsTopic;
         this.target = target != null ? target : "java";
+        this.validation = validation;
     }
 }
 

@@ -23,6 +23,14 @@ in \texttt{<package>.probes},
 \item helper scripts for demos, inputs, completions, failures, escalations and observers.
 \end{itemize}
 
+When scaffolded with \texttt{--validation}, the output additionally contains a
+validation-mode shadow worker per plugin task
+(\texttt{\textit{Name}ValidationWorker.java}) and the
+\texttt{ValidationCandidateOutput} runtime contract, with the dedicated validation
+consumer group and the \texttt{validation-candidate-outputs} channel merged into
+\texttt{application.yml} and the validation topics added to the topic-creation
+script (Section~\ref{sec:ValidationMode}).
+
 The BPMN model copy is kept alongside the source code and is the input to
 regeneration. During the build, \texttt{ModelEnricher} writes implementation
 metadata for custom activities back into this copy, keeping the model in sync
@@ -51,7 +59,7 @@ workers delegate through \texttt{PluginExecutionSupport}, so they can either pas
 and after plugin execution (\texttt{handleMode=materialize}).
 
 After successful plugin or custom execution, generated workers emit a
-Vannak-compatible \texttt{DataIndividualMetadataEvent} to the
+Vannak-compatible \\ \texttt{DataIndividualMetadataEvent} to the
 \texttt{vannak-metadata-events} Kafka topic. This keeps Durga's lifecycle
 \texttt{ProcessEvent} small while exposing item-level metadata for Vannak.
 
