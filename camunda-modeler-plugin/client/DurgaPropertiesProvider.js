@@ -432,8 +432,10 @@ function createAlarmField(element, fieldSuffix, label, options, commandStack, bp
 }
 
 function hasAlarmProps(element) {
-  if (element.get('extensionElements')) {
-    var vals = element.get('extensionElements').get('values') || [];
+  var bo = getBusinessObject(element);
+  var extensionElements = bo && bo.get ? bo.get('extensionElements') : null;
+  if (extensionElements) {
+    var vals = extensionElements.get('values') || [];
     for (var i = 0; i < vals.length; i++) {
       if (vals[i].$type === 'camunda:Properties') {
         return true;
