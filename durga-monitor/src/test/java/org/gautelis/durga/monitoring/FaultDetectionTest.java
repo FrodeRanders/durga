@@ -688,7 +688,6 @@ public class FaultDetectionTest {
         @Override
         public void init(org.apache.kafka.streams.processor.StateStoreContext context, org.apache.kafka.streams.processor.StateStore root) {
         }
-        @Override public void flush() {}
         @Override public boolean persistent() { return false; }
         @Override public boolean isOpen() { return true; }
         @Override public void close() {}
