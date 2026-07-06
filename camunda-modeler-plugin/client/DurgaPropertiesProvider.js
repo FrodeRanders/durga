@@ -31,7 +31,15 @@ var SYNDROME_OPTIONS = [
   { value: 'COUNTED', label: 'Counted (threshold)' },
   { value: 'SLIDING_WINDOW', label: 'Sliding Window (time-bound)' },
   { value: 'STUCK', label: 'Stuck (idle timeout)' },
-  { value: 'CASCADE', label: 'Cascade (stall surge)' }
+  { value: 'CASCADE', label: 'Cascade (stall surge)' },
+  { value: 'SLA_LATENCY', label: 'SLA: max latency (wall-clock)' },
+  { value: 'SLA_THROUGHPUT', label: 'SLA: min throughput (calls/window)' }
+];
+
+var SLA_SYNDROME_OPTIONS = [
+  { value: '', label: '<none>' },
+  { value: 'SLA_LATENCY', label: 'Max latency (wall-clock)' },
+  { value: 'SLA_THROUGHPUT', label: 'Min throughput (calls/window)' }
 ];
 
 var EVENT_TYPE_OPTIONS = [
@@ -65,9 +73,11 @@ DurgaPropertiesProvider.prototype.getGroups = function(element) {
       groups.push(createPluginSelectGroup(element, commandStack, bpmnFactory));
       groups.push(createPluginConfigGroup(element, commandStack, bpmnFactory));
       groups.push(createAlarmGroup(element, commandStack, bpmnFactory));
+      groups.push(createSlaGroup(element, commandStack, bpmnFactory));
     }
     if (is(element, 'bpmn:Process')) {
       groups.push(createProcessAlarmGroup(element, commandStack, bpmnFactory));
+      groups.push(createProcessSlaGroup(element, commandStack, bpmnFactory));
     }
     return groups;
   };
@@ -354,6 +364,36 @@ function createProcessAlarmGroup(element, commandStack, bpmnFactory) {
     createAlarmField(element, '$burst:windowSeconds', 'Aggr. window / timeout (s)', null, commandStack, bpmnFactory),
     createAlarmField(element, '$burst:severity', 'Aggregate Severity', SEVERITY_OPTIONS, commandStack, bpmnFactory),
     createAlarmField(element, '$burst:message', 'Aggregate Message', null, commandStack, bpmnFactory)
+  ], hasAlarmProps(element));
+}
+
+// ---- SLA Groups ----
+//
+// SLA alarms use their own alarm ids so they do not collide with an error alarm on the
+// same element. Activity scope measures a single task; process aggregate scope ($) measures
+// the whole process end to end.
+//   SLA_LATENCY    -> maxLatencyMs (maximum allowed wall-clock duration)
+//   SLA_THROUGHPUT -> threshold (minimum calls) + windowSeconds (measurement period)
+
+function createSlaGroup(element, commandStack, bpmnFactory) {
+  return createGroup('durga-sla', 'Durga SLA (Activity)', [
+    createAlarmField(element, 'sla:syndrome', 'SLA Type', SLA_SYNDROME_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, 'sla:maxLatencyMs', 'Max latency (ms, SLA_LATENCY)', null, commandStack, bpmnFactory),
+    createAlarmField(element, 'sla:threshold', 'Min calls / window (SLA_THROUGHPUT)', null, commandStack, bpmnFactory),
+    createAlarmField(element, 'sla:windowSeconds', 'Window (s, SLA_THROUGHPUT)', null, commandStack, bpmnFactory),
+    createAlarmField(element, 'sla:severity', 'Severity', SEVERITY_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, 'sla:message', 'Message template', null, commandStack, bpmnFactory)
+  ], hasAlarmProps(element));
+}
+
+function createProcessSlaGroup(element, commandStack, bpmnFactory) {
+  return createGroup('durga-process-sla', 'Durga Process SLA (end-to-end)', [
+    createAlarmField(element, '$sla:syndrome', 'SLA Type', SLA_SYNDROME_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, '$sla:maxLatencyMs', 'Max latency (ms, SLA_LATENCY)', null, commandStack, bpmnFactory),
+    createAlarmField(element, '$sla:threshold', 'Min calls / window (SLA_THROUGHPUT)', null, commandStack, bpmnFactory),
+    createAlarmField(element, '$sla:windowSeconds', 'Window (s, SLA_THROUGHPUT)', null, commandStack, bpmnFactory),
+    createAlarmField(element, '$sla:severity', 'Severity', SEVERITY_OPTIONS, commandStack, bpmnFactory),
+    createAlarmField(element, '$sla:message', 'Message template', null, commandStack, bpmnFactory)
   ], hasAlarmProps(element));
 }
 

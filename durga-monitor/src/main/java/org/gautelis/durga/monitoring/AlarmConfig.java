@@ -22,17 +22,22 @@ import java.util.Objects;
  * @param processId    scope: process to monitor (null = all processes)
  * @param activityId   scope: activity to monitor (null = all activities)
  * @param eventType    which lifecycle event type triggers counting (may be null for
- *                     {@link AlarmSyndrome#STUCK} and {@link AlarmSyndrome#CASCADE},
- *                     which are evaluated by a punctuator rather than per event)
+ *                     {@link AlarmSyndrome#STUCK}, {@link AlarmSyndrome#CASCADE}, and the
+ *                     SLA syndromes, which either use a punctuator or default the event type
+ *                     from the scope)
  * @param syndrome     how faults are aggregated into an alarm
  * @param threshold    maximum count before alarm (ignored for {@link AlarmSyndrome#HARD_ERROR}
- *                     and {@link AlarmSyndrome#STUCK})
+ *                     and {@link AlarmSyndrome#STUCK}); for {@link AlarmSyndrome#SLA_THROUGHPUT}
+ *                     it is the <em>minimum</em> required calls per {@code windowDuration}
  * @param windowDuration size of sliding window for {@link AlarmSyndrome#SLIDING_WINDOW} /
- *                     {@link AlarmSyndrome#CASCADE}, or idle timeout for {@link AlarmSyndrome#STUCK}
+ *                     {@link AlarmSyndrome#CASCADE}, idle timeout for {@link AlarmSyndrome#STUCK},
+ *                     the maximum allowed wall-clock latency for {@link AlarmSyndrome#SLA_LATENCY},
+ *                     or the measurement period for {@link AlarmSyndrome#SLA_THROUGHPUT}
  * @param severity     alarm severity level
  * @param message      human-readable alarm message template, may contain
  *                     {@code ${processId}}, {@code ${activityId}}, {@code ${count}},
- *                     {@code ${processInstanceId}}, {@code ${idleSeconds}}
+ *                     {@code ${processInstanceId}}, {@code ${idleSeconds}},
+ *                     {@code ${latencyMs}}, {@code ${limitMs}}, {@code ${windowSeconds}}
  * @param origin       provenance layer (automatic / opt-in / explicit)
  */
 public record AlarmConfig(
@@ -55,7 +60,7 @@ public record AlarmConfig(
 
         switch (syndrome) {
             case HARD_ERROR, COUNTED, SLIDING_WINDOW -> Objects.requireNonNull(eventType, "eventType");
-            default -> { /* STUCK / CASCADE are not event-type driven */ }
+            default -> { /* STUCK / CASCADE / SLA_* default or ignore eventType */ }
         }
         if (syndrome == AlarmSyndrome.SLIDING_WINDOW && windowDuration == null) {
             throw new IllegalArgumentException("SLIDING_WINDOW requires windowDuration");
@@ -66,9 +71,16 @@ public record AlarmConfig(
         if (syndrome == AlarmSyndrome.CASCADE && windowDuration == null) {
             throw new IllegalArgumentException("CASCADE requires windowDuration");
         }
+        if (syndrome == AlarmSyndrome.SLA_LATENCY && windowDuration == null) {
+            throw new IllegalArgumentException("SLA_LATENCY requires windowDuration (maximum allowed latency)");
+        }
+        if (syndrome == AlarmSyndrome.SLA_THROUGHPUT && windowDuration == null) {
+            throw new IllegalArgumentException("SLA_THROUGHPUT requires windowDuration (measurement period)");
+        }
         boolean needsThreshold = syndrome == AlarmSyndrome.COUNTED
                 || syndrome == AlarmSyndrome.SLIDING_WINDOW
-                || syndrome == AlarmSyndrome.CASCADE;
+                || syndrome == AlarmSyndrome.CASCADE
+                || syndrome == AlarmSyndrome.SLA_THROUGHPUT;
         if (needsThreshold && threshold <= 0) {
             throw new IllegalArgumentException(syndrome + " requires threshold > 0");
         }

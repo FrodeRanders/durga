@@ -109,9 +109,10 @@ can spin up and receive a full read replica without recomputing.
 The fault and alarm-state stores are separate from the core process read model:
 
 \begin{itemize}
-\item \texttt{fault-counts-store}, \texttt{fault-windows-store}, and
-      \texttt{fault-last-alarm-store} support fault detection syndromes and alarm
-      suppression.
+\item \texttt{fault-counts-store}, \texttt{fault-windows-store},
+      \texttt{fault-last-alarm-store}, \texttt{fault-config-store},
+      \texttt{fault-seen-store}, and \texttt{fault-latency-entry-store} support the
+      fault-detection and performance-SLA syndromes and alarm suppression.
 \item \texttt{alarm-state-store} is the queryable active-alarm read model consumed by
       the HTTP API and dashboard.
 \end{itemize}

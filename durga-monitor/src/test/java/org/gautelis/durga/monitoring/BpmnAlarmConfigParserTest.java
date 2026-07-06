@@ -307,4 +307,78 @@ public class BpmnAlarmConfigParserTest {
         assertEquals(Duration.ofSeconds(30), c.windowDuration());
         assertEquals(AlarmSeverity.CRITICAL, c.severity());
     }
+
+    @Test
+    public void shouldParseActivityLevelSlaLatency() {
+        System.out.println("TC: parses an activity-level SLA_LATENCY alarm with maxLatencyMs");
+
+        String bpmn = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                                  targetNamespace="http://example.com">
+                  <bpmn:process id="order_proc" isExecutable="true">
+                    <bpmn:serviceTask id="score_risk">
+                      <bpmn:extensionElements>
+                        <camunda:properties>
+                          <camunda:property name="durga:alarm:risk-sla:syndrome" value="SLA_LATENCY" />
+                          <camunda:property name="durga:alarm:risk-sla:maxLatencyMs" value="2500" />
+                          <camunda:property name="durga:alarm:risk-sla:severity" value="WARN" />
+                          <camunda:property name="durga:alarm:risk-sla:message" value="${activityId} slow: ${latencyMs}ms > ${limitMs}ms" />
+                        </camunda:properties>
+                      </bpmn:extensionElements>
+                    </bpmn:serviceTask>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        List<AlarmConfig> configs = BpmnAlarmConfigParser.parse(bpmn);
+        assertEquals(1, configs.size());
+
+        AlarmConfig c = configs.get(0);
+        assertEquals("order_proc:risk-sla", c.id());
+        assertEquals("order_proc", c.processId());
+        assertEquals("score_risk", c.activityId());
+        assertNull(c.eventType());
+        assertEquals(AlarmSyndrome.SLA_LATENCY, c.syndrome());
+        assertEquals(Duration.ofMillis(2500), c.windowDuration());
+        assertEquals(AlarmSeverity.WARN, c.severity());
+    }
+
+    @Test
+    public void shouldParseProcessLevelSlaThroughput() {
+        System.out.println("TC: parses a process-level ($) SLA_THROUGHPUT alarm with minimum rate and window");
+
+        String bpmn = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                                  targetNamespace="http://example.com">
+                  <bpmn:process id="pipeline" isExecutable="true">
+                    <bpmn:extensionElements>
+                      <camunda:properties>
+                        <camunda:property name="durga:alarm:$min-rate:syndrome" value="SLA_THROUGHPUT" />
+                        <camunda:property name="durga:alarm:$min-rate:threshold" value="100" />
+                        <camunda:property name="durga:alarm:$min-rate:windowSeconds" value="60" />
+                        <camunda:property name="durga:alarm:$min-rate:severity" value="CRITICAL" />
+                        <camunda:property name="durga:alarm:$min-rate:message" value="throughput ${count} under ${threshold}/${windowSeconds}s" />
+                      </camunda:properties>
+                    </bpmn:extensionElements>
+                    <bpmn:serviceTask id="task_x" />
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        List<AlarmConfig> configs = BpmnAlarmConfigParser.parse(bpmn);
+        assertEquals(1, configs.size());
+
+        AlarmConfig c = configs.get(0);
+        assertEquals("pipeline:min-rate", c.id());
+        assertEquals("pipeline", c.processId());
+        assertNull(c.activityId());
+        assertEquals(AlarmSyndrome.SLA_THROUGHPUT, c.syndrome());
+        assertEquals(100, c.threshold());
+        assertEquals(Duration.ofSeconds(60), c.windowDuration());
+        assertEquals(AlarmSeverity.CRITICAL, c.severity());
+    }
 }

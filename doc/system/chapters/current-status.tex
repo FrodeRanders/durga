@@ -27,10 +27,12 @@ described in the deployment, supervision and configuration chapters.
       \texttt{AlarmOrigin} provenance; the monitor ships built-in STUCK and
       CASCADE syndromes that detect stall cascades with no per-process
       configuration,
-\item five alarm syndromes: \texttt{HARD\_ERROR}, \texttt{COUNTED},
-      \texttt{SLIDING\_WINDOW} (event-driven) plus \texttt{STUCK},
+\item seven alarm syndromes: \texttt{HARD\_ERROR}, \texttt{COUNTED},
+      \texttt{SLIDING\_WINDOW} (event-driven), \texttt{STUCK},
       \texttt{CASCADE} (absence-of-progress, evaluated by wall-clock
-      punctuator),
+      punctuator), plus performance-SLA syndromes \texttt{SLA\_LATENCY}
+      (wall-clock ceiling per task or process) and \texttt{SLA\_THROUGHPUT}
+      (minimum completions per window), declared in the BPMN model,
 \item queryable alarm-state read model and dashboard alarm overlays; the
       dashboard surfaces system-wide alarms separately from per-process
       alarms,

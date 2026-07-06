@@ -30,13 +30,21 @@ import java.util.Map;
  *
  * <table>
  *   <tr><th>Field</th><th>Values</th><th>Required</th></tr>
- *   <tr><td>{@code syndrome}</td><td>{@code HARD_ERROR}, {@code COUNTED}, {@code SLIDING_WINDOW}, {@code STUCK}, {@code CASCADE}</td><td>yes</td></tr>
- *   <tr><td>{@code eventType}</td><td>{@code PROCESS_FAILED}, {@code ACTIVITY_ESCALATED}, etc.</td><td>event-driven syndromes only (not STUCK / CASCADE)</td></tr>
- *   <tr><td>{@code threshold}</td><td>positive integer</td><td>for COUNTED / SLIDING_WINDOW / CASCADE</td></tr>
- *   <tr><td>{@code windowSeconds}</td><td>positive integer</td><td>window for SLIDING_WINDOW / CASCADE, idle timeout for STUCK</td></tr>
+ *   <tr><td>{@code syndrome}</td><td>{@code HARD_ERROR}, {@code COUNTED}, {@code SLIDING_WINDOW}, {@code STUCK}, {@code CASCADE}, {@code SLA_LATENCY}, {@code SLA_THROUGHPUT}</td><td>yes</td></tr>
+ *   <tr><td>{@code eventType}</td><td>{@code PROCESS_FAILED}, {@code ACTIVITY_ESCALATED}, etc.</td><td>event-driven syndromes only (not STUCK / CASCADE / SLA_*)</td></tr>
+ *   <tr><td>{@code threshold}</td><td>positive integer</td><td>for COUNTED / SLIDING_WINDOW / CASCADE; minimum calls per window for SLA_THROUGHPUT</td></tr>
+ *   <tr><td>{@code windowSeconds}</td><td>positive integer</td><td>window for SLIDING_WINDOW / CASCADE, idle timeout for STUCK, measurement period for SLA_THROUGHPUT</td></tr>
+ *   <tr><td>{@code maxLatencyMs}</td><td>positive integer (milliseconds)</td><td>required for SLA_LATENCY: maximum allowed wall-clock duration</td></tr>
  *   <tr><td>{@code severity}</td><td>{@code WARN}, {@code CRITICAL}</td><td>yes</td></tr>
- *   <tr><td>{@code message}</td><td>template with {@code ${processId}}, {@code ${activityId}}, etc.</td><td>yes</td></tr>
+ *   <tr><td>{@code message}</td><td>template with {@code ${processId}}, {@code ${activityId}}, {@code ${latencyMs}}, {@code ${limitMs}}, {@code ${windowSeconds}}, etc.</td><td>yes</td></tr>
  * </table>
+ *
+ * <h3>SLA scope</h3>
+ * SLA syndromes follow the same placement scoping as other alarms. Activity-level properties
+ * measure that task (entry&rarr;completion latency, or that task's completion rate); process-level
+ * aggregate ({@code $}) properties measure the whole process (start&rarr;completion latency, or the
+ * process completion rate); process-level inherited ({@code *}) properties apply the same task-level
+ * SLA to every activity.
  *
  * <h3>Scoping</h3>
  * Where the properties appear determines the alarm scope:
@@ -166,6 +174,7 @@ public final class BpmnAlarmConfigParser {
         String eventTypeStr = fields.get("eventType");
         String thresholdStr = fields.get("threshold");
         String windowStr = fields.get("windowSeconds");
+        String maxLatencyStr = fields.get("maxLatencyMs");
         String severityStr = fields.get("severity");
         String message = fields.get("message");
 
@@ -210,15 +219,28 @@ public final class BpmnAlarmConfigParser {
             }
         }
 
-        // windowSeconds is the sliding-window size (SLIDING_WINDOW / CASCADE) or the
-        // idle timeout before an instance is considered stuck (STUCK).
+        // windowSeconds is the sliding-window size (SLIDING_WINDOW / CASCADE), the idle timeout
+        // before an instance is considered stuck (STUCK), or the measurement period (SLA_THROUGHPUT).
         Duration windowDuration = null;
         boolean windowed = syndrome == AlarmSyndrome.SLIDING_WINDOW
                 || syndrome == AlarmSyndrome.STUCK
-                || syndrome == AlarmSyndrome.CASCADE;
+                || syndrome == AlarmSyndrome.CASCADE
+                || syndrome == AlarmSyndrome.SLA_THROUGHPUT;
         if (windowed && windowStr != null) {
             try { windowDuration = Duration.ofSeconds(Integer.parseInt(windowStr)); } catch (NumberFormatException e) {
                 LOG.debug("Skipping alarm '{}': invalid windowSeconds '{}'", alarmId, windowStr);
+                return null;
+            }
+        }
+
+        // SLA_LATENCY carries the maximum allowed wall-clock duration in windowDuration.
+        if (syndrome == AlarmSyndrome.SLA_LATENCY) {
+            if (maxLatencyStr == null) {
+                LOG.debug("Skipping alarm '{}': SLA_LATENCY requires maxLatencyMs", alarmId);
+                return null;
+            }
+            try { windowDuration = Duration.ofMillis(Long.parseLong(maxLatencyStr)); } catch (NumberFormatException e) {
+                LOG.debug("Skipping alarm '{}': invalid maxLatencyMs '{}'", alarmId, maxLatencyStr);
                 return null;
             }
         }

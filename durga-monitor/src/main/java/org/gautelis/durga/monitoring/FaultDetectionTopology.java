@@ -67,9 +67,14 @@ public final class FaultDetectionTopology {
     static final String LAST_ALARM_STORE = "fault-last-alarm-store";
     static final String CONFIG_STORE = "fault-config-store";
     static final String SEEN_STORE = "fault-seen-store";
+    static final String LATENCY_ENTRY_STORE = "fault-latency-entry-store";
 
     static final String CASCADE_ONSET_PREFIX = "$cascade-onsets:";
     static final String CASCADE_ALARM_PREFIX = "$cascade:";
+    static final String THROUGHPUT_WINDOW_PREFIX = "$sla-tput:";
+    static final String THROUGHPUT_FIRST_PREFIX = "$sla-tput-first:";
+    static final String THROUGHPUT_ALARM_PREFIX = "$sla-tput-alarm:";
+    static final String LATENCY_SCOPE_PROCESS = "$process";
 
     public static final String DEFAULT_EVENTS_PATTERN = "process-events-.*";
     public static final String DEFAULT_ALARMS_TOPIC = "fault-alarms";
@@ -116,10 +121,15 @@ public final class FaultDetectionTopology {
                         Serdes.String(), Serdes.String());
         builder.addStateStore(seenStoreBuilder);
 
+        StoreBuilder<KeyValueStore<String, String>> latencyEntryStoreBuilder =
+                Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(LATENCY_ENTRY_STORE),
+                        Serdes.String(), Serdes.String());
+        builder.addStateStore(latencyEntryStoreBuilder);
+
         // Stream 1: process events → evaluate alarms
         builder.stream(Pattern.compile(eventsPattern), Consumed.with(Serdes.String(), Serdes.String()))
                 .process(() -> new FaultDetectionProcessor(staticConfigs),
-                        CONFIG_STORE, COUNTS_STORE, WINDOWS_STORE, LAST_ALARM_STORE, SEEN_STORE)
+                        CONFIG_STORE, COUNTS_STORE, WINDOWS_STORE, LAST_ALARM_STORE, SEEN_STORE, LATENCY_ENTRY_STORE)
                 .to(alarmsTopic, Produced.with(Serdes.String(), Serdes.String()));
 
         // Stream 2: process models → update alarm configs
@@ -144,6 +154,7 @@ public final class FaultDetectionTopology {
         private KeyValueStore<String, String> windowsStore;
         private KeyValueStore<String, Integer> lastAlarmStore;
         private KeyValueStore<String, String> seenStore;
+        private KeyValueStore<String, String> latencyEntryStore;
 
         FaultDetectionProcessor(Set<AlarmConfig> staticConfigs) {
             this.staticConfigs = staticConfigs != null ? staticConfigs : Set.of();
@@ -165,6 +176,7 @@ public final class FaultDetectionTopology {
             this.windowsStore = context.getStateStore(WINDOWS_STORE);
             this.lastAlarmStore = context.getStateStore(LAST_ALARM_STORE);
             this.seenStore = context.getStateStore(SEEN_STORE);
+            this.latencyEntryStore = context.getStateStore(LATENCY_ENTRY_STORE);
 
             long scanMs = scanIntervalMs(stuckConfig, cascadeConfig);
             context.schedule(Duration.ofMillis(scanMs), PunctuationType.WALL_CLOCK_TIME, this::detectStalls);
@@ -183,6 +195,7 @@ public final class FaultDetectionTopology {
             updateSeen(event);
 
             String now = Instant.now().toString();
+            long nowMs = System.currentTimeMillis();
             Set<AlarmConfig> allConfigs = new HashSet<>(staticConfigs);
 
             // merge BPMN-derived configs for this process
@@ -193,9 +206,26 @@ public final class FaultDetectionTopology {
                 }
             }
 
+            // SLA syndromes: latency is event-driven (measured on completion against the
+            // recorded entry time); throughput feeds a rolling window that the punctuator scores.
+            recordLatencyEntry(event, allConfigs, nowMs);
             for (AlarmConfig config : allConfigs) {
-                // STUCK / CASCADE are absence-of-progress syndromes handled by the punctuator.
-                if (config.syndrome() == AlarmSyndrome.STUCK || config.syndrome() == AlarmSyndrome.CASCADE) {
+                if (config.syndrome() == AlarmSyndrome.SLA_LATENCY) {
+                    AlarmEvent alarm = evaluateSlaLatency(config, event, now, nowMs);
+                    if (alarm != null) {
+                        context.forward(record.withKey(alarm.alarmId()).withValue(alarm.toJson()));
+                    }
+                } else if (config.syndrome() == AlarmSyndrome.SLA_THROUGHPUT) {
+                    feedThroughput(config, event, nowMs);
+                }
+            }
+            clearLatencyEntryOnCompletion(event);
+
+            for (AlarmConfig config : allConfigs) {
+                // STUCK / CASCADE (punctuator) and SLA_* (handled above) are not per-event counted here.
+                AlarmSyndrome syndrome = config.syndrome();
+                if (syndrome == AlarmSyndrome.STUCK || syndrome == AlarmSyndrome.CASCADE
+                        || syndrome == AlarmSyndrome.SLA_LATENCY || syndrome == AlarmSyndrome.SLA_THROUGHPUT) {
                     continue;
                 }
                 if (event.eventType() != config.eventType()) continue;
@@ -212,6 +242,61 @@ public final class FaultDetectionTopology {
                     context.forward(record.withKey(alarm.alarmId()).withValue(alarm.toJson()));
                 }
             }
+        }
+
+        // ---- SLA latency (event-driven) ----
+
+        /** Records activity/process entry timestamps for scopes governed by an SLA_LATENCY config. */
+        private void recordLatencyEntry(ProcessEvent event, Set<AlarmConfig> allConfigs, long nowMs) {
+            String pid = event.processInstanceId();
+            if (pid == null || pid.isBlank() || event.eventType() == null) return;
+            for (AlarmConfig config : allConfigs) {
+                if (config.syndrome() == AlarmSyndrome.SLA_LATENCY) {
+                    FaultDetectionTopology.recordLatencyEntry(config, event, nowMs, latencyEntryStore);
+                }
+            }
+        }
+
+        private AlarmEvent evaluateSlaLatency(AlarmConfig config, ProcessEvent event, String now, long nowMs) {
+            return FaultDetectionTopology.evaluateSlaLatency(config, event, now, nowMs, latencyEntryStore);
+        }
+
+        /** Clears the entry timestamp once a unit of work finishes, so the entry store stays bounded. */
+        private void clearLatencyEntryOnCompletion(ProcessEvent event) {
+            String pid = event.processInstanceId();
+            if (pid == null || pid.isBlank() || event.eventType() == null) return;
+            switch (event.eventType()) {
+                case ACTIVITY_COMPLETED, ACTIVITY_ESCALATED, ACTIVITY_CANCELLED -> {
+                    if (event.activityId() != null) {
+                        latencyEntryStore.delete(latencyEntryKey(pid, event.activityId()));
+                    }
+                }
+                case PROCESS_COMPLETED, PROCESS_FAILED ->
+                        latencyEntryStore.delete(latencyEntryKey(pid, LATENCY_SCOPE_PROCESS));
+                default -> { }
+            }
+        }
+
+        // ---- SLA throughput (window feed; punctuator scores) ----
+
+        private void feedThroughput(AlarmConfig config, ProcessEvent event, long nowMs) {
+            FaultDetectionTopology.feedThroughput(config, event, nowMs, windowsStore);
+        }
+
+        /** Every SLA_THROUGHPUT config known right now, for punctuator scoring. */
+        private Set<AlarmConfig> allThroughputConfigs() {
+            Set<AlarmConfig> result = new HashSet<>();
+            for (AlarmConfig c : staticConfigs) {
+                if (c.syndrome() == AlarmSyndrome.SLA_THROUGHPUT) result.add(c);
+            }
+            try (KeyValueIterator<String, String> it = configStore.all()) {
+                while (it.hasNext()) {
+                    for (AlarmConfig c : deserializeConfigs(it.next().value)) {
+                        if (c.syndrome() == AlarmSyndrome.SLA_THROUGHPUT) result.add(c);
+                    }
+                }
+            }
+            return result;
         }
 
         /**
@@ -282,6 +367,14 @@ public final class FaultDetectionTopology {
 
             for (AlarmConfig cascade : allCascadeConfigs()) {
                 maintainCascade(cascade, nowMs, windowsStore, lastAlarmStore);
+            }
+
+            // SLA throughput: score each configured minimum-rate SLA over its trailing window.
+            for (AlarmConfig tput : allThroughputConfigs()) {
+                AlarmEvent evt = evaluateThroughput(tput, nowMs, now, windowsStore, lastAlarmStore);
+                if (evt != null) {
+                    context.forward(new Record<>(evt.alarmId(), evt.toJson(), nowMs));
+                }
             }
         }
 
@@ -535,6 +628,171 @@ public final class FaultDetectionTopology {
                 config.id() + "-" + UUID.randomUUID().toString().substring(0, 8),
                 config.id(), AlarmSyndrome.CASCADE, config.severity(), msg,
                 pid, null, config.activityId(), null, now, count, config.threshold());
+    }
+
+    // ---- SLA evaluation ----
+
+    static String latencyEntryKey(String instanceId, String scopeKey) {
+        return instanceId + "::" + scopeKey;
+    }
+
+    static long eventMs(ProcessEvent event, long fallbackMs) {
+        Instant t = Timestamps.parseOrNull(event.timestamp());
+        return t != null ? t.toEpochMilli() : fallbackMs;
+    }
+
+    /** Event type whose occurrences count toward a throughput SLA (defaults from scope). */
+    static ProcessEvent.EventType throughputEventType(AlarmConfig config) {
+        if (config.eventType() != null) return config.eventType();
+        return config.activityId() != null
+                ? ProcessEvent.EventType.ACTIVITY_COMPLETED
+                : ProcessEvent.EventType.PROCESS_COMPLETED;
+    }
+
+    /** Records the entry timestamp for one SLA_LATENCY config if this event opens its scope. */
+    static void recordLatencyEntry(AlarmConfig config, ProcessEvent event, long nowMs,
+                                    KeyValueStore<String, String> latencyEntryStore) {
+        if (config.syndrome() != AlarmSyndrome.SLA_LATENCY || event.eventType() == null) return;
+        String pid = event.processInstanceId();
+        if (pid == null || pid.isBlank()) return;
+        boolean processScope = config.activityId() == null;
+        boolean isEntry = processScope
+                ? event.eventType() == ProcessEvent.EventType.PROCESS_STARTED
+                : event.eventType() == ProcessEvent.EventType.ACTIVITY_ENTERED;
+        if (!isEntry) return;
+        if (!config.matches(event.processId(), event.activityId())) return;
+        String scopeKey = processScope ? LATENCY_SCOPE_PROCESS : event.activityId();
+        latencyEntryStore.put(latencyEntryKey(pid, scopeKey), String.valueOf(eventMs(event, nowMs)));
+    }
+
+    /** Measures wall-clock latency on completion and returns an alarm when it exceeds the limit. */
+    static AlarmEvent evaluateSlaLatency(AlarmConfig config, ProcessEvent event, String now, long nowMs,
+                                          KeyValueStore<String, String> latencyEntryStore) {
+        if (config.syndrome() != AlarmSyndrome.SLA_LATENCY || event.eventType() == null) return null;
+        boolean processScope = config.activityId() == null;
+        boolean isCompletion = processScope
+                ? event.eventType() == ProcessEvent.EventType.PROCESS_COMPLETED
+                : event.eventType() == ProcessEvent.EventType.ACTIVITY_COMPLETED;
+        if (!isCompletion) return null;
+        if (!config.matches(event.processId(), event.activityId())) return null;
+        String pid = event.processInstanceId();
+        if (pid == null || pid.isBlank()) return null;
+        String scopeKey = processScope ? LATENCY_SCOPE_PROCESS : event.activityId();
+        String enteredRaw = latencyEntryStore.get(latencyEntryKey(pid, scopeKey));
+        if (enteredRaw == null) return null;
+        long enteredMs;
+        try {
+            enteredMs = Long.parseLong(enteredRaw);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+        long durationMs = Math.max(0L, eventMs(event, nowMs) - enteredMs);
+        long limitMs = config.windowDuration().toMillis();
+        if (durationMs > limitMs) {
+            return newSlaLatencyAlarm(config, event, now, durationMs, limitMs);
+        }
+        return null;
+    }
+
+    /** Appends a qualifying completion to the throughput SLA's rolling window. */
+    static void feedThroughput(AlarmConfig config, ProcessEvent event, long nowMs,
+                                KeyValueStore<String, String> windowsStore) {
+        if (config.syndrome() != AlarmSyndrome.SLA_THROUGHPUT || event.eventType() == null) return;
+        if (event.eventType() != throughputEventType(config)) return;
+        if (!config.matches(event.processId(), event.activityId())) return;
+        String windowKey = THROUGHPUT_WINDOW_PREFIX + config.id();
+        String firstKey = THROUGHPUT_FIRST_PREFIX + config.id();
+        long windowMs = config.windowDuration().toMillis();
+        List<Long> timestamps = parseTimestamps(windowsStore.get(windowKey));
+        timestamps.add(nowMs);
+        timestamps.removeIf(t -> t < nowMs - windowMs);
+        windowsStore.put(windowKey, serializeTimestamps(timestamps));
+        if (windowsStore.get(firstKey) == null) {
+            windowsStore.put(firstKey, String.valueOf(nowMs));
+        }
+    }
+
+    /**
+     * Scores a minimum-throughput SLA over its trailing window. Fires once when the number of
+     * qualifying completions in the window drops below the configured minimum (after a full window
+     * has elapsed since the first observation), and re-arms when throughput recovers.
+     */
+    static AlarmEvent evaluateThroughput(AlarmConfig config, long nowMs, String now,
+                                          KeyValueStore<String, String> windowsStore,
+                                          KeyValueStore<String, Integer> lastAlarmStore) {
+        String windowKey = THROUGHPUT_WINDOW_PREFIX + config.id();
+        String firstKey = THROUGHPUT_FIRST_PREFIX + config.id();
+        String alarmKey = THROUGHPUT_ALARM_PREFIX + config.id();
+        long windowMs = config.windowDuration().toMillis();
+        long cutoff = nowMs - windowMs;
+
+        List<Long> timestamps = parseTimestamps(windowsStore.get(windowKey));
+        boolean changed = timestamps.removeIf(t -> t < cutoff);
+        if (changed) {
+            windowsStore.put(windowKey, serializeTimestamps(timestamps));
+        }
+
+        String firstRaw = windowsStore.get(firstKey);
+        if (firstRaw == null) return null;                 // never observed yet
+        long firstMs;
+        try {
+            firstMs = Long.parseLong(firstRaw);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+        if (nowMs - firstMs < windowMs) return null;       // still warming up (< one full window)
+
+        int count = timestamps.size();
+        Integer lastAlarmAt = lastAlarmStore.get(alarmKey);
+        if (count < config.threshold() && lastAlarmAt == null) {
+            lastAlarmStore.put(alarmKey, count);
+            return newSlaThroughputAlarm(config, count, now);
+        }
+        if (count >= config.threshold() && lastAlarmAt != null) {
+            lastAlarmStore.delete(alarmKey);
+        }
+        return null;
+    }
+
+    static AlarmEvent newSlaLatencyAlarm(AlarmConfig config, ProcessEvent event, String now,
+                                          long latencyMs, long limitMs) {
+        String processId = event.processId() != null ? event.processId() : "unknown";
+        String activityId = config.activityId() != null ? config.activityId()
+                : (event.activityId() != null ? event.activityId() : "*");
+        String processInstanceId = event.processInstanceId() != null ? event.processInstanceId() : "unknown";
+        String template = config.message() != null ? config.message() : "";
+        String msg = template
+                .replace("${processId}", processId)
+                .replace("${activityId}", activityId)
+                .replace("${processInstanceId}", processInstanceId)
+                .replace("${latencyMs}", String.valueOf(latencyMs))
+                .replace("${limitMs}", String.valueOf(limitMs))
+                .replace("${count}", String.valueOf(latencyMs));
+        return new AlarmEvent(
+                config.id() + "-" + UUID.randomUUID().toString().substring(0, 8),
+                config.id(), AlarmSyndrome.SLA_LATENCY, config.severity(), msg,
+                processId, processInstanceId, config.activityId(),
+                event.eventType(), now,
+                (int) Math.min(latencyMs, Integer.MAX_VALUE),
+                (int) Math.min(limitMs, Integer.MAX_VALUE));
+    }
+
+    static AlarmEvent newSlaThroughputAlarm(AlarmConfig config, int observed, String now) {
+        String pid = config.processId() != null ? config.processId() : "*";
+        String act = config.activityId() != null ? config.activityId() : "*";
+        long windowSeconds = config.windowDuration().toSeconds();
+        String template = config.message() != null ? config.message() : "";
+        String msg = template
+                .replace("${processId}", pid)
+                .replace("${activityId}", act)
+                .replace("${processInstanceId}", "*")
+                .replace("${count}", String.valueOf(observed))
+                .replace("${threshold}", String.valueOf(config.threshold()))
+                .replace("${windowSeconds}", String.valueOf(windowSeconds));
+        return new AlarmEvent(
+                config.id() + "-" + UUID.randomUUID().toString().substring(0, 8),
+                config.id(), AlarmSyndrome.SLA_THROUGHPUT, config.severity(), msg,
+                pid, null, config.activityId(), null, now, observed, config.threshold());
     }
 
     static boolean isTerminal(ProcessEvent.EventType type) {

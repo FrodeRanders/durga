@@ -449,7 +449,179 @@ public class FaultDetectionTest {
         assertEquals("proc=unknown act=* inst=unknown n=1", alarm.message());
     }
 
+    // ---- SLA latency ----
+
+    @Test
+    public void shouldFireSlaLatencyWhenTaskExceedsLimit() {
+        System.out.println("TC: SLA_LATENCY fires when a task's entry-to-completion time exceeds the limit");
+        AlarmConfig config = new AlarmConfig("cfg-lat", "order-proc", "validate_order",
+                null, AlarmSyndrome.SLA_LATENCY, 0, Duration.ofMillis(2000),
+                AlarmSeverity.WARN, "task ${activityId} took ${latencyMs}ms (limit ${limitMs}ms)",
+                AlarmOrigin.EXPLICIT);
+        Map<String, String> entry = new HashMap<>();
+
+        ProcessEvent entered = ev("pi-1", "order-proc", "validate_order",
+                ProcessEvent.EventType.ACTIVITY_ENTERED, "2026-07-01T10:00:00Z");
+        ProcessEvent completed = ev("pi-1", "order-proc", "validate_order",
+                ProcessEvent.EventType.ACTIVITY_COMPLETED, "2026-07-01T10:00:03Z"); // 3s > 2s
+
+        FaultDetectionTopology.recordLatencyEntry(config, entered, System.currentTimeMillis(),
+                new MapKVStore<>(entry));
+        AlarmEvent alarm = FaultDetectionTopology.evaluateSlaLatency(config, completed,
+                Instant.now().toString(), System.currentTimeMillis(), new MapKVStore<>(entry));
+
+        assertNotNull(alarm);
+        assertEquals(AlarmSyndrome.SLA_LATENCY, alarm.syndrome());
+        assertEquals("validate_order", alarm.activityId());
+        assertEquals("task validate_order took 3000ms (limit 2000ms)", alarm.message());
+    }
+
+    @Test
+    public void shouldNotFireSlaLatencyWithinLimit() {
+        System.out.println("TC: SLA_LATENCY stays silent when a task completes within the limit");
+        AlarmConfig config = new AlarmConfig("cfg-lat", "order-proc", "validate_order",
+                null, AlarmSyndrome.SLA_LATENCY, 0, Duration.ofMillis(2000),
+                AlarmSeverity.WARN, "slow", AlarmOrigin.EXPLICIT);
+        Map<String, String> entry = new HashMap<>();
+
+        ProcessEvent entered = ev("pi-1", "order-proc", "validate_order",
+                ProcessEvent.EventType.ACTIVITY_ENTERED, "2026-07-01T10:00:00Z");
+        ProcessEvent completed = ev("pi-1", "order-proc", "validate_order",
+                ProcessEvent.EventType.ACTIVITY_COMPLETED, "2026-07-01T10:00:01Z"); // 1s < 2s
+
+        FaultDetectionTopology.recordLatencyEntry(config, entered, System.currentTimeMillis(),
+                new MapKVStore<>(entry));
+        assertNull(FaultDetectionTopology.evaluateSlaLatency(config, completed,
+                Instant.now().toString(), System.currentTimeMillis(), new MapKVStore<>(entry)));
+    }
+
+    @Test
+    public void shouldFireSlaLatencyForWholeProcess() {
+        System.out.println("TC: process-scope SLA_LATENCY measures start-to-completion end-to-end");
+        AlarmConfig config = new AlarmConfig("cfg-e2e", "order-proc", null,
+                null, AlarmSyndrome.SLA_LATENCY, 0, Duration.ofSeconds(5),
+                AlarmSeverity.CRITICAL, "process ${processId} end-to-end ${latencyMs}ms > ${limitMs}ms",
+                AlarmOrigin.EXPLICIT);
+        Map<String, String> entry = new HashMap<>();
+
+        ProcessEvent started = ev("pi-9", "order-proc", null,
+                ProcessEvent.EventType.PROCESS_STARTED, "2026-07-01T10:00:00Z");
+        ProcessEvent completed = ev("pi-9", "order-proc", null,
+                ProcessEvent.EventType.PROCESS_COMPLETED, "2026-07-01T10:00:08Z"); // 8s > 5s
+
+        FaultDetectionTopology.recordLatencyEntry(config, started, System.currentTimeMillis(),
+                new MapKVStore<>(entry));
+        AlarmEvent alarm = FaultDetectionTopology.evaluateSlaLatency(config, completed,
+                Instant.now().toString(), System.currentTimeMillis(), new MapKVStore<>(entry));
+
+        assertNotNull(alarm);
+        assertEquals("process order-proc end-to-end 8000ms > 5000ms", alarm.message());
+    }
+
+    @Test
+    public void shouldNotFireSlaLatencyWithoutRecordedEntry() {
+        System.out.println("TC: SLA_LATENCY does not fire on a completion with no recorded entry");
+        AlarmConfig config = new AlarmConfig("cfg-lat", "order-proc", "validate_order",
+                null, AlarmSyndrome.SLA_LATENCY, 0, Duration.ofMillis(1),
+                AlarmSeverity.WARN, "slow", AlarmOrigin.EXPLICIT);
+        ProcessEvent completed = ev("pi-1", "order-proc", "validate_order",
+                ProcessEvent.EventType.ACTIVITY_COMPLETED, "2026-07-01T10:00:03Z");
+        assertNull(FaultDetectionTopology.evaluateSlaLatency(config, completed,
+                Instant.now().toString(), System.currentTimeMillis(), new MapKVStore<>(new HashMap<>())));
+    }
+
+    // ---- SLA throughput ----
+
+    @Test
+    public void shouldFireSlaThroughputWhenRateFallsBelowMinimum() {
+        System.out.println("TC: SLA_THROUGHPUT fires once the windowed completion count drops below the minimum");
+        AlarmConfig config = new AlarmConfig("cfg-tput", "pipeline", null,
+                null, AlarmSyndrome.SLA_THROUGHPUT, 3, Duration.ofSeconds(60),
+                AlarmSeverity.CRITICAL, "only ${count}/${windowSeconds}s completed, need ${threshold}",
+                AlarmOrigin.EXPLICIT);
+        Map<String, String> windows = new HashMap<>();
+        Map<String, Integer> lastAlarm = new HashMap<>();
+        long windowMs = 60_000L;
+        long t0 = 1_000_000_000_000L;
+
+        // two early completions
+        feedT(config, t0, windows);
+        feedT(config, t0 + 1000, windows);
+
+        // still within the first window: warming up, no verdict yet
+        assertNull(FaultDetectionTopology.evaluateThroughput(config, t0 + 2000,
+                Instant.now().toString(), new MapKVStore<>(windows), new MapKVStore<>(lastAlarm)));
+
+        // a full window later only one completion remains in-window (< 3) -> breach
+        long later = t0 + windowMs + 1000;
+        AlarmEvent alarm = FaultDetectionTopology.evaluateThroughput(config, later,
+                Instant.now().toString(), new MapKVStore<>(windows), new MapKVStore<>(lastAlarm));
+        assertNotNull(alarm);
+        assertEquals(AlarmSyndrome.SLA_THROUGHPUT, alarm.syndrome());
+
+        // second scan while still starved is suppressed
+        assertNull(FaultDetectionTopology.evaluateThroughput(config, later + 1000,
+                Instant.now().toString(), new MapKVStore<>(windows), new MapKVStore<>(lastAlarm)));
+    }
+
+    @Test
+    public void shouldNotFireSlaThroughputWhenRateMeetsMinimum() {
+        System.out.println("TC: SLA_THROUGHPUT stays silent while enough completions occur in the window");
+        AlarmConfig config = new AlarmConfig("cfg-tput", "pipeline", null,
+                null, AlarmSyndrome.SLA_THROUGHPUT, 2, Duration.ofSeconds(60),
+                AlarmSeverity.WARN, "slow", AlarmOrigin.EXPLICIT);
+        Map<String, String> windows = new HashMap<>();
+        Map<String, Integer> lastAlarm = new HashMap<>();
+        long t0 = 1_000_000_000_000L;
+
+        feedT(config, t0, windows);
+        feedT(config, t0 + 1000, windows);
+        feedT(config, t0 + 2000, windows);
+
+        long later = t0 + 61_000; // full window elapsed; 2 completions still within window (>= 2)
+        assertNull(FaultDetectionTopology.evaluateThroughput(config, later,
+                Instant.now().toString(), new MapKVStore<>(windows), new MapKVStore<>(lastAlarm)));
+    }
+
+    // ---- SLA config validation ----
+
+    @Test
+    public void shouldRejectSlaConfigsMissingRequiredFields() {
+        System.out.println("TC: SLA_LATENCY requires windowDuration; SLA_THROUGHPUT requires window + threshold");
+        try {
+            new AlarmConfig("bad", "p", "a", null, AlarmSyndrome.SLA_LATENCY, 0, null,
+                    AlarmSeverity.WARN, "m", AlarmOrigin.EXPLICIT);
+            fail("expected IllegalArgumentException for SLA_LATENCY without windowDuration");
+        } catch (IllegalArgumentException expected) { }
+
+        try {
+            new AlarmConfig("bad", "p", null, null, AlarmSyndrome.SLA_THROUGHPUT, 0, Duration.ofSeconds(60),
+                    AlarmSeverity.WARN, "m", AlarmOrigin.EXPLICIT);
+            fail("expected IllegalArgumentException for SLA_THROUGHPUT with threshold <= 0");
+        } catch (IllegalArgumentException expected) { }
+    }
+
+    private static void feedT(AlarmConfig config, long ms, Map<String, String> windows) {
+        ProcessEvent e = ev("pi-" + ms, config.processId(), config.activityId(),
+                FaultDetectionTopology.throughputEventType(config), Instant.ofEpochMilli(ms).toString());
+        FaultDetectionTopology.feedThroughput(config, e, ms, new MapKVStore<>(windows));
+    }
+
     // ---- helpers ----
+
+    private static ProcessEvent ev(String instanceId, String processId, String activityId,
+                                    ProcessEvent.EventType type, String timestamp) {
+        ProcessEvent.Status status = switch (type) {
+            case PROCESS_STARTED -> ProcessEvent.Status.STARTED;
+            case ACTIVITY_COMPLETED, PROCESS_COMPLETED -> ProcessEvent.Status.COMPLETED;
+            case PROCESS_FAILED -> ProcessEvent.Status.FAILED;
+            case ACTIVITY_ESCALATED -> ProcessEvent.Status.ESCALATED;
+            case ACTIVITY_CANCELLED -> ProcessEvent.Status.CANCELLED;
+            default -> null;
+        };
+        return new ProcessEvent(instanceId, processId, activityId, "tok", "corr",
+                Map.of(), status, null, type, "v1", "BK", timestamp);
+    }
 
     private static AlarmEvent cascade(AlarmConfig config, String now, long nowMs,
                                        Map<String, String> windowsStore,

@@ -119,18 +119,21 @@ message template:
   matches process-level aggregates.
 \item[Event type] Which \texttt{ProcessEvent.EventType} triggers evaluation
   (e.g. \texttt{PROCESS\_FAILED}, \\ \texttt{ACTIVITY\_ESCALATED}). Optional for
-  STUCK and CASCADE, which are evaluated by a wall-clock punctuator rather than
-  per incoming event.
+  STUCK, CASCADE, and the SLA syndromes, which use a punctuator or default the
+  event type from the scope.
 \item[Syndrome] How observed behaviour is aggregated into an alarm (see below).
 \item[Severity] \texttt{WARN} or \texttt{CRITICAL}.
 \item[Threshold] Maximum count before alarm (required for COUNTED, SLIDING\_WINDOW,
-  CASCADE; ignored for HARD\_ERROR and STUCK).
-\item[Window duration] Sliding-window size for SLIDING\_WINDOW / CASCADE, or
-  idle-timeout for STUCK.
+  CASCADE; ignored for HARD\_ERROR and STUCK). For SLA\_THROUGHPUT it is instead
+  the \emph{minimum} required completions per window.
+\item[Window duration] Sliding-window size for SLIDING\_WINDOW / CASCADE,
+  idle-timeout for STUCK, the maximum allowed wall-clock latency for SLA\_LATENCY,
+  or the measurement period for SLA\_THROUGHPUT.
 \item[Message] A template rendered at alarm time; supports
   \texttt{\$\{processId\}}, \texttt{\$\{activityId\}},
-  \texttt{\$\{count\}}, \texttt{\$\{processInstanceId\}}, and
-  \texttt{\$\{idleSeconds\}} (STUCK only).
+  \texttt{\$\{count\}}, \texttt{\$\{processInstanceId\}},
+  \texttt{\$\{idleSeconds\}} (STUCK), and
+  \texttt{\$\{latencyMs\}} / \texttt{\$\{limitMs\}} / \texttt{\$\{windowSeconds\}} (SLA).
 \item[Origin] One of \texttt{AUTOMATIC}, \texttt{OPT\_IN}, or \texttt{EXPLICIT}.
 \end{description}
 
@@ -186,6 +189,39 @@ CASCADE configs carry the actual process identifier.
 
 \end{description}
 
+\paragraph{Performance SLA syndromes}
+
+The SLA syndromes let a BPMN model declare a performance agreement --- expressed
+as wall-clock latency or as throughput --- for a single task or for the whole
+process, and alarm when observed performance violates it. Both use the same
+placement scoping as other alarms: activity-level properties measure that task,
+process-level aggregate (\texttt{\$}) properties measure the whole process end to
+end, and process-level inherited (\texttt{*}) properties apply the same task-level
+SLA to every activity.
+
+\begin{description}
+
+\item[SLA\_LATENCY] A wall-clock ceiling. The maximum allowed duration is carried
+in \texttt{windowDuration}. For a task, latency is measured from
+\texttt{ACTIVITY\_ENTERED} to \texttt{ACTIVITY\_COMPLETED}; for the whole process
+it is measured from \texttt{PROCESS\_STARTED} to \texttt{PROCESS\_COMPLETED}. It is
+evaluated per completing instance, so each breaching completion produces one alarm.
+The template variables \texttt{\$\{latencyMs\}} and \texttt{\$\{limitMs\}} report
+the observed duration and the agreed limit. Authored with
+\texttt{durga:alarm:<id>:maxLatencyMs}.
+
+\item[SLA\_THROUGHPUT] A minimum-rate floor. \texttt{threshold} is the minimum
+number of completions required within each trailing \texttt{windowDuration}
+(the measurement period). It is scored by the wall-clock punctuator once a full
+window has elapsed since the first observation, fires once when the windowed
+count falls below the minimum, and re-arms when throughput recovers. The template
+variables \texttt{\$\{count\}}, \texttt{\$\{threshold\}}, and
+\texttt{\$\{windowSeconds\}} report the observed rate, the required minimum, and
+the window. Authored with \texttt{durga:alarm:<id>:threshold} and
+\texttt{:windowSeconds}.
+
+\end{description}
+
 \subsubsection{Alarm emission}
 
 Triggered alarms are serialized as JSON and published to the
@@ -231,7 +267,7 @@ inventory and rendered as \texttt{system-wide} in the Alarm State widget.
 
 \subsubsection{State stores}
 
-The fault detection topology maintains five persistent state stores:
+The fault detection topology maintains six persistent state stores:
 
 \begin{itemize}
 \item \texttt{fault-config-store} --- serialized \texttt{AlarmConfig} per
@@ -239,12 +275,15 @@ The fault detection topology maintains five persistent state stores:
   \texttt{process-models}.
 \item \texttt{fault-counts-store} --- current count per (config, processId, activityId).
 \item \texttt{fault-windows-store} --- list of epoch-millis timestamps per scope
-  (SLIDING\_WINDOW and CASCADE).
+  (SLIDING\_WINDOW, CASCADE, and SLA\_THROUGHPUT windows).
 \item \texttt{fault-last-alarm-store} --- count at which the last alarm fired,
   used for single-fire suppression.
 \item \texttt{fault-seen-store} --- per-instance record of the last lifecycle
   activity observed (processId, activityId, last-seen epoch millis, alarm
   flag), used by the STUCK punctuator.
+\item \texttt{fault-latency-entry-store} --- per (instance, scope) entry
+  timestamp, used to measure SLA\_LATENCY on completion; entries are cleared
+  when the unit of work finishes.
 \end{itemize}
 
 \subsubsection{Example configuration}
@@ -279,6 +318,44 @@ AlarmConfig cascade = new AlarmConfig("builtin:cascade", null, null, null,
     AlarmSeverity.CRITICAL,
     "Cascade: ${count} instances stalled within 60s (threshold ${threshold})",
     AlarmOrigin.AUTOMATIC);
+
+// SLA: a single task must complete within 2 seconds
+AlarmConfig taskSla = new AlarmConfig("order-proc:score-sla", "order-proc",
+    "score_risk", null,
+    AlarmSyndrome.SLA_LATENCY, 0, Duration.ofMillis(2000),
+    AlarmSeverity.WARN, "${activityId} took ${latencyMs}ms (limit ${limitMs}ms)",
+    AlarmOrigin.EXPLICIT);
+
+// SLA: the pipeline must complete at least 100 instances per minute
+AlarmConfig rateSla = new AlarmConfig("pipeline:min-rate", "pipeline", null,
+    null, AlarmSyndrome.SLA_THROUGHPUT, 100, Duration.ofSeconds(60),
+    AlarmSeverity.CRITICAL,
+    "Throughput ${count}/${windowSeconds}s below minimum ${threshold}",
+    AlarmOrigin.EXPLICIT);
+\end{verbatim}
+
+Because SLA configurations are usually part of the process contract, they are
+normally authored in the BPMN model as Camunda extension properties (optionally
+via the Durga modeler plugin) rather than in code. The monitor is handed the
+model when the process registers on \texttt{process-models} and extracts them
+automatically. For example, a per-task latency SLA and a process-wide throughput
+SLA:
+
+\begin{verbatim}
+<!-- on a ServiceTask: this task must finish within 2s -->
+<camunda:property name="durga:alarm:sla:syndrome"     value="SLA_LATENCY"/>
+<camunda:property name="durga:alarm:sla:maxLatencyMs" value="2000"/>
+<camunda:property name="durga:alarm:sla:severity"     value="WARN"/>
+<camunda:property name="durga:alarm:sla:message"
+    value="${activityId} slow: ${latencyMs}ms > ${limitMs}ms"/>
+
+<!-- on the Process (aggregate $ scope): >= 100 completions/min -->
+<camunda:property name="durga:alarm:$rate:syndrome"      value="SLA_THROUGHPUT"/>
+<camunda:property name="durga:alarm:$rate:threshold"     value="100"/>
+<camunda:property name="durga:alarm:$rate:windowSeconds" value="60"/>
+<camunda:property name="durga:alarm:$rate:severity"      value="CRITICAL"/>
+<camunda:property name="durga:alarm:$rate:message"
+    value="throughput ${count} below ${threshold}/${windowSeconds}s"/>
 \end{verbatim}
 
 \subsubsection{Integration with the monitoring server}
