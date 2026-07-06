@@ -57,15 +57,24 @@ var SEVERITY_OPTIONS = [
   { value: 'CRITICAL', label: 'CRITICAL' }
 ];
 
-function DurgaPropertiesProvider(propertiesPanelService, translate, commandStack, bpmnFactory) {
+// Debounce factory used by text/number/textarea entries. The built-in entry
+// components call `debounce(callback)` and expect a (debounced) function back.
+// Populated from the host's `debounceInput` service in the constructor; falls back
+// to an identity (no debounce) so entries still work if the service is unavailable.
+var debounceFn = function(fn) { return fn; };
+
+function DurgaPropertiesProvider(propertiesPanelService, translate, commandStack, bpmnFactory, debounceInput) {
   this._commandStack = commandStack;
   this._bpmnFactory = bpmnFactory;
+  if (typeof debounceInput === 'function') {
+    debounceFn = debounceInput;
+  }
   propertiesPanelService.registerProvider(500, this);
 }
 
 module.exports = DurgaPropertiesProvider;
 
-DurgaPropertiesProvider.$inject = ['propertiesPanel', 'translate', 'commandStack', 'bpmnFactory'];
+DurgaPropertiesProvider.$inject = ['propertiesPanel', 'translate', 'commandStack', 'bpmnFactory', 'debounceInput'];
 
 DurgaPropertiesProvider.prototype.getGroups = function(element) {
   var commandStack = this._commandStack;
@@ -448,6 +457,14 @@ function hasAlarmProps(element) {
 // ---- Group builder ----
 
 function createGroup(id, label, entries, isEdited) {
+  // Text/number/textarea entry components require a `debounce` function; the panel
+  // spreads each entry's props onto its component, so supply it here for every entry
+  // (select/checkbox entries simply ignore the extra prop).
+  (entries || []).forEach(function(entry) {
+    if (entry && entry.debounce === undefined) {
+      entry.debounce = debounceFn;
+    }
+  });
   return { id: id, label: label, entries: entries };
 }
 
