@@ -7,7 +7,9 @@ description: >
   Validates JSON payloads against a configurable schema subset. Supports
   type checking, required fields, enum values, numeric ranges, string
   length bounds, regex patterns, nested objects, and array item validation.
-  Invalid payloads throw, routing to the DLQ channel.
+  An optional onInvalid directive selects how invalid payloads are handled:
+  dlq (default) routes them to the dead-letter channel, skip drops them
+  silently, and fail fails the process.
 
 input:
   schema:
@@ -24,7 +26,8 @@ config:
   description: >
     JSON object defining the schema. Supports: type, required, properties,
     enum, minimum, maximum, minLength, maxLength, pattern (Java regex),
-    items (array element schema).
+    items (array element schema). An optional onInvalid=dlq|skip|fail
+    directive may be appended (e.g. schema={...};onInvalid=skip).
 
 implementation:
   class: org.gautelis.durga.plugins.JsonSchemaValidator

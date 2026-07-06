@@ -72,7 +72,7 @@ Section~\ref{sec:ValidationMode}.
 
 \subsection{State stores}
 
-The topology maintains ten state stores:
+The topology maintains eleven state stores:
 
 \newcommand{\storetable}[1]{%
 \begin{longtable}{|>{\raggedright\arraybackslash}p{0.40\textwidth}|>{\raggedright\arraybackslash}p{0.20\textwidth}|>{\raggedright\arraybackslash}p{0.32\textwidth}|}
@@ -99,7 +99,9 @@ The topology maintains ten state stores:
 }
 
 The five local stores drive computation — aggregation, counting, and temporal joins.
-The five global stores serve queries. The output topics (\texttt{process-state},
+Six global tables serve read access: five (\texttt{*-global-store}) hold full replicas
+of the computed output topics, and \texttt{process-models-store} holds the BPMN model
+registry. The output topics (\texttt{process-state},
 \texttt{process-state-counts}, \\ \texttt{process-active-state}, \texttt{process-latency},
 \texttt{process-trends}) decouple computation from query access: any monitoring instance
 can spin up and receive a full read replica without recomputing.
@@ -120,8 +122,8 @@ Activity latency uses a temporal join pattern without windowed stream-stream joi
 The \\ \texttt{ActivityLatencyProcessor} stores each \texttt{ACTIVITY\_ENTERED} event's
 timestamp under the key \texttt{instanceId:activityId} in the persistent
 \texttt{process-activity-entry-store}. When a later \texttt{ACTIVITY\_COMPLETED},
-\texttt{ACTIVITY\_ESCALATED}, \texttt{ACTIVITY\_CANCELLED}, \texttt{GATEWAY\_TAKEN}, \\ 
-\texttt{PROCESS\_COMPLETED}, or \texttt{PROCESS\_FAILED} event arrives for the same
+\texttt{ACTIVITY\_ESCALATED}, \texttt{ACTIVITY\_CANCELLED}, or \texttt{PROCESS\_FAILED}
+event arrives for the same
 key, the processor computes the duration and emits an \texttt{ActivityLatencyDelta}.
 
 These deltas are grouped by a canonical activity key (processId, version, activityId,

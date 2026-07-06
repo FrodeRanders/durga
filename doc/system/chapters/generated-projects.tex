@@ -20,6 +20,12 @@ in \texttt{<package>.probes},
 \item a topic-creation script,
 \item sample payload data in \texttt{task-payloads.json},
 \item a generated README,
+\item deployment and operations artifacts (\texttt{Dockerfile}, \texttt{k8s.yml},
+      \texttt{docker-compose.test.yml}, \texttt{alerts.yml}, \texttt{topics.yml},
+      \texttt{summary.json}), with additional artifacts emitted for specific flags
+      (e.g. \texttt{keda-scalers.yml} and \texttt{acls.sh} for
+      \texttt{--strimzi}/\texttt{--separate-workers}, and
+      \texttt{connect-source.json}/\texttt{connect-sink.json} for \texttt{--connect}),
 \item helper scripts for demos, inputs, completions, failures, escalations and observers.
 \end{itemize}
 
@@ -80,8 +86,15 @@ Generated scripts include:
 \item \texttt{send-message-event.sh},
 \item \texttt{send-signal-event.sh},
 \item \texttt{watch-process-events.sh},
-\item \texttt{watch-task-output.sh}.
+\item \texttt{watch-task-output.sh},
+\item \texttt{topics.sh} (topic creation),
+\item \texttt{run-local.sh} (local run helper),
+\item \texttt{replay.sh} (DLQ inspection/replay),
+\item \texttt{deploy.sh} (deployment helper).
 \end{itemize}
+
+Additional scripts are emitted for specific flags: \texttt{acls.sh} (with
+\texttt{--strimzi}) and \texttt{connect.sh} (with \texttt{--connect}).
 
 \subsection{Development workflow}
 

@@ -95,5 +95,7 @@ gateway / validation and project (\texttt{Cargo.toml}, \texttt{lib.rs},
 workers use a mature Kafka client (\texttt{rdkafka}) and an async runtime
 (\texttt{tokio}) for the same consume--transform--emit loop the plain-Kafka Java
 worker performs. Rust remains the less-mature target: it currently covers plugin
-tasks and exclusive gateways in a start/tasks/gateways/end topology, and reports and
+tasks, custom-task stubs (with contract modules and \texttt{build.rs} entries),
+exclusive gateways, and validation-mode shadow workers in a
+start/tasks/gateways/end topology, and reports and
 skips unsupported constructs.

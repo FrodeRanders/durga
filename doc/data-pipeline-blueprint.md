@@ -96,6 +96,11 @@ plugins/
 │   └── field-router.yml
 ├── aggregate/
 │   └── window-counter.yml
+├── inspect/
+│   └── format-detector.yml
+├── store/
+│   ├── object-store-collector.yml
+│   └── object-store-extractor.yml
 └── connect/
     ├── source.yml
     └── sink.yml
@@ -288,7 +293,7 @@ except where noted.
 | `mask` | `fields=ssn,email;mask=*;preserve=3` | Masks explicitly configured text fields. Configurable mask character and boundary character count to preserve. Supports nested fields via dot-notation. |
 | `regex-extract` | `source=log;pattern=(?<ip>...);target=parsed` | Extracts named capture groups from a source field into the payload. Optional target path for storage. Supports `all=true` for multiple matches. |
 | `json-flatten` | `direction=flatten;separator=.;maxDepth=3` | Flattens nested JSON to dot-notation keys or unflattens dot-notation back to nested objects. Configurable separator and max depth. |
-| `uuid-inject` | `fields=id,correlation_id;strategy=uuid4` | Injects UUIDs into fields. `uuid4` for random, `uuid1` for time-based. Creates intermediate objects for nested paths. |
+| `uuid-inject` | `fields=id,correlation_id;strategy=uuid7` | Injects UUIDs into fields. `uuid7` (default, time-ordered) or `uuid4` for random, `uuid1` for time-based. Creates intermediate objects for nested paths. |
 | `timestamp-normalize` | `fields=created_at;from=epoch_ms;to=ISO8601;zone=UTC` | Converts between epoch_s, epoch_ms, ISO8601, RFC3339, and custom DateTimeFormatter patterns. Configurable timezone and `removeOnError` option. |
 
 ### 6.2 Validate plugins
@@ -343,7 +348,7 @@ A generated data pipeline project would look like:
 
 ```
 generated/
-├── src/main/java/org/gautelis/durga/generated/
+├── src/main/java/org/example/generated/          # default package (override with --package)
 │   ├── workers/
 │   │   ├── TransformInvoiceWorker.java      # plugin executor
 │   │   ├── ValidateInvoiceWorker.java       # plugin executor

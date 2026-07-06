@@ -17,7 +17,7 @@ BPMN → Kafka code generation and process monitoring. Two tools:
 
 ```bash
 mvn -q clean package
-java -jar target/durga-0.1.0-beta.1.jar path/to/process.bpmn
+java -jar durga-tools/target/durga-tools-0.1.0-beta.1.jar path/to/process.bpmn
 ```
 
 ## Local Kafka setup
@@ -51,7 +51,7 @@ See [Testcontainers setup](doc/testcontainers-setup.md) for details.
 
 Output lands in `generated/` by default:
 
-- Java sources in `generated/src/main/java/org/gautelis/durga/generated/`
+- Java sources in `generated/src/main/java/<package>/` (default package `org.example.generated`; override with `--package`), plus runtime contract classes under `generated/src/main/java/org/gautelis/durga/`
 - `topics.sh` and `summary.json`
 - `task-payloads.json` with sample input payloads
 - `pom.xml` and `README.md` for the generated project
@@ -77,11 +77,11 @@ The generator skips existing files in `src/main/java/`, merges new channels into
 
 ## BPMN sample catalog
 
-All sample models live under `src/test/resources/bpmn/`. Run any with:
+All sample models live under `durga-tools/src/test/resources/bpmn/`. Run any with:
 
 ```bash
 mvn -q clean package
-java -jar target/durga-0.1.0-beta.1.jar src/test/resources/bpmn/<model>.bpmn
+java -jar durga-tools/target/durga-tools-0.1.0-beta.1.jar durga-tools/src/test/resources/bpmn/<model>.bpmn
 ```
 
 | Model | Feature |
@@ -166,7 +166,7 @@ wire record is identical across targets, so a mixed fleet feeds the same compara
 ```
 
 Starts **everything** — Kafka in Docker, the monitoring backend, auto-registers
-all BPMN models from `src/test/resources/bpmn/`, starts continuous feeds for
+all BPMN models from `durga-tools/src/test/resources/bpmn/`, starts continuous feeds for
 `invoice_receipt` and `order_fulfillment`, and serves the Svelte SPA.
 Open `http://localhost:8081`. Press Ctrl+C to stop all services.
 
@@ -191,7 +191,7 @@ SKIP_BUILD=true ./setup/dev-up.sh
 | `PORT` | `8081` | Backend HTTP port (API + SPA) |
 | `START_KAFKA` | `true` | Auto-start Kafka via Docker Compose |
 | `SKIP_BUILD` | `false` | Skip Maven + npm build |
-| `BPMN_DIR` | `src/test/resources/bpmn` | `{pid}.bpmn` directory for diagram fallback |
+| `BPMN_DIR` | `durga-tools/src/test/resources/bpmn` | `{pid}.bpmn` directory for diagram fallback |
 | `FEED_INTERVAL` | `1000` | Milliseconds between feed lifecycle completions |
 
 ### Manual setup
@@ -202,8 +202,9 @@ cd setup && docker compose up -d
 
 # Terminal 2 — Build
 cd monitoring-ui && npm install && npm run build && cd ..
-mvn -q package -DskipTests -Pmonitoring
-JAR="$(find target -maxdepth 1 -name 'durga-*-runner.jar' -print -quit)"
+mvn -q package -DskipTests
+JAR="$(find durga-monitor/target -maxdepth 1 -name 'durga-monitor-*-runner.jar' -print -quit)"
+TOOLS_JAR="$(find durga-tools/target -maxdepth 1 -name 'durga-tools-*.jar' ! -name 'original-*' -print -quit)"
 
 # Terminal 3 — Monitoring backend
 java -Dquarkus.http.port=8081 -Ddurga.streams.state.dir=/tmp/kafka-streams-state \
@@ -211,14 +212,14 @@ java -Dquarkus.http.port=8081 -Ddurga.streams.state.dir=/tmp/kafka-streams-state
   localhost:9094 durga-monitor
 
 # Terminal 4 — Register BPMN models
-for f in src/test/resources/bpmn/*.bpmn; do
-  java -cp "${JAR}" \
+for f in durga-tools/src/test/resources/bpmn/*.bpmn; do
+  java -cp "${TOOLS_JAR}" \
     org.gautelis.durga.demo.BpmnModelPublisher \
     localhost:9094 "$(basename "$f" .bpmn)" "$f"
 done
 
 # Terminal 5 — Feed
-java -cp "${JAR}" \
+java -cp "${TOOLS_JAR}" \
   org.gautelis.durga.demo.ContinuousFeedPublisher \
   localhost:9094 invoice_receipt 1000
 ```
@@ -254,7 +255,7 @@ remains unauthenticated for Prometheus-style scrapes.
 ### CLI client
 
 ```bash
-JAR="$(find target -maxdepth 1 -name 'durga-*-runner.jar' -print -quit)"
+JAR="$(find durga-monitor/target -maxdepth 1 -name 'durga-monitor-*-runner.jar' -print -quit)"
 
 java -cp "${JAR}" \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
@@ -283,7 +284,7 @@ client environment before running the commands.
 ### Demo scenarios (without a generated process)
 
 ```bash
-java -cp target/durga-0.1.0-beta.1.jar \
+java -cp durga-tools/target/durga-tools-0.1.0-beta.1.jar \
   org.gautelis.durga.demo.ProcessEventScenarioRunner \
   localhost:9094 happy invoice_receipt register_invoice,review_invoice,notify_requester
 

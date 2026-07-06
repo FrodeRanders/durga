@@ -59,13 +59,21 @@ To test with the monitoring dashboard:
 
 \subsection{Connection to Kafka}
 
-Kafka bootstrap servers are configured through a chain of fallbacks:
+Kafka bootstrap servers are resolved slightly differently depending on the
+process, but all paths end at the same hardcoded default \texttt{localhost:9094}:
 
 \begin{enumerate}
-\item JVM system property \texttt{kafka.bootstrap.servers}.
-\item Environment variable \texttt{KAFKA\_BOOTSTRAP\_SERVERS}.
-\item Hardcoded default \texttt{localhost:9094}.
+\item The monitoring app takes an optional first CLI argument, then falls back to
+the JVM system property \texttt{kafka.bootstrap.servers}, then the default.
+\item Generated standalone (non-Quarkus) workers read the JVM system property
+\texttt{kafka.bootstrap.servers}, then the default.
+\item Generated Quarkus workers read the environment variable
+\texttt{KAFKA\_BOOTSTRAP\_SERVERS} (via \texttt{application.yml}), then the default.
 \end{enumerate}
+
+In containers the generated \texttt{Dockerfile} bridges the environment variable
+into the JVM property, so setting \texttt{KAFKA\_BOOTSTRAP\_SERVERS} works uniformly
+across worker styles (see below).
 
 In Docker and Kubernetes, set \texttt{KAFKA\_BOOTSTRAP\_SERVERS} as a container
 environment variable. The generated \texttt{Dockerfile} passes it to the JVM:

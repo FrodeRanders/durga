@@ -1,6 +1,6 @@
 # Testcontainers Setup
 
-Integration tests use [Testcontainers](https://testcontainers.com) 2.0.2 to start a
+Integration tests use [Testcontainers](https://testcontainers.com) 2.0.5 to start a
 real Kafka broker in Docker containers.
 
 ## Prerequisites
@@ -14,7 +14,7 @@ real Kafka broker in Docker containers.
 mvn test -Dtest='*IntegrationTest'
 ```
 
-Testcontainers 2.0.2 auto-detects the Docker socket on both macOS and Linux —
+Testcontainers 2.0.5 auto-detects the Docker socket on both macOS and Linux —
 no manual configuration needed. Ryuk (the container reaper) runs automatically
 and cleans up containers after each test run.
 
@@ -74,11 +74,12 @@ mvn test -Dtest='*IntegrationTest'
 **"Timed out waiting for a node assignment"**
 
 Kafka broker started but the client can't reach it. The test infrastructure
-uses a fixed host port (19092) mapped to the container. If that port is in use,
-change `KAFKA_PORT` in `KafkaIntegrationTestBase` or kill the process holding it:
+picks a random free host port per test class (mapped to the container's internal
+port 9092), falling back to a fixed port only if allocation fails. To inspect or
+free a port, find the mapped port from the test logs, or:
 
 ```bash
-lsof -i :19092
+lsof -i :<mapped-port>
 ```
 
 **Ryuk container fails**

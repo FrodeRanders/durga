@@ -159,4 +159,57 @@ public class JsonSchemaValidatorTest {
         String config = "{\"type\":\"object\",\"properties\":{\"items\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}}}";
         validator.execute(Plugin.toBytes("{\"items\":[1,\"bad\",3]}"), config);
     }
+
+    @Test
+    public void shouldReturnSuccessWhenValidViaResult() throws Exception {
+        System.out.println("TC: executeWithResult returns success for a valid payload");
+        String config = "{\"type\":\"object\",\"required\":[\"name\"]}";
+        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"name\":\"Alice\"}"), config);
+        assertTrue(result.isSuccess());
+        assertNull(result.errorStrategy());
+        assertEquals("{\"name\":\"Alice\"}", Plugin.toString(result.output()));
+    }
+
+    @Test
+    public void shouldRouteInvalidToDlqByDefault() throws Exception {
+        System.out.println("TC: executeWithResult routes invalid payload to DLQ when onInvalid is absent");
+        String config = "{\"type\":\"object\",\"required\":[\"name\"]}";
+        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"email\":\"a@b.com\"}"), config);
+        assertEquals(PluginResult.ErrorStrategy.DLQ, result.errorStrategy());
+    }
+
+    @Test
+    public void shouldSkipInvalidWhenOnInvalidSkip() throws Exception {
+        System.out.println("TC: executeWithResult skips invalid payload when onInvalid=skip");
+        String config = "schema={\"type\":\"object\",\"required\":[\"name\"]};onInvalid=skip";
+        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"email\":\"a@b.com\"}"), config);
+        assertEquals(PluginResult.ErrorStrategy.SKIP, result.errorStrategy());
+    }
+
+    @Test
+    public void shouldFailInvalidWhenOnInvalidFail() throws Exception {
+        System.out.println("TC: executeWithResult fails process for invalid payload when onInvalid=fail");
+        String config = "schema={\"type\":\"object\",\"required\":[\"name\"]};onInvalid=fail";
+        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"email\":\"a@b.com\"}"), config);
+        assertEquals(PluginResult.ErrorStrategy.FAIL, result.errorStrategy());
+    }
+
+    @Test
+    public void shouldHonorOnInvalidWithCompactConfig() throws Exception {
+        System.out.println("TC: executeWithResult honors onInvalid directive appended to compact config");
+        String config = "required=order_id,amount;onInvalid=skip";
+        PluginResult invalid = validator.executeWithResult(Plugin.toBytes("{\"order_id\":7}"), config);
+        assertEquals(PluginResult.ErrorStrategy.SKIP, invalid.errorStrategy());
+        PluginResult valid = validator.executeWithResult(
+                Plugin.toBytes("{\"order_id\":7,\"amount\":12.5}"), config);
+        assertTrue(valid.isSuccess());
+    }
+
+    @Test
+    public void shouldStayValidWhenPayloadPassesWithOnInvalid() throws Exception {
+        System.out.println("TC: executeWithResult returns success even when onInvalid directive is present");
+        String config = "schema={\"type\":\"object\",\"required\":[\"name\"]};onInvalid=fail";
+        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"name\":\"Alice\"}"), config);
+        assertTrue(result.isSuccess());
+    }
 }

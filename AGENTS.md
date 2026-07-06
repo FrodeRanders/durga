@@ -1,28 +1,27 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/main/java/org/gautelis/durga/tools/` contains the BPMN scaffolder (entry point: `BpmnScaffolder`). Shared spec types are in `BpmnModelSupport.java`; model element collection is in `BpmnModelCollector.java`; CLI argument parsing is in `CliParser.java`; code generation helpers are in `EventTemplateGenerator.java`, `TaskRoutingGenerator.java`, `SubProcessTemplateGenerator.java`, and `GeneratedProjectSupport.java`.
-- `src/main/java/org/gautelis/durga/monitoring/` holds Kafka Streams monitoring topology, Quarkus REST API (`ProcessMonitoringApp`), CLI client, query service, and component-level metrics (`Metrics.java`).
-- `src/main/java/org/gautelis/durga/plugins/` contains 15 data pipeline plugins implementing the `Plugin` interface, plus shared utilities (`PipelinePlugin.java`).
-- `src/main/java/org/gautelis/durga/demo/` contains demo publishers and scenario runners.
-- `src/main/java/org/gautelis/durga/` holds core runtime contracts (`ProcessEvent`, `ProcessState`, `ScopeCancellationRegistry`, `ProcessStateStore`).
-- `src/main/resources/templates-java/` holds StringTemplate 4 `.stg` template files for the Java code-generation target; `src/main/resources/templates-rust/` holds the equivalent templates for the (in-progress) Rust target.
+The project is a multi-module Maven build (parent aggregator `durga`, `pom` packaging) with three Java modules plus a Rust crate:
+- `durga-runtime/` holds core runtime contracts (`org.gautelis.durga.ProcessEvent`, `ProcessState`, `ScopeCancellationRegistry`, `ProcessStateStore`), the 16 data pipeline plugins implementing the `Plugin` interface (`org.gautelis.durga.plugins/`, plus shared utilities `PipelinePlugin.java`, `PluginResult.java`, `PluginExecutionSupport.java`), component-level metrics (`org.gautelis.durga.monitoring.Metrics`), and validation-mode support (`org.gautelis.durga.validation/`).
+- `durga-tools/` contains the BPMN scaffolder (entry point: `org.gautelis.durga.tools.BpmnScaffolder`). Shared spec types are in `BpmnModelSupport.java`; model element collection is in `BpmnModelCollector.java`; CLI argument parsing is in `CliParser.java`; code generation helpers are in `EventTemplateGenerator.java`, `TaskRoutingGenerator.java`, `SubProcessTemplateGenerator.java`, `GeneratedProjectSupport.java`, and `RustTargetGenerator.java`. Demo publishers and scenario runners are in `org.gautelis.durga.demo/`. Templates live under `durga-tools/src/main/resources/templates-java/` (StringTemplate 4 `.stg` files for the Java target) and `templates-rust/` (Rust target). BPMN test fixtures are in `durga-tools/src/test/resources/bpmn/` (25 models covering BPMN 2.0 element types).
+- `durga-monitor/` holds the Kafka Streams monitoring topology, Quarkus REST API (`org.gautelis.durga.monitoring.ProcessMonitoringApp`), CLI client (`ProcessMonitoringClient`), query services, and validation topology.
 - `durga-rust/` is a Cargo crate providing the Rust plugin runtime for the Rust code-generation target: the `Plugin` trait (binary/text/structured dispatch mirroring the Java interface), `PluginResult` with `OutputDisposition`, a wire-compatible `ProcessEvent`, and Rust ports of the pipeline plugins. Generated Rust workers depend on it directly; there are no adapters onto the Java plugins.
-- `src/test/resources/bpmn/` contains BPMN example models used as scaffolder test fixtures (24 models covering all BPMN 2.0 element types).
+- `monitoring-ui/` is the Svelte dashboard (Vite dev server proxies `/api` to the monitor REST API, default `http://localhost:8081`).
 - `setup/` contains local Kafka infrastructure (`docker-compose.yml`, `config.yml`).
-- `target/` is Maven build output (generated).
+- `target/` under each module is Maven build output (generated).
 
 ## Build, Test, and Development Commands
-- `mvn clean package` builds the shaded JAR and cleans logs configured by the clean plugin.
-- `mvn test` runs all JUnit 4 tests. As of 2026-06-26, `mvn test -Dtest='!*IntegrationTest'` runs 219 non-Docker tests; integration tests require Docker and are suffixed `IntegrationTest`.
+- `mvn clean package` builds all modules (the scaffolder shaded JAR and the monitor Quarkus runner) and cleans logs configured by the clean plugin.
+- `mvn test` runs all JUnit 4 tests across modules. `mvn test -Dtest='!*IntegrationTest'` runs the non-Docker suite (326 tests as of 2026-07-06: durga-runtime 208, durga-tools 57, durga-monitor 61); integration tests require Docker and are suffixed `IntegrationTest`.
 - `mvn test -Dtest='!*IntegrationTest'` runs unit tests only (no Docker required).
 - `mvn test -Dtest='*IntegrationTest'` runs integration tests only (requires Docker).
 - `mvn compile` compiles sources without running tests.
 - `mvn dependency:tree` prints the resolved dependency graph.
 - `mvn -Dtest=XxxTest test` runs a single test class.
-- `java -jar target/durga-0.1.0-beta.1.jar <path-to-bpmn.xml>` runs the packaged BPMN scaffolder.
+- `java -jar durga-tools/target/durga-tools-0.1.0-beta.1.jar <path-to-bpmn.xml>` runs the packaged BPMN scaffolder.
+- `java -jar durga-monitor/target/durga-monitor-0.1.0-beta.1-runner.jar` runs the monitoring app.
+- `cd durga-rust && cargo test` runs the Rust runtime tests (62 as of 2026-07-06).
 - `cd setup && docker compose up` starts a local Kafka broker and Kafka UI for development.
-- `mvn -Pdeps validate` prints dependency update information.
 
 ## Coding Style & Naming Conventions
 - Java uses 4-space indentation with standard brace placement (match existing files).
@@ -32,7 +31,7 @@
 - Keep configuration keys in `application.yml` and logging in `log4j2.xml`; avoid hardcoding broker settings.
 
 ## Testing Guidelines
-- JUnit 4 is configured in `pom.xml`; place tests under `src/test/java/` with names like `XxxTest`.
+- JUnit 4 is configured in `pom.xml`; place tests under the owning module's `src/test/java/` with names like `XxxTest`.
 - Integration tests use Testcontainers (`KafkaIntegrationTestBase`); extend that base class for any test needing a real Kafka broker.
 - Prefer focused unit tests for services; use Kafka-in-container tests for topology, state store, and serialization verification.
 - Each test method should include `System.out.println("TC: description")` for traceability.

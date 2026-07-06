@@ -12,9 +12,11 @@ The generator generally follows these patterns:
 \item task topics use process and task identifiers,
 \item generated classes use process and BPMN element names converted to Java class names,
 \item helper scripts use short imperative file names such as \texttt{complete-task.sh},
-\item monitoring topics use shared names such as:
+\item the canonical lifecycle-event topic is per process by default,
+\filepath{process-events-\%processId\%} (override with \texttt{--event-topic});
+the monitor consumes the whole \filepath{process-events-*} family,
+\item shared monitoring output topics use fixed names such as:
 \begin{quote}
-\filepath{process-events}\\
 \filepath{process-state}\\
 \filepath{process-state-counts}
 \end{quote}

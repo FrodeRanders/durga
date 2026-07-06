@@ -92,6 +92,9 @@ Log processing pipeline demonstrating regex extraction, type coercion, string te
 \filepath{custom_activity_demo.bpmn} &
 Custom activity round-trip example. A ServiceTask annotated with \texttt{camunda:plugin="custom"} triggers contract interface generation and delegating worker creation for hand-written implementations. \\
 \hline
+\filepath{e2e_pipeline.bpmn} &
+End-to-end pipeline fixture combining category-specific plugin tasks (\texttt{json-transform}, \texttt{type-coercer}, \texttt{field-router}, \texttt{kv-enricher}, \texttt{json-schema-validator}, \texttt{window-counter}) with an XOR gateway on the \texttt{amount} field and embedded alarm configurations. Drives the end-to-end integration test. \\
+\hline
 \end{longtable}
 
 Taken together, the sample set functions as a compact executable coverage matrix. When a new BPMN function

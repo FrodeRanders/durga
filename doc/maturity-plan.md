@@ -7,7 +7,7 @@ Durga from active prototype toward beta readiness.
 
 Durga is an active prototype with alpha-level engineering structure:
 
-- the core Maven build is repeatable on JDK 21,
+- the core Maven build is repeatable on JDK 25,
 - the Java unit suite covers core contracts, plugins, monitoring projections, and
   generated-project compilation,
 - Kafka-backed integration tests exist but require Docker,

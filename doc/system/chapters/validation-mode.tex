@@ -101,10 +101,11 @@ Results are written to \texttt{validation-results} and materialized in the
 The monitor exposes the report under \texttt{/api/validation/}:
 \begin{itemize}
 \item \texttt{/api/validation/summary?processId=\textit{id}} --- per-task counts
-  (equal / diff / prior-missing / candidate-error / total),
+  (equal / diff / prior-missing / candidate-error / total); \texttt{processId} is
+  optional (omit it for all processes),
 \item \texttt{/api/validation/results?processId=\&taskId=\&status=} --- individual
   comparisons, optionally filtered,
-\item \texttt{/api/validation/instances/\{processInstanceId\}} --- all validated
+\item \texttt{/api/validation/instances/\{instanceId\}} --- all validated
   tasks for one instance.
 \end{itemize}
 

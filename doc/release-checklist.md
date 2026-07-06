@@ -43,7 +43,7 @@ For at least one representative BPMN model:
 
 ```bash
 mvn -q clean package
-java -jar target/durga-0.1.0-beta.1.jar durga-tools/src/test/resources/bpmn/invoice_receipt.bpmn
+java -jar durga-tools/target/durga-tools-0.1.0-beta.1.jar durga-tools/src/test/resources/bpmn/invoice_receipt.bpmn
 cd generated
 mvn test
 ```

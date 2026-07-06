@@ -6,18 +6,33 @@
 //! * a JSON-Schema-subset object — type / required / properties / enum /
 //!   minimum / maximum / minLength / maxLength / pattern / items.
 //!
-//! On success the payload is returned unchanged; on failure the plugin errors
-//! (the generated worker turns that into an `ACTIVITY_ESCALATED` /
-//! `VALIDATION_FAILED` lifecycle event).
+//! An optional `onInvalid` directive selects how invalid payloads are handled:
+//! `dlq` (default) routes them to the dead-letter channel, `skip` drops them
+//! silently, and `fail` fails the process. It is appended alongside the schema,
+//! e.g. `schema={"type":"object"};onInvalid=skip` or, in compact form,
+//! `required=order_id,amount;onInvalid=fail`.
+//!
+//! On success the payload is returned unchanged; on failure the plugin returns
+//! a [`PluginResult`] carrying the selected error strategy (the generated worker
+//! turns that into the corresponding lifecycle event).
 
 use regex::Regex;
 use serde_json::Value;
 
 use crate::pipeline::field_at;
 use crate::plugin::{Plugin, PluginError};
+use crate::result::PluginResult;
 
 #[derive(Default)]
 pub struct JsonSchemaValidator;
+
+/// How the plugin handles a payload that fails validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OnInvalid {
+    Dlq,
+    Skip,
+    Fail,
+}
 
 impl JsonSchemaValidator {
     pub fn new() -> Self {
@@ -25,24 +40,107 @@ impl JsonSchemaValidator {
     }
 
     pub fn validate(payload: &str, config: &str) -> Result<String, PluginError> {
-        let input: Value = serde_json::from_str(payload)
-            .map_err(|e| -> PluginError { format!("Invalid input JSON: {e}").into() })?;
-
-        let trimmed = config.trim();
-        if !config.is_empty() && !trimmed.is_empty() && !trimmed.starts_with('{') {
-            if let Some(err) = validate_compact(&input, config) {
-                return Err(err.into());
-            }
-            return Ok(payload.to_string());
+        let (schema_config, _) = parse_config(config);
+        match validate_payload(payload, &schema_config)? {
+            Some(err) => Err(err.into()),
+            None => Ok(payload.to_string()),
         }
-
-        let schema: Value = serde_json::from_str(config)
-            .map_err(|e| -> PluginError { format!("Invalid schema config: {e}").into() })?;
-        if let Some(err) = validate_node(&input, &schema, "$") {
-            return Err(err.into());
-        }
-        Ok(payload.to_string())
     }
+}
+
+/// Separates an optional `onInvalid` directive from the schema configuration.
+/// Segments are split on top-level `;` only, so a `;` inside the JSON schema
+/// (within braces or string literals) does not act as a separator.
+fn parse_config(config: &str) -> (String, OnInvalid) {
+    let mut on_invalid = OnInvalid::Dlq;
+    let mut schema_config = String::new();
+    for segment in split_top_level(config) {
+        let trimmed = segment.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let lower = trimmed.to_ascii_lowercase();
+        if let Some(rest) = lower.strip_prefix("oninvalid=") {
+            on_invalid = match rest.trim() {
+                "skip" => OnInvalid::Skip,
+                "fail" => OnInvalid::Fail,
+                _ => OnInvalid::Dlq,
+            };
+        } else if lower.starts_with("schema=") {
+            append_schema(&mut schema_config, &trimmed["schema=".len()..]);
+        } else {
+            append_schema(&mut schema_config, trimmed);
+        }
+    }
+    (schema_config, on_invalid)
+}
+
+fn append_schema(schema_config: &mut String, segment: &str) {
+    let value = segment.trim();
+    if value.is_empty() {
+        return;
+    }
+    if !schema_config.is_empty() {
+        schema_config.push(';');
+    }
+    schema_config.push_str(value);
+}
+
+fn split_top_level(config: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0i32;
+    let mut in_string = false;
+    let mut escaped = false;
+    for c in config.chars() {
+        if in_string {
+            current.push(c);
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match c {
+            '"' => {
+                in_string = true;
+                current.push(c);
+            }
+            '{' | '[' => {
+                depth += 1;
+                current.push(c);
+            }
+            '}' | ']' => {
+                if depth > 0 {
+                    depth -= 1;
+                }
+                current.push(c);
+            }
+            ';' if depth == 0 => {
+                parts.push(std::mem::take(&mut current));
+            }
+            _ => current.push(c),
+        }
+    }
+    parts.push(current);
+    parts
+}
+
+fn validate_payload(payload: &str, schema_config: &str) -> Result<Option<String>, PluginError> {
+    let input: Value = serde_json::from_str(payload)
+        .map_err(|e| -> PluginError { format!("Invalid input JSON: {e}").into() })?;
+
+    let trimmed = schema_config.trim();
+    if !trimmed.is_empty() && !trimmed.starts_with('{') {
+        return Ok(validate_compact(&input, schema_config));
+    }
+
+    let schema: Value = serde_json::from_str(schema_config)
+        .map_err(|e| -> PluginError { format!("Invalid schema config: {e}").into() })?;
+    Ok(validate_node(&input, &schema, "$"))
 }
 
 fn validate_compact(input: &Value, config: &str) -> Option<String> {
@@ -177,11 +275,26 @@ impl Plugin for JsonSchemaValidator {
     fn execute_str(&self, payload: &str, config: &str) -> Result<Option<String>, PluginError> {
         Ok(Some(Self::validate(payload, config)?))
     }
+
+    fn execute_with_result(&self, payload: &[u8], config: &str) -> Result<PluginResult, PluginError> {
+        let text = std::str::from_utf8(payload)?;
+        let (schema_config, on_invalid) = parse_config(config);
+        let idempotency_key = self.idempotency_key(payload, config);
+        match validate_payload(text, &schema_config)? {
+            None => Ok(PluginResult::success(Some(payload.to_vec()), idempotency_key)),
+            Some(err) => Ok(match on_invalid {
+                OnInvalid::Skip => PluginResult::skip(idempotency_key, err),
+                OnInvalid::Fail => PluginResult::fail(idempotency_key, err),
+                OnInvalid::Dlq => PluginResult::dlq(Some(payload.to_vec()), idempotency_key, err),
+            }),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::result::ErrorStrategy;
 
     #[test]
     fn compact_required_passes_when_present() {
@@ -208,5 +321,64 @@ mod tests {
         assert!(JsonSchemaValidator::validate(r#"{"id":5}"#, schema).is_ok());
         assert!(JsonSchemaValidator::validate(r#"{"id":"x"}"#, schema).is_err());
         assert!(JsonSchemaValidator::validate(r#"{}"#, schema).is_err());
+    }
+
+    #[test]
+    fn invalid_routes_to_dlq_by_default() {
+        let schema = r#"{"type":"object","required":["name"]}"#;
+        let plugin = JsonSchemaValidator::new();
+        let result = plugin
+            .execute_with_result(br#"{"email":"a@b.com"}"#, schema)
+            .unwrap();
+        assert_eq!(result.error_strategy(), Some(ErrorStrategy::Dlq));
+    }
+
+    #[test]
+    fn on_invalid_skip_and_fail() {
+        let plugin = JsonSchemaValidator::new();
+        let skip = plugin
+            .execute_with_result(
+                br#"{"email":"a@b.com"}"#,
+                r#"schema={"type":"object","required":["name"]};onInvalid=skip"#,
+            )
+            .unwrap();
+        assert_eq!(skip.error_strategy(), Some(ErrorStrategy::Skip));
+
+        let fail = plugin
+            .execute_with_result(
+                br#"{"email":"a@b.com"}"#,
+                r#"schema={"type":"object","required":["name"]};onInvalid=fail"#,
+            )
+            .unwrap();
+        assert_eq!(fail.error_strategy(), Some(ErrorStrategy::Fail));
+    }
+
+    #[test]
+    fn on_invalid_with_compact_config() {
+        let plugin = JsonSchemaValidator::new();
+        let invalid = plugin
+            .execute_with_result(br#"{"order_id":7}"#, "required=order_id,amount;onInvalid=skip")
+            .unwrap();
+        assert_eq!(invalid.error_strategy(), Some(ErrorStrategy::Skip));
+
+        let valid = plugin
+            .execute_with_result(
+                br#"{"order_id":7,"amount":12.5}"#,
+                "required=order_id,amount;onInvalid=skip",
+            )
+            .unwrap();
+        assert!(valid.is_success());
+    }
+
+    #[test]
+    fn valid_payload_succeeds_with_on_invalid_present() {
+        let plugin = JsonSchemaValidator::new();
+        let result = plugin
+            .execute_with_result(
+                br#"{"name":"Alice"}"#,
+                r#"schema={"type":"object","required":["name"]};onInvalid=fail"#,
+            )
+            .unwrap();
+        assert!(result.is_success());
     }
 }

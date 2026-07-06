@@ -44,8 +44,8 @@ The best near-term positioning is:
 
 Durga's main capability is in the scaffolder:
 
-- `src/main/java/org/gautelis/durga/tools/BpmnScaffolder.java`
-- `src/main/java/org/gautelis/durga/tools/BpmnModelCollector.java`
+- `durga-tools/src/main/java/org/gautelis/durga/tools/BpmnScaffolder.java`
+- `durga-tools/src/main/java/org/gautelis/durga/tools/BpmnModelCollector.java`
 - `durga-tools/src/main/resources/templates-java/scaffold.stg`
 - `durga-tools/src/main/resources/templates-java/scaffold-generated-project.stg`
 
@@ -70,13 +70,13 @@ than tasks dispatched by a central scheduler.
 
 Pipeline functionality is provided by:
 
-- `src/main/java/org/gautelis/durga/plugins/Plugin.java`
-- `src/main/java/org/gautelis/durga/plugins/PipelinePlugin.java`
-- `src/main/java/org/gautelis/durga/plugins/JsonTransform.java`
-- `src/main/java/org/gautelis/durga/plugins/FieldFilter.java`
-- `src/main/java/org/gautelis/durga/plugins/JsonSchemaValidator.java`
-- `src/main/java/org/gautelis/durga/plugins/Mask.java`
-- `src/main/java/org/gautelis/durga/plugins/WindowCounter.java`
+- `durga-runtime/src/main/java/org/gautelis/durga/plugins/Plugin.java`
+- `durga-runtime/src/main/java/org/gautelis/durga/plugins/PipelinePlugin.java`
+- `durga-runtime/src/main/java/org/gautelis/durga/plugins/JsonTransform.java`
+- `durga-runtime/src/main/java/org/gautelis/durga/plugins/FieldFilter.java`
+- `durga-runtime/src/main/java/org/gautelis/durga/plugins/JsonSchemaValidator.java`
+- `durga-runtime/src/main/java/org/gautelis/durga/plugins/Mask.java`
+- `durga-runtime/src/main/java/org/gautelis/durga/plugins/WindowCounter.java`
 - `plugins/catalog.yml`
 
 The `Plugin` contract supports text/JSON and binary payloads. The scaffolder
@@ -95,7 +95,7 @@ Useful pipeline operations are present:
 - UUID injection,
 - schema validation,
 - key/value enrichment,
-- dead-letter routing,
+- field-value routing (the `field-router` plugin, class `DeadLetterRouter`),
 - window counting.
 
 This is a strong foundation for a governed data-pipeline component catalog.
@@ -104,7 +104,7 @@ This is a strong foundation for a governed data-pipeline component catalog.
 
 Durga has an explicit model for pipeline data assets:
 
-- `src/main/java/org/gautelis/durga/DataHandle.java`
+- `durga-runtime/src/main/java/org/gautelis/durga/DataHandle.java`
 - `doc/data-pipeline-assets.md`
 - `BpmnModelCollector.collectDataObjectSpecs`
 - `BpmnModelCollector.collectDataStoreSpecs`
@@ -130,7 +130,7 @@ process events. Durga already distinguishes:
 
 Durga includes monitoring services under:
 
-- `src/main/java/org/gautelis/durga/monitoring/`
+- `durga-monitor/src/main/java/org/gautelis/durga/monitoring/` (Kafka Streams topology, REST API, CLI) and `durga-runtime/src/main/java/org/gautelis/durga/monitoring/Metrics.java` (component metrics)
 - `monitoring-ui/`
 
 The monitoring topology materializes:
@@ -499,16 +499,20 @@ Impact:
 
 - operational recovery remains manual and risky.
 
-### 5. Idempotency Is Not Yet A Plugin Contract
+### 5. Idempotency Is A Plugin Contract, But Side-Effect Protection Is Partial
 
-Plugins receive bytes and config and return bytes. There is no required
-idempotency key, deterministic output declaration, external-write protocol, or
-side-effect contract.
+The `Plugin` contract now includes a structured result path: plugins may override
+`executeWithResult` to return a `PluginResult` carrying an idempotency key (default:
+content hash of payload + config), an `OutputDisposition`
+(`PAYLOAD`/`PASSTHROUGH`/`SIDE_EFFECT`), and an error strategy
+(`DLQ`/`SKIP`/`FAIL`). What remains missing is an end-to-end external-write
+protocol (e.g. transactional outbox / exactly-once sink) that consumes the
+idempotency key.
 
 Impact:
 
-- retries and replays can duplicate external writes unless each plugin handles
-  this manually.
+- retries and replays carry an idempotency key, but preventing duplicate
+  *external* writes still depends on the sink honouring it.
 
 ### 6. Kafka Connect Generation Is Skeleton-Level
 
@@ -617,16 +621,17 @@ possible through Kafka.
 
 ### Phase 5: Strengthen Plugin SDK Contracts
 
-Evolve the plugin contract beyond `execute(bytes, config)`:
+Evolve the plugin contract beyond `execute(bytes, config)`. Several of these are
+already implemented via `executeWithResult`/`PluginResult` (marked *done*):
 
 - plugin descriptor config-schema validation,
 - plugin version resolution,
 - declared input/output media types,
-- idempotency key strategy,
-- side-effect declaration,
-- lineage emission helper,
-- structured plugin result with payload plus metadata,
-- standard error strategies: fail, skip, DLQ, quarantine.
+- idempotency key strategy — *done* (`Plugin.idempotencyKey`, default content hash),
+- side-effect declaration — *done* (`OutputDisposition.SIDE_EFFECT` + description),
+- lineage emission helper — *done* (Vannak `DataIndividualMetadataEvent` emission),
+- structured plugin result with payload plus metadata — *done* (`PluginResult` with metadata),
+- standard error strategies: fail, skip, DLQ — *done* (`ErrorStrategy`); `quarantine` remains future work.
 
 This should align with Vannak's passive/active metadata distinction. Plugin
 execution should return payload bytes plus metadata facts such as transformed

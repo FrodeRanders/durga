@@ -79,7 +79,9 @@ instance.
 
 \subsection{Canonical event model}
 
-The shared canonical stream on \texttt{process-events} is the observability backbone for
+The canonical lifecycle-event stream --- by default a per-process topic
+\texttt{process-events-\textit{processId}}, which the monitor consumes as the
+\texttt{process-events-*} family --- is the observability backbone for
 latest state per instance, counts by current state, latency summaries, stuck-instance
 detection, dashboards and query endpoints. Execution topics may be useful for routing
 visibility, but the monitoring model depends on explicit projections rather than raw topic

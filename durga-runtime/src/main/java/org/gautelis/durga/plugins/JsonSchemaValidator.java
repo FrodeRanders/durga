@@ -8,10 +8,10 @@ import org.gautelis.durga.monitoring.Metrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 /**
  * Validates JSON payloads against a JSON Schema-like configuration.
@@ -28,6 +28,13 @@ import java.util.regex.PatternSyntaxException;
  * </ul>
  *
  * <p>The config is a JSON object matching the schema subset above.
+ *
+ * <p>An optional {@code onInvalid} directive selects how invalid payloads are
+ * handled: {@code dlq} (default) routes them to the dead-letter channel,
+ * {@code skip} drops them silently, and {@code fail} fails the process. The
+ * directive is supplied alongside the schema, e.g.
+ * {@code schema={"type":"object"};onInvalid=skip} or, in compact form,
+ * {@code required=order_id,amount;onInvalid=fail}.
  */
 public final class JsonSchemaValidator implements Plugin {
 
@@ -36,6 +43,14 @@ public final class JsonSchemaValidator implements Plugin {
     private final ObjectMapper mapper = new ObjectMapper();
     private JsonNode schema;
 
+    /** How the plugin handles a payload that fails validation. */
+    enum OnInvalid {
+        DLQ, SKIP, FAIL
+    }
+
+    record ValidatorConfig(String schemaConfig, OnInvalid onInvalid) {
+    }
+
     @Override
     public String execute(String payload, String config) throws Exception {
         String pluginName = "json-schema-validator";
@@ -43,21 +58,139 @@ public final class JsonSchemaValidator implements Plugin {
         Timer timer = Metrics.registry().timer("plugin.duration", "plugin", pluginName);
         counter.increment();
         return timer.recordCallable(() -> {
-            JsonNode input = mapper.readTree(payload);
-            if (config != null && !config.isBlank() && !config.trim().startsWith("{")) {
-                String error = validateCompactConfig(input, config);
-                if (error != null) {
-                    throw new ValidationException(error);
-                }
-                return payload;
-            }
-            JsonNode schemaNode = mapper.readTree(config);
-            String error = validate(input, schemaNode, "$");
+            String error = validatePayload(payload, parseConfig(config).schemaConfig());
             if (error != null) {
                 throw new ValidationException(error);
             }
             return payload;
         });
+    }
+
+    @Override
+    public PluginResult executeWithResult(byte[] payload, String config) throws Exception {
+        String pluginName = "json-schema-validator";
+        Counter counter = Metrics.registry().counter("plugin.executions", "plugin", pluginName);
+        Timer timer = Metrics.registry().timer("plugin.duration", "plugin", pluginName);
+        counter.increment();
+        return timer.recordCallable(() -> {
+            ValidatorConfig parsed = parseConfig(config);
+            String error = validatePayload(Plugin.toString(payload), parsed.schemaConfig());
+            String idempotencyKey = idempotencyKey(payload, config);
+            if (error == null) {
+                return PluginResult.success(payload, idempotencyKey);
+            }
+            return switch (parsed.onInvalid()) {
+                case SKIP -> PluginResult.skip(idempotencyKey, error);
+                case FAIL -> PluginResult.fail(idempotencyKey, error);
+                case DLQ -> PluginResult.dlq(payload, idempotencyKey, error);
+            };
+        });
+    }
+
+    private String validatePayload(String payload, String schemaConfig) throws Exception {
+        JsonNode input = mapper.readTree(payload);
+        if (schemaConfig != null && !schemaConfig.isBlank() && !schemaConfig.trim().startsWith("{")) {
+            return validateCompactConfig(input, schemaConfig);
+        }
+        JsonNode schemaNode = mapper.readTree(schemaConfig);
+        return validate(input, schemaNode, "$");
+    }
+
+    /**
+     * Separates an optional {@code onInvalid} directive from the schema
+     * configuration. Segments are split on top-level {@code ;} only, so a
+     * {@code ;} inside the JSON schema (within braces or string literals) does
+     * not act as a separator.
+     */
+    static ValidatorConfig parseConfig(String config) {
+        if (config == null) {
+            return new ValidatorConfig(null, OnInvalid.DLQ);
+        }
+        OnInvalid onInvalid = OnInvalid.DLQ;
+        StringBuilder schemaConfig = new StringBuilder();
+        for (String segment : splitTopLevel(config)) {
+            String trimmed = segment.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            String lower = trimmed.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("oninvalid=")) {
+                onInvalid = parseOnInvalid(trimmed.substring("onInvalid=".length()).trim());
+            } else if (lower.startsWith("schema=")) {
+                appendSchema(schemaConfig, trimmed.substring("schema=".length()));
+            } else {
+                appendSchema(schemaConfig, trimmed);
+            }
+        }
+        return new ValidatorConfig(schemaConfig.toString(), onInvalid);
+    }
+
+    private static void appendSchema(StringBuilder schemaConfig, String segment) {
+        String value = segment.trim();
+        if (value.isEmpty()) {
+            return;
+        }
+        if (schemaConfig.length() > 0) {
+            schemaConfig.append(';');
+        }
+        schemaConfig.append(value);
+    }
+
+    private static OnInvalid parseOnInvalid(String value) {
+        return switch (value.toLowerCase(Locale.ROOT)) {
+            case "skip" -> OnInvalid.SKIP;
+            case "fail" -> OnInvalid.FAIL;
+            default -> OnInvalid.DLQ;
+        };
+    }
+
+    private static List<String> splitTopLevel(String config) {
+        List<String> parts = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = 0; i < config.length(); i++) {
+            char c = config.charAt(i);
+            if (inString) {
+                current.append(c);
+                if (escaped) {
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            switch (c) {
+                case '"' -> {
+                    inString = true;
+                    current.append(c);
+                }
+                case '{', '[' -> {
+                    depth++;
+                    current.append(c);
+                }
+                case '}', ']' -> {
+                    if (depth > 0) {
+                        depth--;
+                    }
+                    current.append(c);
+                }
+                case ';' -> {
+                    if (depth == 0) {
+                        parts.add(current.toString());
+                        current.setLength(0);
+                    } else {
+                        current.append(c);
+                    }
+                }
+                default -> current.append(c);
+            }
+        }
+        parts.add(current.toString());
+        return parts;
     }
 
     private String validateCompactConfig(JsonNode input, String config) {

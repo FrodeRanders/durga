@@ -26,10 +26,10 @@ config:
     type: object
     required: true
     description: Map of field values to channel names
-  defaultRoute:
+  default:
     type: string
-    required: true
-    description: Fallback channel when no route matches
+    required: false
+    description: Fallback channel when no route matches (defaults to "default")
 
 implementation:
   class: org.gautelis.durga.plugins.DeadLetterRouter

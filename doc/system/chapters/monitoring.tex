@@ -289,8 +289,9 @@ with its own application ID and state directory. Both subscribe to
 \texttt{process-events-.*}; the fault detector also consumes
 \texttt{process-models} so BPMN alarm properties can update runtime alarm
 configuration. A third \texttt{KafkaStreams} instance maintains the alarm-state
-read model from \texttt{fault-alarms}. Health output reports all three stream
-states: core monitoring, fault detection, and alarm state.
+read model from \texttt{fault-alarms}, and a fourth drives the validation
+(shadow-run) topology. Health output reports all four stream states: core
+monitoring, fault detection, alarm state, and validation.
 
 Unit tests are in \texttt{FaultDetectionTest}, \texttt{BpmnAlarmConfigParserTest},
 \texttt{AlarmStateViewTest},

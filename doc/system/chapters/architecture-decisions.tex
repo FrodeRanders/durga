@@ -3,7 +3,9 @@
 
 \subsection{Canonical lifecycle stream}
 
-The shared \texttt{process-events} topic carries normalized lifecycle events. Execution topics
+The canonical lifecycle-event stream --- by default a per-process
+\texttt{process-events-\textit{processId}} topic, consumed by the monitor as the
+\texttt{process-events-*} family --- carries normalized lifecycle events. Execution topics
 carry work between generated handlers, but they are not the authoritative query source.
 State projections are built from lifecycle events because:
 \begin{itemize}

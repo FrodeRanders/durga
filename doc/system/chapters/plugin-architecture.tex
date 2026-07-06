@@ -53,20 +53,36 @@ lifecycle.
 \subsection{Plugin interface}
 
 All 16 processing plugins implement \filepath{org.gautelis.durga.plugins.Plugin},
-which provides two \texttt{default} methods. The two connect catalog descriptors
+which provides four \texttt{default} methods. The two connect catalog descriptors
 (\texttt{kafka-connect-source} and \\ \texttt{kafka-connect-sink}) are code-generation
 descriptors that reference the scaffolder, not runtime \texttt{Plugin}
 implementations.
 
 \begin{quote}
 \texttt{byte[] execute(byte[] payload, String config) throws Exception} \\
-\texttt{String execute(String payload, String config) throws Exception}
+\texttt{String execute(String payload, String config) throws Exception} \\
+\texttt{PluginResult executeWithResult(byte[] payload, String config) throws Exception} \\
+\texttt{String idempotencyKey(byte[] payload, String config)}
 \end{quote}
 
-The generated worker calls the \texttt{byte[]} overload. Text / JSON plugins
-override the \texttt{String} variant instead, with UTF-8 conversion handled by
-the \texttt{byte[]} default. Binary plugins override the \texttt{byte[]} variant
-directly. Only one of the two needs to be overridden.
+The generated worker always calls \texttt{executeWithResult}. Its default
+implementation delegates to the \texttt{byte[]} overload and wraps the output in a
+\texttt{PluginResult} carrying a content-based idempotency key and the default
+\texttt{PAYLOAD} disposition. Text / JSON plugins override the \texttt{String}
+\texttt{execute} variant (UTF-8 conversion is handled by the \texttt{byte[]}
+default); binary plugins override the \texttt{byte[]} variant directly. Plugins
+that need an explicit idempotency strategy, a non-\texttt{PAYLOAD}
+\texttt{OutputDisposition} (\texttt{PASSTHROUGH} for route/inspect control values,
+\texttt{SIDE\_EFFECT} for stored-object handles), or a non-exceptional error
+strategy (\texttt{ErrorStrategy.DLQ}, \texttt{SKIP}, or \texttt{FAIL}) override
+\texttt{executeWithResult} to return a structured \texttt{PluginResult}. For
+example, the JSON Schema Validator honours an \texttt{onInvalid=dlq|skip|fail}
+directive by returning the corresponding error strategy.
+
+The generated worker inspects the returned \texttt{PluginResult.errorStrategy()}:
+\texttt{SKIP} acknowledges and drops the message, \texttt{DLQ} routes it to the
+task's dead-letter topic, and \texttt{FAIL} fails the activity (also to the
+dead-letter topic, plus a \texttt{PROCESS\_FAILED} lifecycle event).
 
 Generated executor classes instantiate the plugin at field level and delegate
 through \\ \texttt{PluginExecutionSupport.execute(...)} for each message. The config
@@ -140,7 +156,7 @@ fully supported; experimental plugins generate with a warning.
 \subsubsection{Inspect plugins (1)}
 
 \begin{description}
-\item[Format Detector] Detects MIME type, textual/binary shape, JSON object/array/scalar form, byte count, and checksums. Status: experimental.
+\item[Format Detector] Detects MIME type, textual/binary shape, JSON object/array/scalar form, byte count, and checksums. Status: stable.
 \end{description}
 
 \subsubsection{Store plugins (2)}

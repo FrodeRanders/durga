@@ -18,18 +18,18 @@ Endpoints (all under \texttt{/api/}):
 \item \texttt{/health} --- Kafka Streams readiness for probes and load balancers,
 \item \texttt{/api/health} --- API-namespace health alias,
 \item \texttt{/api/processes/list} --- all known process IDs (from counts + model registry),
-\item \texttt{/api/instances/\{processInstanceId\}} --- latest instance view,
+\item \texttt{/api/instances/\{instanceId\}} --- latest instance view,
 \item \texttt{/api/processes/\{processId\}/counts} --- process-specific state counts,
 \item \texttt{/api/processes/\{processId\}/latency} --- activity latency summaries,
 \item \texttt{/api/processes/\{processId\}/trends} --- bucketed start/completion/failure history,
 \item \texttt{/api/counts} --- global state-count view,
 \item \texttt{/api/alarms} --- global active alarm-state view,
 \item \texttt{/api/processes/\{processId\}/alarms} --- process-specific active alarm-state view,
-\item \texttt{/api/instances/\{processInstanceId\}/alarms} --- active alarms whose latest firing belongs to the instance,
+\item \texttt{/api/instances/\{instanceId\}/alarms} --- active alarms whose latest firing belongs to the instance,
 \item \texttt{/api/stuck} --- stuck-instance detection,
-\item \texttt{/api/validation/summary?processId=\textit{id}} --- per-task validation outcome counts (see Section~\ref{sec:ValidationMode}),
+\item \texttt{/api/validation/summary?processId=\textit{id}} --- per-task validation outcome counts; \texttt{processId} is optional (omit it for all processes) (see Section~\ref{sec:ValidationMode}),
 \item \texttt{/api/validation/results?processId=\&taskId=\&status=} --- individual validation comparisons,
-\item \texttt{/api/validation/instances/\{processInstanceId\}} --- validation comparisons for one instance,
+\item \texttt{/api/validation/instances/\{instanceId\}} --- validation comparisons for one instance,
 \item \texttt{/api/diagram?processId=\textit{id}} --- BPMN 2.0 XML from the model cache,
 \item \texttt{/api/metrics} --- Prometheus-format metrics.
 \end{itemize}
@@ -44,24 +44,28 @@ exposing it outside a trusted environment.
 
 \subsection{CLI client}
 
-The repository includes a convenience script at \filepath{durga-monitor}:
+The \texttt{ProcessMonitoringClient} takes a base URL followed by a command:
 
 \begin{verbatim}
-./durga-monitor health
-./durga-monitor counts invoice_receipt
-./durga-monitor latency invoice_receipt
-./durga-monitor stuck invoice_receipt 300
-./durga-monitor instance <processInstanceId>
-\end{verbatim}
-
-Defaults to \texttt{http://localhost:8081}. Override with
-\texttt{DURGA\_URL}. Equivalent to:
-
-\begin{verbatim}
-java -cp target/durga-0.1.0-beta.1.jar \
+java -cp durga-monitor/target/durga-monitor-0.1.0-beta.1-runner.jar \
   org.gautelis.durga.monitoring.ProcessMonitoringClient \
   http://localhost:8081 <command>
 \end{verbatim}
+
+Supported commands:
+
+\begin{verbatim}
+health
+instance <processInstanceId>
+counts [processId]
+latency <processId>
+trends <processId>
+stuck [processId] [olderThanSeconds]
+\end{verbatim}
+
+The base URL defaults to \texttt{http://localhost:8081}. Set
+\texttt{DURGA\_MONITORING\_API\_KEY} in the environment to send an
+\texttt{Authorization: Bearer} header when the API requires authentication.
 
 \subsection{Dashboard}
 

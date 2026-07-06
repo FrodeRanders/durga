@@ -1,12 +1,17 @@
 \section{Generated Runtime Classes}
 \label{sec:GeneratedRuntime}
 
-Each generated project contains Java classes under
+Each generated project contains Java classes under the configured base package
+(\texttt{--package}, default \texttt{org.example.generated}). In the examples
+below this package is written as \texttt{<pkg>}.
 Operational classes (workers, gateways, orchestrator) are generated under:
-\filepath{src/main/java/org/gautelis/durga/generated/}.
+\filepath{src/main/java/<pkg>/}.
 Probes and exercisers (starter, scenario runner, publishers, watchers) are
 generated under:
-\filepath{src/main/java/org/gautelis/durga/generated/probes/}.
+\filepath{src/main/java/<pkg>/probes/}.
+Shared runtime contract classes (\texttt{ProcessEvent}, \texttt{DataHandle},
+plugin runtime, etc.) are generated under
+\filepath{src/main/java/org/gautelis/durga/}.
 These classes map BPMN constructs onto Kafka consumers, producers and lifecycle events
 rather than hiding behind an opaque engine.
 
