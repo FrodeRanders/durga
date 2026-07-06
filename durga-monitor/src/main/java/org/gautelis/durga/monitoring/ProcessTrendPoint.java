@@ -56,7 +56,7 @@ public record ProcessTrendPoint(
     }
 
     private static String bucketFor(String timestamp) {
-        Instant instant = (timestamp == null || timestamp.isBlank()) ? Instant.now() : Instant.parse(timestamp);
+        Instant instant = Timestamps.parseOrDefault(timestamp, Instant.now());
         return instant.truncatedTo(ChronoUnit.MINUTES).toString();
     }
 }

@@ -164,9 +164,13 @@ public record ProcessStateView(
         if (entered == null) {
             return;
         }
+        Instant enteredAtInstant = Timestamps.parseOrNull(entered);
+        if (enteredAtInstant == null) {
+            return;
+        }
         // Durations are overwritten per activity id, so the view tracks the latest observed
         // duration for that activity within the instance rather than a full history.
-        long durationMs = Math.max(0L, Duration.between(Instant.parse(entered), eventTimestamp).toMillis());
+        long durationMs = Math.max(0L, Duration.between(enteredAtInstant, eventTimestamp).toMillis());
         durations.put(activityId, durationMs);
     }
 
@@ -184,9 +188,6 @@ public record ProcessStateView(
     }
 
     private static Instant parseTimestamp(String timestamp) {
-        if (timestamp == null || timestamp.isBlank()) {
-            return Instant.now();
-        }
-        return Instant.parse(timestamp);
+        return Timestamps.parseOrDefault(timestamp, Instant.now());
     }
 }

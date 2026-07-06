@@ -54,8 +54,17 @@ public final class ProcessMonitoringTopology {
     private static final String LOCAL_ACTIVITY_ENTRY_STORE = "process-activity-entry-store";
     private static final String LOCAL_TRENDS_STORE = "process-trends-store";
 
-    private static final long SLA_THRESHOLD_MS =
-            Long.parseLong(System.getProperty("durga.sla.threshold.ms", "0"));
+    private static final long SLA_THRESHOLD_MS = slaThresholdMs();
+
+    private static long slaThresholdMs() {
+        String raw = System.getProperty("durga.sla.threshold.ms", "0");
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException e) {
+            LOG.warn("Invalid durga.sla.threshold.ms '{}', defaulting to 0", raw);
+            return 0L;
+        }
+    }
 
     private ProcessMonitoringTopology() {
     }
@@ -295,8 +304,15 @@ public final class ProcessMonitoringTopology {
             if (enteredAt == null || enteredAt.isBlank()) {
                 return;
             }
+            Instant entered = Timestamps.parseOrNull(enteredAt);
+            Instant completed = Timestamps.parseOrNull(event.timestamp());
+            if (entered == null || completed == null) {
+                // Malformed timestamps: drop the entry so it does not accumulate, and skip.
+                entryStore.delete(key);
+                return;
+            }
             entryStore.delete(key);
-            long durationMs = Math.max(0L, ChronoUnit.MILLIS.between(Instant.parse(enteredAt), Instant.parse(event.timestamp())));
+            long durationMs = Math.max(0L, ChronoUnit.MILLIS.between(entered, completed));
             ActivityLatencyDelta sample = ActivityLatencyDelta.of(
                     event.processId(), event.activityId(), durationMs, SLA_THRESHOLD_MS);
             context.forward(record.withKey(sample.key()).withValue(sample));

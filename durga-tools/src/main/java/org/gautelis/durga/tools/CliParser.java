@@ -56,6 +56,10 @@ final class CliParser {
                 validation = true;
             } else if (arg.startsWith("--out=")) {
                 outputDir = arg.substring("--out=".length());
+                if (outputDir.isBlank()) {
+                    System.err.println("Missing value for --out");
+                    return null;
+                }
             } else if ("--out".equals(arg)) {
                 if (i + 1 >= args.length) {
                     System.err.println("Missing value for --out");

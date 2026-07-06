@@ -429,6 +429,26 @@ public class FaultDetectionTest {
                 FaultDetectionTopology.cascadeOnsetKey(perProcess));
     }
 
+    @Test
+    public void shouldRenderAlarmWithNullEventFields() {
+        System.out.println("TC: newAlarm tolerates null processId/activityId/processInstanceId in the event");
+        AlarmConfig config = new AlarmConfig("cfg-null", null, null,
+                ProcessEvent.EventType.PROCESS_FAILED, AlarmSyndrome.HARD_ERROR, 0, null,
+                AlarmSeverity.CRITICAL,
+                "proc=${processId} act=${activityId} inst=${processInstanceId} n=${count}",
+                AlarmOrigin.EXPLICIT);
+        ProcessEvent event = new ProcessEvent(
+                null, null, null, "tok", "corr",
+                Map.of(), ProcessEvent.Status.FAILED,
+                new ProcessEvent.ErrorInfo("boom", "TASK_FAILED"),
+                ProcessEvent.EventType.PROCESS_FAILED, "v1", "BK", "2026-07-01T10:00:00Z");
+
+        AlarmEvent alarm = FaultDetectionTopology.newAlarm(config, event, "2026-07-01T10:00:00Z", 1);
+
+        assertNotNull(alarm);
+        assertEquals("proc=unknown act=* inst=unknown n=1", alarm.message());
+    }
+
     // ---- helpers ----
 
     private static AlarmEvent cascade(AlarmConfig config, String now, long nowMs,

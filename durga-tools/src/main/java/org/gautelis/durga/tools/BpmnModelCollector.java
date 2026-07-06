@@ -621,6 +621,7 @@ class BpmnModelCollector {
                     subProcess.getId(),
                     enclosingScopeId
             );
+            String enclosingScopeName = enclosingScopeName(model, enclosingScopeId);
 
             specs.add(new EventSubProcessSpec(
                     subProcess.getId(),
@@ -630,10 +631,7 @@ class BpmnModelCollector {
                     triggerTopic,
                     timerType,
                     timerExpression,
-                    enclosingScopeId != null ? normalize(nameOrId(
-                            ((SubProcess) model.getModelElementById(enclosingScopeId)).getName(),
-                            enclosingScopeId
-                    )) : null,
+                    enclosingScopeName,
                     isInterruptingStart(triggerStart),
                     cancellationScopeActivityIds,
                     distinct(entryTargetIds),
@@ -1007,6 +1005,20 @@ class BpmnModelCollector {
             current = current.getParentElement();
         }
         return null;
+    }
+
+    /**
+     * Resolves a normalized display name for an enclosing scope id, tolerating a missing
+     * or non-{@link SubProcess} element (e.g. a dangling reference or the top-level process).
+     * Returns {@code null} when {@code enclosingScopeId} is null.
+     */
+    static String enclosingScopeName(BpmnModelInstance model, String enclosingScopeId) {
+        if (enclosingScopeId == null) {
+            return null;
+        }
+        ModelElementInstance element = model.getModelElementById(enclosingScopeId);
+        String name = element instanceof SubProcess subProcess ? subProcess.getName() : null;
+        return normalize(nameOrId(name, enclosingScopeId));
     }
 
     static boolean isWithinSubProcess(ModelElementInstance element, String subProcessId) {

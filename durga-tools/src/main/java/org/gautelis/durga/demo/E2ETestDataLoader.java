@@ -49,17 +49,17 @@ public class E2ETestDataLoader {
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--bootstrap-servers":
-                    bootstrapServers = args[++i];
+                    bootstrapServers = DemoArgs.requireValue(args, ++i, "--bootstrap-servers");
                     break;
                 case "--topic":
-                    topic = args[++i];
+                    topic = DemoArgs.requireValue(args, ++i, "--topic");
                     break;
                 case "--count":
-                    maxCount = Long.parseLong(args[++i]);
+                    maxCount = DemoArgs.parseLong(DemoArgs.requireValue(args, ++i, "--count"), -1L, "--count");
                     continuous = maxCount < 0;
                     break;
                 case "--interval-ms":
-                    intervalMs = Long.parseLong(args[++i]);
+                    intervalMs = DemoArgs.parseLong(DemoArgs.requireValue(args, ++i, "--interval-ms"), 100L, "--interval-ms");
                     break;
                 case "--continuous":
                     continuous = true;

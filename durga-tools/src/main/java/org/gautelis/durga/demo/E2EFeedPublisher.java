@@ -38,8 +38,8 @@ public final class E2EFeedPublisher {
     public static void main(String[] args) {
         String bootstrap = args.length > 0 ? args[0] : "localhost:9094";
         String processId = args.length > 1 ? args[1] : "e2e_pipeline";
-        long intervalMs = Long.parseLong(args.length > 2 ? args[2] : "100");
-        long maxCount = Long.parseLong(args.length > 3 ? args[3] : "-1");
+        long intervalMs = DemoArgs.parseLong(args.length > 2 ? args[2] : "100", 100L, "interval-ms");
+        long maxCount = DemoArgs.parseLong(args.length > 3 ? args[3] : "-1", -1L, "count");
         String targetTopic = processId + "_start";
 
         Properties props = new Properties();

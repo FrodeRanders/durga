@@ -311,4 +311,28 @@ public class ProcessStateViewTest {
         assertEquals(Long.valueOf(120000L), state.activityDurationsMs().get("task-a"));
         assertEquals(Long.valueOf(180000L), state.activityDurationsMs().get("task-b"));
     }
+
+    @Test
+    public void shouldTolerateMalformedTimestamps() {
+        System.out.println("TC: malformed event timestamps do not throw; projection falls back gracefully");
+        ProcessStateView state = ProcessStateView.empty()
+                .apply(new ProcessEvent(
+                        "pi-99", "order_proc", "task-a", "token-a", "corr-99",
+                        Map.of(), null, null,
+                        ProcessEvent.EventType.ACTIVITY_ENTERED, "v1", "ORD-99",
+                        "not-a-timestamp"
+                ))
+                .apply(new ProcessEvent(
+                        "pi-99", "order_proc", "task-a", "token-a", "corr-99",
+                        Map.of(), ProcessEvent.Status.COMPLETED, null,
+                        ProcessEvent.EventType.ACTIVITY_COMPLETED, "v1", "ORD-99",
+                        "also-bad"
+                ));
+
+        // No exception is thrown; malformed timestamps fall back to a valid instant,
+        // so a (non-negative) duration is still recorded.
+        assertNotNull(state);
+        assertTrue(state.activityDurationsMs().containsKey("task-a"));
+        assertTrue(state.activityDurationsMs().get("task-a") >= 0);
+    }
 }

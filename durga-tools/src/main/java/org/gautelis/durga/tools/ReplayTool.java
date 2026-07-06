@@ -52,9 +52,9 @@ public final class ReplayTool {
 
         String command = args[0];
         String bootstrap = resolveArg(args, "--bootstrap", "KAFKA_BOOTSTRAP_SERVERS", "localhost:9094");
-        long timeoutSeconds = Long.parseLong(resolveArg(args, "--timeout", null, "60"));
 
         try {
+            long timeoutSeconds = parseLongArg(resolveArg(args, "--timeout", null, "60"), "--timeout");
             switch (command) {
                 case "replay-dlq" -> {
                     if (args.length < 2) {
@@ -71,9 +71,9 @@ public final class ReplayTool {
                         System.exit(1);
                     }
                     String topic = args[1];
-                    int partition = Integer.parseInt(args[2]);
-                    long fromOffset = Long.parseLong(args[3]);
-                    long toOffset = Long.parseLong(args[4]);
+                    int partition = (int) parseLongArg(args[2], "partition");
+                    long fromOffset = parseLongArg(args[3], "from-offset");
+                    long toOffset = parseLongArg(args[4], "to-offset");
                     boolean dryRun = hasFlag(args, "--dry-run");
                     replayOffset(bootstrap, topic, partition, fromOffset, toOffset, timeoutSeconds, dryRun);
                 }
@@ -339,6 +339,14 @@ public final class ReplayTool {
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "50");
         return props;
+    }
+
+    private static long parseLongArg(String value, String name) {
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid numeric value for " + name + ": '" + value + "'");
+        }
     }
 
     private static String resolveArg(String[] args, String flag, String envVar, String defaultValue) {

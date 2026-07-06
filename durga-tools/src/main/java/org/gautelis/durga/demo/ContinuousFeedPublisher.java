@@ -37,12 +37,12 @@ public final class ContinuousFeedPublisher {
                 : System.getenv().getOrDefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9094");
         String processId = args.length > 1 ? args[1]
                 : System.getenv().getOrDefault("FEED_PROCESS_ID", "invoice_receipt");
-        long intervalMs = Long.parseLong(args.length > 2 ? args[2]
-                : System.getenv().getOrDefault("FEED_INTERVAL_MS", "1000"));
+        long intervalMs = DemoArgs.parseLong(args.length > 2 ? args[2]
+                : System.getenv().getOrDefault("FEED_INTERVAL_MS", "1000"), 1000L, "interval-ms");
         String bpmnDir = args.length > 3 ? args[3]
                 : System.getenv().getOrDefault("BPMN_DIR", "durga-tools/src/test/resources/bpmn");
-        long maxCount = Long.parseLong(args.length > 4 ? args[4]
-                : System.getenv().getOrDefault("FEED_COUNT", "-1"));
+        long maxCount = DemoArgs.parseLong(args.length > 4 ? args[4]
+                : System.getenv().getOrDefault("FEED_COUNT", "-1"), -1L, "count");
 
         List<String> activities = resolveActivities(processId, bpmnDir);
         if (activities.isEmpty()) {

@@ -89,7 +89,11 @@ public final class JsonSchemaValidator implements Plugin {
 
     private String validatePayload(String payload, String schemaConfig) throws Exception {
         JsonNode input = mapper.readTree(payload);
-        if (schemaConfig != null && !schemaConfig.isBlank() && !schemaConfig.trim().startsWith("{")) {
+        if (schemaConfig == null || schemaConfig.isBlank()) {
+            // No schema configured: nothing to validate against, treat as valid.
+            return null;
+        }
+        if (!schemaConfig.trim().startsWith("{")) {
             return validateCompactConfig(input, schemaConfig);
         }
         JsonNode schemaNode = mapper.readTree(schemaConfig);

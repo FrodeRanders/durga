@@ -212,4 +212,13 @@ public class JsonSchemaValidatorTest {
         PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"name\":\"Alice\"}"), config);
         assertTrue(result.isSuccess());
     }
+
+    @Test
+    public void shouldTreatBlankConfigAsNoValidation() throws Exception {
+        System.out.println("TC: blank config performs no validation and returns the payload unchanged");
+        byte[] result = validator.execute(Plugin.toBytes("{\"name\":\"Alice\"}"), "");
+        assertEquals("{\"name\":\"Alice\"}", Plugin.toString(result));
+        PluginResult structured = validator.executeWithResult(Plugin.toBytes("{\"x\":1}"), "   ");
+        assertTrue(structured.isSuccess());
+    }
 }

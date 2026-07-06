@@ -115,11 +115,11 @@ public final class RegexExtract implements Plugin {
             target = root;
         }
 
-        Matcher groupMatcher = Pattern.compile("\\(\\?<(\\w+)>").matcher(matcher.pattern().pattern());
-        java.util.Set<String> groupNames = new java.util.LinkedHashSet<>();
-        while (groupMatcher.find()) {
-            groupNames.add(groupMatcher.group(1));
-        }
+        // Iterate named groups in pattern order (ascending group index) for deterministic output.
+        java.util.List<String> groupNames = matcher.pattern().namedGroups().entrySet().stream()
+                .sorted(java.util.Map.Entry.comparingByValue())
+                .map(java.util.Map.Entry::getKey)
+                .toList();
 
         for (String name : groupNames) {
             try {

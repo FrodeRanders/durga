@@ -429,15 +429,19 @@ public final class FaultDetectionTopology {
     }
 
     static AlarmEvent newAlarm(AlarmConfig config, ProcessEvent event, String now, int count) {
-        String msg = config.message()
-                .replace("${processId}", event.processId())
-                .replace("${activityId}", event.activityId() != null ? event.activityId() : "*")
-                .replace("${processInstanceId}", event.processInstanceId())
+        String processId = event.processId() != null ? event.processId() : "unknown";
+        String activityId = event.activityId() != null ? event.activityId() : "*";
+        String processInstanceId = event.processInstanceId() != null ? event.processInstanceId() : "unknown";
+        String template = config.message() != null ? config.message() : "";
+        String msg = template
+                .replace("${processId}", processId)
+                .replace("${activityId}", activityId)
+                .replace("${processInstanceId}", processInstanceId)
                 .replace("${count}", String.valueOf(count));
         return new AlarmEvent(
                 config.id() + "-" + UUID.randomUUID().toString().substring(0, 8),
                 config.id(), config.syndrome(), config.severity(), msg,
-                event.processId(), event.processInstanceId(), event.activityId(),
+                processId, processInstanceId, activityId,
                 event.eventType(), now, count,
                 config.syndrome() == AlarmSyndrome.HARD_ERROR ? 0 : config.threshold());
     }

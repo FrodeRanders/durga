@@ -122,7 +122,10 @@ public class ProcessStateStore implements AutoCloseable {
      */
     @Override
     public void close() {
-        producer.close();
-        consumer.close();
+        try {
+            producer.close();
+        } finally {
+            consumer.close();
+        }
     }
 }
