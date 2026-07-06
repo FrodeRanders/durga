@@ -36,6 +36,44 @@ Consistent names make it easier to:
 \item debug routing and completion behavior quickly.
 \end{itemize}
 
+\subsection{Normalization and transliteration}
+\label{sec:NameNormalization}
+
+Process ids and element names become both Kafka topic segments and generated Java
+identifiers, so they are normalized to a stable ASCII slug (\texttt{[a-z0-9\_]}) by
+the shared \texttt{org.gautelis.durga.NameNormalizer}. The monitor uses the same
+class when it re-derives ids from a registered model, so lifecycle events and
+alarm/SLA configurations always agree.
+
+Normalization is: transliterate to ASCII, lowercase, collapse any run of other
+characters to a single underscore, and trim leading/trailing underscores.
+Transliteration is not lossy dropping --- accented Latin letters are mapped to a
+sensible ASCII equivalent. Swedish \texttt{å}/\texttt{ä}/\texttt{Å}/\texttt{Ä}
+become \texttt{a}/\texttt{A} and \texttt{ö}/\texttt{Ö} become \texttt{o}/\texttt{O}
+(via Unicode NFD decomposition), and a small table covers letters that do not
+decompose (\texttt{ø}$\to$\texttt{o}, \texttt{æ}$\to$\texttt{ae},
+\texttt{ß}$\to$\texttt{ss}, \texttt{þ}$\to$\texttt{th}, \texttt{ð}$\to$\texttt{d},
+\texttt{ł}$\to$\texttt{l}, \dots). For example, a process named
+\texttt{\"Aterk\"op} yields id \texttt{aterkop}, topic
+\texttt{process-events-aterkop}, and starter class \texttt{AterkopStarter}; a task
+\texttt{Registrera \"arende} yields class \texttt{RegistreraArendeWorkerService}.
+
+\subsection{Scaffold-time validation}
+
+Because a broken or ambiguous id would produce invalid Java or colliding topics,
+the scaffolder validates all names before generating and \textbf{aborts} (with a
+message on standard error) when any of these hold:
+\begin{itemize}
+\item an id or name has no usable ASCII letters/digits after transliteration
+(e.g. an all-CJK id) and cannot yield an identifier,
+\item a normalized name starts with a digit (not a valid Java identifier),
+\item a normalized name is a Java reserved word,
+\item two distinct names normalize to the same slug (they would share generated
+classes and topics).
+\end{itemize}
+A non-fatal warning is emitted whenever a name was transliterated, so the drift
+from the source model is visible.
+
 \subsection{Practical guidance}
 
 For the cleanest generated output, BPMN ids should be stable, readable and
@@ -44,4 +82,6 @@ generated Kafka and Java output becomes harder to read as well.
 
 If the BPMN tool changes element identifiers between edits, pin the process
 id with \texttt{--process-id <id>} to keep topic names, consumer groups,
-and class names stable across regenerations.
+and class names stable across regenerations. The monitor registers each model
+under this effective id, so alarm and SLA configurations extracted from the model
+are scoped to the same id the running workers use.

@@ -95,6 +95,9 @@ Custom activity round-trip example. A ServiceTask annotated with \texttt{camunda
 \filepath{e2e_pipeline.bpmn} &
 End-to-end pipeline fixture combining category-specific plugin tasks (\texttt{json-transform}, \texttt{type-coercer}, \texttt{field-router}, \texttt{kv-enricher}, \texttt{json-schema-validator}, \texttt{window-counter}) with an XOR gateway on the \texttt{amount} field and embedded alarm configurations. Drives the end-to-end integration test. \\
 \hline
+\filepath{svenskt_aterkop.bpmn} &
+Non-ASCII naming coverage. Uses a Swedish process id (\texttt{\"aterk\"op}) and task names (\texttt{Registrera \"arende}, \texttt{Bed\"om \"aterk\"op}); verifies that transliteration produces valid ASCII topics and Java class names (Section~\ref{sec:NameNormalization}). \\
+\hline
 \end{longtable}
 
 Taken together, the sample set functions as a compact executable coverage matrix. When a new BPMN function

@@ -127,6 +127,28 @@ public class BpmnScaffolder {
         if (eventsTopic == null || eventsTopic.isBlank()) {
             eventsTopic = "process-events-" + processId;
         }
+
+        String rawProcessSource = parsed.processIdOverride != null
+                ? parsed.processIdOverride
+                : (process.getId() != null ? process.getId() : "process");
+        List<NameValidation.Issue> nameIssues = NameValidation.validate(model, rawProcessSource);
+        for (NameValidation.Issue issue : nameIssues) {
+            if (issue.severity() == NameValidation.Severity.WARNING) {
+                System.err.println("Name check (warning): " + issue.message());
+                LOG.warn("Name check: {}", issue.message());
+            }
+        }
+        if (NameValidation.hasErrors(nameIssues)) {
+            for (NameValidation.Issue issue : nameIssues) {
+                if (issue.severity() == NameValidation.Severity.ERROR) {
+                    System.err.println("Name check (error): " + issue.message());
+                    LOG.error("Name check: {}", issue.message());
+                }
+            }
+            System.err.println("Aborting: BPMN names do not yield valid identifiers/topics. "
+                    + "Rename the offending elements or pass --process-id with a valid id.");
+            System.exit(1);
+        }
         Map<String, NodeInfo> nodes = new LinkedHashMap<>();
         Map<String, List<FlowInfo>> flowsBySource = new LinkedHashMap<>();
         List<EventSubProcessSpec> eventSubProcessSpecs = BpmnModelCollector.collectEventSubProcessSpecs(model, nodes);

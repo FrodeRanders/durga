@@ -14,7 +14,7 @@ Three layers:
   syntactically and semantically correct.
 \end{itemize}
 
-The verification set spans 25 BPMN fixtures covering:
+The verification set spans 26 BPMN fixtures covering:
 \begin{itemize}
 \item message and signal events,
 \item timers and boundaries,
@@ -93,7 +93,7 @@ fold-up, severity preservation, late older events, and topology construction.
 \subsection{CI pipeline}
 
 The non-Docker verification command \texttt{mvn test -Dtest='!*IntegrationTest'}
-currently runs 341 tests (durga-runtime 209, durga-tools 57, durga-monitor 75).
+currently runs 355 tests (durga-runtime 215, durga-tools 63, durga-monitor 77).
 Docker-backed integration tests are suffixed
 \texttt{IntegrationTest} and are run separately for release gates.
 

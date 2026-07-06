@@ -381,4 +381,71 @@ public class BpmnAlarmConfigParserTest {
         assertEquals(Duration.ofSeconds(60), c.windowDuration());
         assertEquals(AlarmSeverity.CRITICAL, c.severity());
     }
+
+    @Test
+    public void shouldTransliterateSwedishProcessAndActivityIds() {
+        System.out.println("TC: Swedish ids in the model are transliterated the same way generated events are");
+
+        String bpmn = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                                  targetNamespace="http://example.com">
+                  <bpmn:process id="återköp" name="Återköpsflöde" isExecutable="true">
+                    <bpmn:serviceTask id="st" name="Bedöm återköp">
+                      <bpmn:extensionElements>
+                        <camunda:properties>
+                          <camunda:property name="durga:alarm:sla:syndrome" value="SLA_LATENCY" />
+                          <camunda:property name="durga:alarm:sla:maxLatencyMs" value="2000" />
+                          <camunda:property name="durga:alarm:sla:severity" value="WARN" />
+                          <camunda:property name="durga:alarm:sla:message" value="${activityId} slow" />
+                        </camunda:properties>
+                      </bpmn:extensionElements>
+                    </bpmn:serviceTask>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        List<AlarmConfig> configs = BpmnAlarmConfigParser.parse(bpmn);
+        assertEquals(1, configs.size());
+
+        AlarmConfig c = configs.get(0);
+        assertEquals("aterkop:sla", c.id());
+        assertEquals("aterkop", c.processId());
+        assertEquals("bedom_aterkop", c.activityId());
+        assertEquals(AlarmSyndrome.SLA_LATENCY, c.syndrome());
+    }
+
+    @Test
+    public void shouldUseProcessIdOverrideForConfigScope() {
+        System.out.println("TC: parse honors a process-id override so configs align with --process-id events");
+
+        String bpmn = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                                  targetNamespace="http://example.com">
+                  <bpmn:process id="model_internal_id" isExecutable="true">
+                    <bpmn:serviceTask id="task_a" name="Task A">
+                      <bpmn:extensionElements>
+                        <camunda:properties>
+                          <camunda:property name="durga:alarm:fail:syndrome" value="HARD_ERROR" />
+                          <camunda:property name="durga:alarm:fail:eventType" value="ACTIVITY_ESCALATED" />
+                          <camunda:property name="durga:alarm:fail:severity" value="CRITICAL" />
+                          <camunda:property name="durga:alarm:fail:message" value="failed in ${processId}" />
+                        </camunda:properties>
+                      </bpmn:extensionElements>
+                    </bpmn:serviceTask>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        List<AlarmConfig> configs = BpmnAlarmConfigParser.parse(bpmn, "deployed_name");
+        assertEquals(1, configs.size());
+
+        AlarmConfig c = configs.get(0);
+        assertEquals("deployed_name", c.processId());
+        assertEquals("deployed_name:fail", c.id());
+        assertTrue(c.message().contains("deployed_name"));
+    }
 }

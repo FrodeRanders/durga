@@ -456,7 +456,10 @@ public final class FaultDetectionTopology {
             String bpmnXml = record.value();
             if (processId == null || bpmnXml == null || bpmnXml.isBlank()) return;
 
-            List<AlarmConfig> configs = BpmnAlarmConfigParser.parse(bpmnXml);
+            // The registration key is the effective process id used by generated lifecycle
+            // events (including any --process-id override), so parse configs against it to keep
+            // alarm/SLA scoping aligned with the events.
+            List<AlarmConfig> configs = BpmnAlarmConfigParser.parse(bpmnXml, processId);
             if (configs.isEmpty()) {
                 configStore.delete(processId);
             } else {

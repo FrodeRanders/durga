@@ -67,10 +67,7 @@ class BpmnModelCollector {
         if (value == null || value.isBlank()) {
             return "unnamed";
         }
-        String normalized = value.toLowerCase(Locale.ROOT)
-                .replaceAll("[^a-z0-9]+", "_")
-                .replaceAll("^_+", "")
-                .replaceAll("_+$", "");
+        String normalized = org.gautelis.durga.NameNormalizer.slug(value);
         return normalized.isBlank() ? "unnamed" : normalized;
     }
 
@@ -85,16 +82,8 @@ class BpmnModelCollector {
     }
 
     static String toClassName(String value) {
-        String[] parts = normalize(value).split("_");
-        StringBuilder builder = new StringBuilder();
-        for (String part : parts) {
-            if (part.isBlank()) {
-                continue;
-            }
-            builder.append(part.substring(0, 1).toUpperCase(Locale.ROOT))
-                    .append(part.substring(1));
-        }
-        return builder.isEmpty() ? "Unnamed" : builder.toString();
+        String className = org.gautelis.durga.NameNormalizer.toClassName(value);
+        return className.isEmpty() ? "Unnamed" : className;
     }
 
     // ---- task collection ----

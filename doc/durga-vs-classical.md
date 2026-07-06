@@ -152,10 +152,10 @@ Camunda Modeler and regenerate.
 
 ### 5. "Who's using this? Is it proven?"
 
-Durga is at v0.1.0. It compiles 25 BPMN test fixtures covering the
+Durga is at v0.1.0. It compiles 26 BPMN test fixtures covering the
 full BPMN execution subset (tasks, gateways, timers, boundary events,
 subprocesses, call activities, message/signal events, and data pipeline
-plugins). The non-Docker verification suite currently runs 341 tests,
+plugins). The non-Docker verification suite currently runs 355 tests,
 including compilation checks that
 verifies generated projects actually compile against their dependencies.
 The generated projects run on Quarkus + Kafka.

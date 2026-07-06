@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://example.com/bpmn">
+  <process id="återköp" name="Återköpsflöde" isExecutable="true">
+    <startEvent id="start" name="Ärende mottaget" />
+    <sequenceFlow id="flow_start_to_registrera" sourceRef="start" targetRef="registrera_arende" />
+    <serviceTask id="registrera_arende" name="Registrera ärende" />
+    <sequenceFlow id="flow_registrera_to_bedom" sourceRef="registrera_arende" targetRef="bedom_aterkop" />
+    <userTask id="bedom_aterkop" name="Bedöm återköp" />
+    <sequenceFlow id="flow_bedom_to_meddela" sourceRef="bedom_aterkop" targetRef="meddela_kund" />
+    <serviceTask id="meddela_kund" name="Meddela kund" />
+    <sequenceFlow id="flow_meddela_to_end" sourceRef="meddela_kund" targetRef="end_klar" />
+    <endEvent id="end_klar" name="Ärende avslutat" />
+  </process>
+</definitions>

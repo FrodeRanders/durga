@@ -74,6 +74,21 @@ public final class BpmnAlarmConfigParser {
      * @return list of {@link AlarmConfig}, may be empty
      */
     public static List<AlarmConfig> parse(String bpmnXml) {
+        return parse(bpmnXml, null);
+    }
+
+    /**
+     * Parses a BPMN XML string and extracts all alarm configurations, using an explicit
+     * process id when supplied.
+     *
+     * @param bpmnXml            raw BPMN 2.0 XML
+     * @param processIdOverride  effective process id (e.g. the {@code process-models}
+     *                           registration key, which reflects any {@code --process-id}
+     *                           override used at scaffold time); when null/blank the model's
+     *                           own {@code <process id>} is used
+     * @return list of {@link AlarmConfig}, may be empty
+     */
+    public static List<AlarmConfig> parse(String bpmnXml, String processIdOverride) {
         List<AlarmConfig> configs = new ArrayList<>();
         BpmnModelInstance model;
         try {
@@ -86,7 +101,9 @@ public final class BpmnAlarmConfigParser {
         Process process = model.getModelElementsByType(Process.class).stream().findFirst().orElse(null);
         if (process == null) return configs;
 
-        String processId = normalizeId(process.getId());
+        String processId = processIdOverride != null && !processIdOverride.isBlank()
+                ? normalizeId(processIdOverride)
+                : normalizeId(process.getId());
 
         // collect activity-level and process-level properties
         Map<String, Map<String, String>> activityProps = new LinkedHashMap<>(); // activityId → props
@@ -275,10 +292,7 @@ public final class BpmnAlarmConfigParser {
     }
 
     private static String normalizeId(String id) {
-        if (id == null || id.isBlank()) return "";
-        return id.trim().toLowerCase(java.util.Locale.ROOT)
-                .replaceAll("[^a-z0-9]+", "_")
-                .replaceAll("^_+|_+$", "");
+        return org.gautelis.durga.NameNormalizer.slug(id);
     }
 
     private static String nameOrId(String name, String id) {

@@ -28,6 +28,24 @@ public class BpmnScaffolderTest {
     }
 
     @Test
+    public void dryRunTransliteratesSwedishNames() throws Exception {
+        System.out.println("TC: dry-run transliterates Swedish process/task names to ASCII identifiers and topics");
+        String output = runDryRun("src/test/resources/bpmn/svenskt_aterkop.bpmn");
+
+        // process id 'återköp' -> 'aterkop'
+        assertTrue(output.contains("Process: aterkop"));
+        // topics use the transliterated ASCII slug
+        assertTrue(output.contains("process-events-aterkop"));
+        assertTrue(output.contains("aterkop_registrera_arende_input"));
+        // generated Java classes are valid ASCII UpperCamelCase
+        assertTrue(output.contains("RegistreraArendeWorkerService"));
+        assertTrue(output.contains("BedomAterkopUserTaskService"));
+        assertTrue(output.contains("MeddelaKundWorkerService"));
+        // the transliteration is surfaced as a warning
+        assertTrue(output.contains("Name check (warning):"));
+    }
+
+    @Test
     public void dryRunIncludesMessageEventArtifacts() throws Exception {
         System.out.println("TC: dry-run generates message event catch/throw services and channel names");
         String output = runDryRun("src/test/resources/bpmn/invoice_message_exchange.bpmn");
