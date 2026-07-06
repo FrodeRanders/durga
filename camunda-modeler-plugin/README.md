@@ -60,7 +60,20 @@ This generates `dist/client.js` and bundles the plugin catalog from the reposito
 
 3. Restart Camunda Modeler.
 
-4. Verify: select any BPMN task element — the properties panel should show "Durga Plugin" and "Durga Alarm" groups.
+4. Verify: create or open a **Camunda 7 (Platform)** BPMN diagram and select any task
+   element — the properties panel should show **"Durga Plugin"**, **"Durga Alarm
+   (Activity)"**, and **"Durga SLA (Activity)"** groups.
+
+> **Camunda 7 vs Camunda 8:** Durga stores its settings as `camunda:*` extension
+> properties (the Camunda 7 / Platform moddle), so the plugin registers only with the
+> Platform BPMN editor. The Durga groups will **not** appear on a Camunda 8 (Cloud/Zeebe)
+> diagram — start a "Camunda 7" BPMN diagram instead.
+
+> **A greyed-out "Durga Pipeline Configuration" entry under the Plugins menu is normal.**
+> It is only an indicator that the plugin loaded; this plugin contributes properties-panel
+> groups, not a clickable menu action. If the entry is present but no Durga groups show when
+> a task is selected, confirm you are on a Camunda 7 diagram and that `dist/client.js` is the
+> current build.
 
 ### Rebuild after adding plugins
 
@@ -95,11 +108,20 @@ Available syndromes:
 | `SLIDING_WINDOW` | matching events in a window exceed threshold | `eventType`, `threshold`, `windowSeconds` |
 | `STUCK` | an active instance is idle longer than the timeout | `windowSeconds` (idle timeout) |
 | `CASCADE` | more instances stall within a window than the threshold | `threshold`, `windowSeconds` |
+| `SLA_LATENCY` | a task/process takes longer than the agreed maximum | `maxLatencyMs` |
+| `SLA_THROUGHPUT` | completions per window fall below the agreed minimum | `threshold` (min), `windowSeconds` |
 
 `STUCK` and `CASCADE` are absence-of-progress syndromes evaluated by the monitor's stall
 detector, so they do **not** require an `eventType`. The monitor also ships built-in `STUCK`
 and `CASCADE` defaults that apply with no configuration; a process-level config of the same
 syndrome overrides the built-in default for that scope.
+
+### Configuring performance SLAs
+
+1. On a task: expand **"Durga SLA (Activity)"** — choose `SLA_LATENCY` (set *Max latency (ms)*)
+   or `SLA_THROUGHPUT` (set *Min calls / window* and *Window (s)*).
+2. On the process (click empty canvas area): expand **"Durga Process SLA (end-to-end)"** for a
+   whole-process latency ceiling or completion-rate floor.
 
 ### Fields written
 

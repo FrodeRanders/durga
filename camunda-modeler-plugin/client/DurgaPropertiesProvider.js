@@ -2,7 +2,9 @@
 
 var is = require('bpmn-js/lib/util/ModelUtil').is;
 var getBusinessObject = require('bpmn-js/lib/util/ModelUtil').getBusinessObject;
-var propertiesPanel = require('@bpmn-io/properties-panel');
+// Use the Camunda Modeler host's live properties-panel instance (and its preact),
+// not a bundled copy — otherwise entries register but never render in the host panel.
+var propertiesPanel = require('camunda-modeler-plugin-helpers/vendor/@bpmn-io/properties-panel');
 
 var TextFieldEntry = propertiesPanel.TextFieldEntry;
 var TextAreaEntry = propertiesPanel.TextAreaEntry;
