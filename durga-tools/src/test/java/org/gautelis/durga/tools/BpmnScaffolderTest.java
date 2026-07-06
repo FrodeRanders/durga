@@ -614,6 +614,7 @@ public class BpmnScaffolderTest {
     }
 
     private static void runGeneratedMavenTest(Path outputDir) throws Exception {
+        ensureDurgaRuntimeInstalled();
         Process process = new ProcessBuilder("mvn", "-q", "test")
                 .directory(outputDir.toFile())
                 .redirectErrorStream(true)
@@ -632,6 +633,7 @@ public class BpmnScaffolderTest {
     }
 
     private static void runGeneratedMavenPackage(Path outputDir) throws Exception {
+        ensureDurgaRuntimeInstalled();
         Process process = new ProcessBuilder("mvn", "-q", "package")
                 .directory(outputDir.toFile())
                 .redirectErrorStream(true)
@@ -647,6 +649,51 @@ public class BpmnScaffolderTest {
                 0,
                 process.exitValue()
         );
+    }
+
+    private static volatile boolean durgaRuntimeInstalled = false;
+
+    /**
+     * Generated projects depend on {@code org.gautelis:durga-runtime} for the concrete plugin
+     * classes, so the spawned generated-project Maven builds must resolve that artifact from the
+     * local repository. A plain reactor {@code mvn test}/{@code verify} builds durga-runtime but
+     * never installs it, so these tests only pass on a warm {@code ~/.m2}. Install it once here so
+     * the tests are self-contained on a cold local repository (and in CI).
+     */
+    private static synchronized void ensureDurgaRuntimeInstalled() throws Exception {
+        if (durgaRuntimeInstalled) {
+            return;
+        }
+        Path repoRoot = findRepoRoot();
+        Process process = new ProcessBuilder(
+                "mvn", "-q", "-pl", "durga-runtime", "install",
+                "-DskipTests", "-Dcheckstyle.skip=true", "-Dspotbugs.skip=true", "-Djacoco.skip=true")
+                .directory(repoRoot.toFile())
+                .redirectErrorStream(true)
+                .start();
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        process.getInputStream().transferTo(captured);
+        boolean finished = process.waitFor(5, TimeUnit.MINUTES);
+        assertTrue("durga-runtime install timed out\n" + captured.toString(StandardCharsets.UTF_8), finished);
+        assertEquals(
+                "Failed to install durga-runtime to the local repository\n"
+                        + captured.toString(StandardCharsets.UTF_8),
+                0,
+                process.exitValue());
+        durgaRuntimeInstalled = true;
+    }
+
+    private static Path findRepoRoot() {
+        Path dir = Path.of("").toAbsolutePath();
+        for (int i = 0; i < 6 && dir != null; i++) {
+            if (Files.exists(dir.resolve("durga-runtime/pom.xml"))) {
+                return dir;
+            }
+            dir = dir.getParent();
+        }
+        throw new IllegalStateException(
+                "Could not locate the repository root (durga-runtime module) from "
+                        + Path.of("").toAbsolutePath());
     }
 
     private static String extractCustomHash(String bpmn) {
