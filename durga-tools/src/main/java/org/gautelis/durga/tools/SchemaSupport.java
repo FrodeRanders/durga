@@ -185,8 +185,7 @@ public final class SchemaSupport {
             return;
         }
 
-        for (var it = oldProps.fields(); it.hasNext(); ) {
-            Map.Entry<String, JsonNode> entry = it.next();
+        for (Map.Entry<String, JsonNode> entry : oldProps.properties()) {
             String field = entry.getKey();
             JsonNode oldProp = entry.getValue();
             JsonNode newProp = newProps.get(field);
