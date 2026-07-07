@@ -272,6 +272,27 @@
     // hidden by default and opt-in via this toggle (their count is always shown).
     let showEqual = $state(false)
 
+    // Remembers each comparison's expanded/collapsed state across polls (keyed by a stable id), so a
+    // 3s refresh does not reset the user's manual expand/collapse back to the DIFF/error default.
+    let openComparisons = $state({})
+
+    function cmpKey(r) {
+        return `${r.taskId ?? ''}:${r.processInstanceId ?? ''}:${r.activityId ?? ''}`
+    }
+
+    function isCmpOpen(r) {
+        const key = cmpKey(r)
+        if (key in openComparisons) return openComparisons[key]
+        return r.matchStatus === 'DIFF' || r.matchStatus === 'CANDIDATE_ERROR'
+    }
+
+    function onCmpToggle(r, event) {
+        const open = event.currentTarget.open
+        if (openComparisons[cmpKey(r)] !== open) {
+            openComparisons = {...openComparisons, [cmpKey(r)]: open}
+        }
+    }
+
     function validationResultRows() {
         const rows = [...s.validationResults]
             .filter((r) => showEqual || r.matchStatus !== 'EQUAL')
@@ -694,8 +715,8 @@
                                 </label>
                             </div>
                             {#if validationResultRows().length}
-                                {#each validationResultRows() as r}
-                                    <details class="cmp" open={r.matchStatus === 'DIFF' || r.matchStatus === 'CANDIDATE_ERROR'}>
+                                {#each validationResultRows() as r (cmpKey(r))}
+                                    <details class="cmp" open={isCmpOpen(r)} ontoggle={(e) => onCmpToggle(r, e)}>
                                         <summary>
                                             <span class="badge {validationStatusClass(r.matchStatus)}">{r.matchStatus}</span>
                                             <span class="mono">{r.processInstanceId}</span>
