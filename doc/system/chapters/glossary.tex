@@ -12,9 +12,11 @@
 \item[Process orchestrator] The generated runtime class that detects terminal flows and emits explicit completion for the enclosing process.
 \item[ProcessStateView] The repository's materialized per-instance monitoring projection.
 \item[Scope cancellation] The generated runtime behavior that suppresses or redirects normal flow after an interrupting boundary or interrupting event subprocess fires.
-\item[Validation mode] An opt-in mode (\texttt{--validation}) in which a candidate task implementation is run against real input on a dedicated consumer index with side effects suppressed, and its output is compared per task against the prior/production output (Section~\ref{sec:ValidationMode}).
-\item[Shadow worker] The generated validation-mode worker that consumes production input through a dedicated consumer group, runs the candidate implementation without side effects, and diverts its output to \texttt{validation-candidate-outputs} instead of the task output topic.
-\item[Candidate output] A \texttt{ValidationCandidateOutput} record emitted by a shadow worker, carrying the shared input and the candidate's output for comparison against production.
+\item[Validation mode] An opt-in mode (\texttt{--validation}) in which the whole process is generated as a complete shadow that reads the live production input on a dedicated consumer group, runs each plugin with a validation \texttt{PluginExecutionContext} (side effects suppressed), and writes to \texttt{-validation} topics, so its output is compared per task against the prior/production output (Section~\ref{sec:ValidationMode}).
+\item[Shadow process] The complete validation-mode process: it mirrors production but reads through a dedicated consumer group and writes only to \texttt{-validation} topics and the fixed \texttt{validation-events} topic, never to a real process topic.
+\item[Plugin execution context] The \texttt{PluginExecutionContext} passed to \texttt{executeWithResult}; \texttt{validationMode()} tells side-effecting plugins to suppress external effects while still returning the response they would have produced.
+\item[Validation events topic] The single fixed \texttt{validation-events} topic carrying every shadow's lifecycle events (all processes, both targets); the comparator's candidate source.
+\item[Activity throughput] The per-activity items-processed count materialized into \texttt{process-activity-throughput} and served at \texttt{/api/processes/\{id\}/throughput}.
 \item[Validation result] A \texttt{ValidationResult} record classifying one comparison as \texttt{EQUAL}, \texttt{DIFF}, \\ \texttt{PRIOR\_MISSING}, or \texttt{CANDIDATE\_ERROR}, with the located differences.
 \item[Scaffolder] The BPMN-driven generator entry point, implemented by:
 \begin{quote}

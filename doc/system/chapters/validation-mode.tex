@@ -3,69 +3,89 @@
 
 \subsection{Purpose}
 
-Validation mode runs a not-yet-released implementation of a process task against
-real input, alongside the current (or prior) version, and reports where the new
-version produces the same output and where it diverges. It answers a concrete
-release question: \emph{if I deploy this candidate task, what changes downstream?}
-Sometimes an identical input$\rightarrow$output is expected (a refactor); sometimes
-divergence is intended (a functional correction). Validation mode does not judge ---
-it produces the evidence and lets a human decide.
+Validation mode runs a not-yet-released implementation of a process against real
+input, alongside the current (or prior) version, and reports where the new version
+produces the same output and where it diverges. It answers a concrete release
+question: \emph{if I deploy this candidate, what changes downstream?} Sometimes an
+identical input$\rightarrow$output is expected (a refactor); sometimes divergence is
+intended (a functional correction). Validation mode does not judge --- it produces the
+evidence and lets a human decide.
 
-\subsection{Per-task isolation}
+\subsection{A complete shadow, not extra workers}
 
-Validation is handled \emph{per task}. Each candidate task is fed the production
-input \emph{for that task} --- the prior version's output of its predecessor --- not
-the candidate's own reworked output. Candidate outputs are therefore never chained
-together. A divergence introduced by a modified early task cannot cascade into and
-contaminate the comparison of later tasks: every task is compared in isolation
-against production for the identical shared input.
-
-\subsection{Shadow worker and the dedicated index}
-
-For each plugin task, scaffolding with \texttt{--validation} generates an additional
-\emph{shadow worker} beside the production worker. The shadow worker:
+\texttt{--validation} is a \emph{mode}, not an add-on. Scaffolding a model with
+\texttt{--validation} generates the \emph{whole} process again, wired differently ---
+not an additional shadow worker beside each production worker. The shadow process:
 \begin{itemize}
-\item consumes the same production input topic through a \emph{dedicated consumer
-  group} (\texttt{\%processId\%\_\\\%taskId\%\_validation}), so the production consumer
-  offset --- the current input index --- is never advanced or disturbed;
+\item \textbf{reads the same live production input} that the running process consumes,
+  through a \emph{dedicated consumer group} (\texttt{\%processId\%-validation} for the
+  Java target; \texttt{\%processId\%-\%taskId\%-validation} per worker for the Rust
+  target), so the production consumer offsets --- the current input index --- are never
+  advanced or disturbed;
 \item starts at \texttt{latest} by default (live-concurrent shadowing) and can be
   pointed at recent history via \texttt{DURGA\_VALIDATION\_OFFSET\_RESET} (a bounded
   replay near the tail --- not from the very beginning, since old input may not be
   representative);
-\item runs the candidate implementation with side effects suppressed;
-\item writes nothing to the task output topic, \texttt{process-events}, or the
-  dead-letter queue. Its output is diverted to the shared
-  \texttt{validation-candidate-outputs} topic as a \\ \texttt{ValidationCandidateOutput}
-  record carrying the shared input, the candidate output, disposition, idempotency
-  key, and any error.
+\item \textbf{writes nothing to a real process topic.} Each task's output is diverted to
+  a per-task \texttt{\%processId\%\_\%taskId\%\_output-validation} topic and its DLQ to
+  \texttt{\%processId\%\_\%taskId\%\_dlq-validation}; lifecycle events go to the fixed
+  \texttt{validation-events} topic instead of the live \texttt{process-events-\%processId\%};
+\item runs each plugin with side effects suppressed (Section~\ref{sec:ValidationMode}
+  below).
 \end{itemize}
 
-Live-concurrent and historic replay differ only in where the dedicated consumer
-starts; the matching mechanism is identical in both.
+\subsection{Per-task isolation}
+
+Validation is handled \emph{per task}. Each task in the shadow is fed the production
+input \emph{for its own position} in the chain --- the production predecessor's output
+topic --- not the shadow's own reworked output. Candidate outputs are therefore never
+chained together: a divergence introduced by a modified early task cannot cascade into
+and contaminate the comparison of later tasks. Every task is compared in isolation
+against production for the identical shared input. (The shadow's own inter-task
+\texttt{-validation} outputs are consequently unread --- they exist only so the shadow
+never writes to a real topic.)
 
 \subsection{Side-effect suppression}
 
-Because the shadow worker never publishes to the task output topic,
-\texttt{process-events}, or the DLQ, downstream tasks never observe a candidate
-result. For handle-aware (\texttt{materialize}) execution, \\
-\texttt{PluginExecutionSupport.executeSandboxed} runs the transform but writes no
-object to the store: it returns a synthetic handle whose content hash still reflects
-the real output, so the meaningful part stays comparable while volatile fields (uri,
-timestamps) are excluded by comparison ignore paths. Version~1 targets pure transform
-(plugin) tasks; tasks that perform their own external effects (send tasks, external
-calls, object-store writes inside a plugin body) are out of scope for validation and
-must not be shadowed.
+The generated worker calls the plugin with a
+\texttt{PluginExecutionContext}: \texttt{production()} in a normal build,
+\texttt{validation()} in a validation build. The single structured entry point is
+\texttt{PluginResult executeWithResult(byte[] payload, String config,
+PluginExecutionContext context)} (mirrored by \texttt{execute\_with\_result} in the Rust
+trait). Pure transforms ignore the context; plugins that perform substantial side
+effects override it to suppress them when \texttt{context.validationMode()} is true while
+still returning the response they \emph{would} have produced. For example
+\texttt{ObjectStoreCollector} computes and returns the handle it would have written but
+writes no object, marking the URI \texttt{validation:not-stored/\ldots}. For handle-aware
+(\texttt{materialize}) execution, \texttt{PluginExecutionSupport.executeSandboxed} runs
+the transform but writes no object to the store, returning a synthetic handle whose
+content hash still reflects the real output so volatile fields (uri, timestamps) can be
+excluded by comparison ignore paths.
 
 \subsection{Comparison and report}
 
-The monitor's \texttt{ValidationTopology} pairs each candidate output against the
-prior/production output for the same input --- the \texttt{ACTIVITY\_COMPLETED}
-lifecycle event --- keyed identically on
-\texttt{processId:\\activityId:processInstanceId}. The two sides are merged into a
-single aggregate so the comparison is robust to arrival order: in live mode the
-candidate may arrive before or after the production output. A candidate seen before
-any prior output yields \texttt{PRIOR\_MISSING}, superseded when the prior output
-later arrives.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.85\textwidth]{../images/monitoring-validation-report.png}
+\caption{Shadowing a production process with a proposed replacement, comparing function}
+\label{fig:ProcessValidation}
+\end{center}
+\end{figure}
+
+The monitor's \texttt{ValidationTopology} pairs each shadow task's
+\texttt{ACTIVITY\_COMPLETED} event (from the fixed \texttt{validation-events} topic)
+against the production \texttt{ACTIVITY\_COMPLETED} for the same input (from the
+per-process \texttt{process-events-*} streams, excluding validation), keyed identically
+on \texttt{processId:activityId:processInstanceId}. Both sides carry the same instance id
+(the shadow replays the same start records), so they join naturally; the merge is a
+single aggregate, robust to arrival order. A candidate seen before any prior output
+yields \texttt{PRIOR\_MISSING}, superseded when the prior output later arrives.
+
+The candidate side is a \emph{single fixed} topic rather than a per-process regex: a
+pattern-subscribed source feeding a repartition (the join/aggregate) cannot absorb a
+topic created \emph{after} the streams have started, which is exactly when a validation
+run begins. Routing every shadow's events to the fixed \texttt{validation-events} topic
+(created at monitor startup) keeps the comparator robust.
 
 Comparison is a structural, order-sensitive JSON diff (\texttt{JsonComparison}) with
 configurable \emph{ignore paths} (dot-notation, with \texttt{*} and \texttt{[*]}
@@ -88,13 +108,21 @@ Results are written to \texttt{validation-results} and materialized in the
 \subsection{Topics and naming}
 
 \begin{itemize}
-\item \texttt{\%processId\%\_\%taskId\%\_validation} --- dedicated consumer group for
-  the shadow worker (reads the production input topic).
-\item \texttt{validation-candidate-outputs} --- shared topic carrying candidate
-  outputs from every shadow worker (Java and Rust).
+\item dedicated consumer group --- \texttt{\%processId\%-validation} (Java) or
+  \texttt{\%processId\%-\%taskId\%-validation} (Rust) --- reading the live production
+  chaining topics;
+\item \texttt{\%processId\%\_\%taskId\%\_output-validation} and
+  \texttt{\%processId\%\_\%taskId\%\_dlq-validation} --- per-task shadow output and DLQ;
+\item \texttt{validation-events} --- the single fixed topic carrying every shadow's
+  lifecycle events (all processes, both targets), consumed by the comparator;
 \item \texttt{validation-results} --- comparison results, materialized in
   \texttt{validation-results-store}.
 \end{itemize}
+
+The \texttt{validation-events} topic does not begin with \texttt{process-events-}, so the
+main state and fault/alarm topologies (which subscribe to
+\texttt{process-events-(?!.*-validation).*}) never ingest shadow events: a running
+validation cannot trip phantom stuck/cascade alarms or pollute production state.
 
 \subsection{Reporting interfaces}
 
@@ -111,22 +139,23 @@ The monitor exposes the report under \texttt{/api/validation/}:
 
 The dashboard adds a \emph{Validation Report} panel to the per-process drill-down: a
 per-task summary table and, per instance, an expandable comparison showing the shared
-input, prior output, candidate output, and a highlighted diff table. Prometheus
-metrics \texttt{durga\_validation\_total}, \texttt{durga\_validation\_diff}, and
+input, prior output, candidate output, and a highlighted diff table. \texttt{EQUAL}
+comparisons (the common, uninformative case) are hidden by default and opt-in via a
+\emph{show equal} toggle; their count is always shown. Prometheus metrics
+\texttt{durga\_validation\_total}, \texttt{durga\_validation\_diff}, and
 \texttt{durga\_validation\_candidate\_error} are exported per
 \texttt{process\_id,task\_id} on \\ \texttt{/api/metrics}.
 
 \subsection{Java and Rust parity}
 
-Both code-generation targets emit shadow workers. The
-\texttt{ValidationCandidateOutput} wire record is byte-compatible across targets
-(camelCase fields matching the Java record), so a mixed Java/Rust fleet feeds the same
-\texttt{validation-candidate-outputs} topic and the same monitor comparator. The Rust
-runtime crate (\filepath{durga-rust}) provides the matching
-\texttt{ValidationCandidateOutput} type and a \texttt{plan\_validation\_output}
-function; generated Rust projects add a \texttt{\%taskId\%\_validation} binary per
-plugin task using \texttt{run\_validation\_worker} with the same dedicated-group and
-offset-reset behaviour.
+Both code-generation targets emit the same \texttt{ProcessEvent} lifecycle records to the
+same \texttt{validation-events} topic, and both chain tasks through \emph{identical}
+topics (Section~\ref{sec:RustTarget}). A shadow is therefore
+wire-interchangeable with production regardless of target: a Rust-generated shadow can
+validate a running Java process (and vice versa), task by task --- a convenient way to
+verify the two targets against each other. There is no separate candidate wire record and
+no separate validation binary: validation is the whole process, generated once and wired
+to the validation topics.
 
 \subsection{Comparison model summary}
 
@@ -139,7 +168,8 @@ offset-reset behaviour.
 \rowcolor[gray]{0.9}\textbf{Type} & \textbf{Role} \\
 \hline
 \endhead
-\texttt{ValidationCandidateOutput} & Shadow worker $\rightarrow$ comparator wire record: shared input, candidate output, disposition, error. \\
+\texttt{PluginExecutionContext} & Passed to the plugin; \texttt{validationMode()} tells side-effecting plugins to suppress external effects. \\
+\texttt{ProcessEvent} (on \texttt{validation-events}) & Shadow $\rightarrow$ comparator: the candidate task's \texttt{ACTIVITY\_COMPLETED} output for the shared input. \\
 \texttt{JsonComparison} & Structural JSON diff with ignore-path normalization. \\
 \texttt{ValidationResult} & Comparator $\rightarrow$ report record: outcome plus located differences and both payloads. \\
 \texttt{ValidationSummary} & Per-task aggregate counts surfaced to the API, dashboard, and metrics. \\

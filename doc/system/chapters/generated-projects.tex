@@ -29,13 +29,14 @@ in \texttt{<package>.probes},
 \item helper scripts for demos, inputs, completions, failures, escalations and observers.
 \end{itemize}
 
-When scaffolded with \texttt{--validation}, the output additionally contains a
-validation-mode shadow worker per plugin task
-(\texttt{\textit{Name}ValidationWorker.java}) and the
-\texttt{ValidationCandidateOutput} runtime contract, with the dedicated validation
-consumer group and the \texttt{validation-candidate-outputs} channel merged into
-\texttt{application.yml} and the validation topics added to the topic-creation
-script (Section~\ref{sec:ValidationMode}).
+When scaffolded with \texttt{--validation}, the output is instead the \emph{complete}
+process wired for validation: the workers read the live production topics through a
+dedicated consumer group (\texttt{\%processId\%-validation}), each task's output/DLQ are
+redirected to \texttt{-validation} topics, lifecycle events go to the fixed
+\texttt{validation-events} topic, and \texttt{application.yml} plus the topic-creation
+script are adjusted accordingly. The plugins run with a validation
+\texttt{PluginExecutionContext} so substantial side effects are suppressed
+(Section~\ref{sec:ValidationMode}).
 
 The BPMN model copy is kept alongside the source code and is the input to
 regeneration. During the build, \texttt{ModelEnricher} writes implementation

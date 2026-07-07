@@ -61,23 +61,28 @@ implementations.
 \begin{quote}
 \texttt{byte[] execute(byte[] payload, String config) throws Exception} \\
 \texttt{String execute(String payload, String config) throws Exception} \\
-\texttt{PluginResult executeWithResult(byte[] payload, String config) throws Exception} \\
+\texttt{PluginResult executeWithResult(byte[] payload, String config, PluginExecutionContext context) throws Exception} \\
 \texttt{String idempotencyKey(byte[] payload, String config)}
 \end{quote}
 
-The generated worker always calls \texttt{executeWithResult}. Its default
-implementation delegates to the \texttt{byte[]} overload and wraps the output in a
-\texttt{PluginResult} carrying a content-based idempotency key and the default
-\texttt{PAYLOAD} disposition. Text / JSON plugins override the \texttt{String}
-\texttt{execute} variant (UTF-8 conversion is handled by the \texttt{byte[]}
-default); binary plugins override the \texttt{byte[]} variant directly. Plugins
-that need an explicit idempotency strategy, a non-\texttt{PAYLOAD}
+The generated worker always calls \texttt{executeWithResult}, passing a
+\texttt{PluginExecutionContext} (\texttt{production()} in a normal build,
+\texttt{validation()} in a validation build --- see Section~\ref{sec:ValidationMode}).
+Its default implementation delegates to the \texttt{byte[]} overload and wraps the output
+in a \texttt{PluginResult} carrying a content-based idempotency key and the default
+\texttt{PAYLOAD} disposition, ignoring the context. Text / JSON plugins override the
+\texttt{String} \texttt{execute} variant (UTF-8 conversion is handled by the
+\texttt{byte[]} default); binary plugins override the \texttt{byte[]} variant directly.
+Plugins that need an explicit idempotency strategy, a non-\texttt{PAYLOAD}
 \texttt{OutputDisposition} (\texttt{PASSTHROUGH} for route/inspect control values,
-\texttt{SIDE\_EFFECT} for stored-object handles), or a non-exceptional error
-strategy (\texttt{ErrorStrategy.DLQ}, \texttt{SKIP}, or \texttt{FAIL}) override
+\texttt{SIDE\_EFFECT} for stored-object handles), a non-exceptional error strategy
+(\texttt{ErrorStrategy.DLQ}, \texttt{SKIP}, or \texttt{FAIL}), or that must suppress
+substantial side effects when \texttt{context.validationMode()} is true, override
 \texttt{executeWithResult} to return a structured \texttt{PluginResult}. For
 example, the JSON Schema Validator honours an \texttt{onInvalid=dlq|skip|fail}
-directive by returning the corresponding error strategy.
+directive by returning the corresponding error strategy, and
+\texttt{ObjectStoreCollector} skips the external write in validation mode while still
+returning the handle it would have produced.
 
 The generated worker inspects the returned \texttt{PluginResult.errorStrategy()}:
 \texttt{SKIP} acknowledges and drops the message, \texttt{DLQ} routes it to the

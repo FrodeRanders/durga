@@ -38,12 +38,19 @@ that records \\ \texttt{ACTIVITY\_ENTERED} timestamps in a persistent key-value 
 (\texttt{process-activity-entry-store}) and, on later completion or termination events,
 emits duration deltas. These deltas are aggregated into rolling \texttt{ActivityLatencyStats}
 per activity, then mapped to \texttt{ActivityLatencySummary} and output to
-\texttt{process-latency}.
+\texttt{process-latency}. Latency therefore requires an \texttt{ACTIVITY\_ENTERED}
+event paired with the completion; the generated workers emit \texttt{ACTIVITY\_ENTERED}
+before executing so plugin/data-pipeline tasks are measurable.
+\item[Activity throughput] Counts the terminal per-activity events
+(\texttt{ACTIVITY\_COMPLETED}, \texttt{ACTIVITY\_ESCALATED}, \texttt{GATEWAY\_TAKEN}) per
+\texttt{processId:activityId} into \texttt{ActivityThroughput} records (items processed),
+output to \texttt{process-activity-throughput}. Unlike latency, this needs no
+entry/exit pairing, so it reports throughput for tasks that emit only completions.
 \item[Trends] Filters to \texttt{PROCESS\_STARTED}, \texttt{PROCESS\_COMPLETED},
 and \texttt{PROCESS\_FAILED} events, maps them to hourly trend bucket keys,
 counts per bucket, and outputs \texttt{ProcessTrendPoint} records to
 \texttt{process-trends}. Materialized in \texttt{process-trends-store}.
-\item[Queryable replicas] Six \texttt{builder.globalTable()} calls consume the
+\item[Queryable replicas] Seven \texttt{builder.globalTable()} calls consume the
 output topics above plus \\ \texttt{process-models}, each materialized as a global table
 with a \texttt{-global-store} or \texttt{-store} suffix. These are full replicas on
 every monitoring instance and are what the query service reads.
@@ -54,7 +61,8 @@ models here on startup via \texttt{BpmnModelPublisher} or the generated
 \end{description}
 
 Fault detection and alarm state are deliberately separate stream topologies.
-\texttt{FaultDetectionTopology} consumes \texttt{process-events-.*} and
+\texttt{FaultDetectionTopology} consumes \texttt{process-events-(?!.*-validation).*}
+(production events only, never validation shadows) and
 \texttt{process-models}, evaluates BPMN alarm configuration, and emits
 \texttt{AlarmEvent} records to \texttt{fault-alarms}. \texttt{AlarmStateTopology}
 then consumes \texttt{fault-alarms} and folds repeated firings into
@@ -63,10 +71,14 @@ application runs these as separate \texttt{KafkaStreams} instances with separate
 application IDs and state directories.
 
 Validation mode adds a fourth separate topology. \texttt{ValidationTopology}
-merges candidate task outputs (\texttt{validation-candidate-outputs}) with the
-prior/production output (the \texttt{ACTIVITY\_COMPLETED} lifecycle event),
-keyed on \texttt{processId:activityId:processInstanceId}, and materializes a \\
-\texttt{ValidationResult} per task per instance in \texttt{validation-results-store}.
+merges the shadow's task completions (from the fixed \texttt{validation-events} topic)
+with the prior/production output (the \texttt{ACTIVITY\_COMPLETED} lifecycle event on
+the \texttt{process-events-*} streams), keyed on
+\texttt{processId:activityId:processInstanceId}, and materializes a \\
+\texttt{ValidationResult} per task per instance in \texttt{validation-results-store}. The
+candidate source is a single fixed topic (not a per-process regex) because a
+pattern-subscribed source feeding the join's repartition cannot absorb a topic created
+after the streams have started --- which is when a validation run begins.
 It runs as its own \texttt{KafkaStreams} instance and is described in
 Section~\ref{sec:ValidationMode}.
 

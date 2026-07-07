@@ -21,6 +21,7 @@ Endpoints (all under \texttt{/api/}):
 \item \texttt{/api/instances/\{instanceId\}} --- latest instance view,
 \item \texttt{/api/processes/\{processId\}/counts} --- process-specific state counts,
 \item \texttt{/api/processes/\{processId\}/latency} --- activity latency summaries,
+\item \texttt{/api/processes/\{processId\}/throughput} --- per-activity items-processed counts,
 \item \texttt{/api/processes/\{processId\}/trends} --- bucketed start/completion/failure history,
 \item \texttt{/api/counts} --- global state-count view,
 \item \texttt{/api/alarms} --- global active alarm-state view,
@@ -71,15 +72,23 @@ The base URL defaults to \texttt{http://localhost:8081}. Set
 
 \subsection{Dashboard}
 
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.85\textwidth]{../images/monitoring-selecting-process-2.png}
+\caption{Monitoring a process}
+\label{fig:ProcessMonitoring}
+\end{center}
+\end{figure}
+
 The Svelte SPA is built from \filepath{monitoring-ui/} and served directly
 from the monitoring backend. It shows:
 \begin{itemize}
 \item a process inventory with all known process IDs and aggregate KPIs,
 \item alarm KPIs and process-level alarm counts,
 \item per-process drill-down: state mix, lifecycle trends, activity latency, stuck instances, and alarm state,
-\item a validation report: per-task outcome counts and per-instance input/prior/candidate diffs when candidate tasks run in validation mode (see Section~\ref{sec:ValidationMode}),
+\item a validation report: per-task outcome counts and per-instance input/prior/candidate diffs when a candidate runs in validation mode; \texttt{EQUAL} comparisons are hidden by default (opt-in via a \emph{show equal} toggle) and expand/collapse state persists across the poll refresh (see Section~\ref{sec:ValidationMode}),
 \item instance detail lookup with latest alarm details,
-\item a BPMN diagram viewer with color-coded activity overlays (alarms, latency, and state).
+\item a BPMN diagram viewer whose per-task overlays show aggregate statistics --- items processed and latency (avg/p95) --- with any active alarm layered on top (driving the colour), rather than a single execution's state.
 \end{itemize}
 
 The diagram viewer uses \texttt{bpmn-js} with built-in zoom (scroll wheel),
@@ -88,6 +97,14 @@ pan (grab tool), and fit-to-viewport controls.
 The monitoring SPA is served from the same Quarkus HTTP server that hosts the
 REST API. It polls \texttt{/api/*} endpoints and renders an interactive
 dashboard with a BPMN diagram viewer.
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.85\textwidth]{../images/monitoring-process-diagram.png}
+\caption{Getting an overview of process performance}
+\label{fig:ProcessPerformance}
+\end{center}
+\end{figure}
 
 \subsection{How the interfaces fit together}
 

@@ -1,5 +1,50 @@
 # Changes
 
+## [Unreleased] — 2026-07-07
+
+### Validation mode redesign (supersedes the 2026-07-06 entry below)
+- `--validation` now generates the **complete process as a shadow**, not additive
+  shadow workers beside production. The shadow reads the **live production topics**
+  through a dedicated consumer group (`{processId}-validation`), writes each task's
+  output/DLQ to `-validation` topics, and emits lifecycle events to a single fixed
+  **`validation-events`** topic — never to a real process topic
+- Side-effect suppression is now explicit: a single
+  `executeWithResult(payload, config, PluginExecutionContext)` method (the 2-arg form
+  was removed; mirrored by `execute_with_result` in the Rust trait). Side-effecting
+  plugins (e.g. `ObjectStoreCollector`) suppress external writes when
+  `context.validationMode()` is true while still returning the response they would have
+  produced. **Retired** `ValidationCandidateOutput` and `validation-candidate-outputs`
+- Generated workers emit `ACTIVITY_ENTERED` before executing, so per-task latency is
+  measurable for plugin/data-pipeline tasks
+- `ValidationTopology` compares the shadow's `ACTIVITY_COMPLETED` (fixed
+  `validation-events` topic) against production per `processId:activityId:instance`.
+  A fixed candidate source avoids the Kafka Streams "topic unknown to the topology"
+  crash that a pattern-subscribed comparator hits when a per-process validation topic
+  appears after startup
+- `FaultDetectionTopology` and the main topology exclude `process-events-*-validation`
+  (pattern `process-events-(?!.*-validation).*`), so a running shadow never trips
+  phantom stuck/cascade alarms or pollutes production state
+
+### Java/Rust interchangeability
+- The Rust target now uses the **same chaining-topic names as Java**
+  (`<task>_output`, gateway `<target>_input`, `<pid>_start`) instead of `<task>_in`,
+  making the two targets wire-interchangeable. A Rust shadow can validate a running
+  Java process (and vice versa), task by task
+
+### Monitoring
+- New per-activity **throughput** read model (`ActivityThroughput`,
+  `process-activity-throughput` store) and `GET /api/processes/{id}/throughput`
+- Diagram overlays show per-task **statistics** (items processed + avg/p95 latency)
+  with active alarms layered on top, instead of a single execution's state
+- Dashboard Validation Report hides `EQUAL` comparisons by default (opt-in toggle),
+  persists per-comparison expand/collapse across polls, and the bpmn.io watermark no
+  longer fills the diagram
+
+### Tooling & docs
+- `scripts/run-e2e-validation.sh` runs a validation shadow alongside `run-e2e-test.sh`
+- README and the LaTeX system manual updated to match (validation mode,
+  naming conventions, code-generation targets, plugin architecture, monitoring)
+
 ## [Unreleased] — 2026-07-06
 
 ### Validation mode

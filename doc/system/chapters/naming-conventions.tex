@@ -20,11 +20,18 @@ the monitor consumes the whole \filepath{process-events-*} family,
 \filepath{process-state}\\
 \filepath{process-state-counts}
 \end{quote}
-\item validation mode uses a dedicated consumer group
-\texttt{\%processId\%\_\%taskId\%\_validation} on the production input topic and the
-shared topics \filepath{validation-candidate-outputs} and \\ \filepath{validation-results}
-(Section~\ref{sec:ValidationMode}).
+\item validation mode reads the live production topics through a dedicated consumer
+group (\texttt{\%processId\%-validation}), diverts each task's output to
+\filepath{\%processId\%\_\%taskId\%\_output-validation}, and routes lifecycle events to
+the fixed shared topic \filepath{validation-events}; comparison results are materialized
+from \filepath{validation-results} (Section~\ref{sec:ValidationMode}).
 \end{itemize}
+
+\noindent Both code-generation targets use the \emph{same} intermediate-topic names ---
+a task consumes its predecessor's \filepath{\%processId\%\_\%predecessor\%\_output}, a
+routing gateway writes to each target's \filepath{\%processId\%\_\%target\%\_input}, and
+the first task consumes \filepath{\%processId\%\_start}. The Java and Rust targets are
+therefore wire-interchangeable on every topic.
 
 \subsection{Why this matters}
 

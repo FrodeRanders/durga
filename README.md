@@ -133,12 +133,21 @@ A Kafka Streams topology consumes per-process lifecycle events and materializes:
 - counts by state into `process-state-counts`
 - active-instance index into `process-active-state`
 - activity latency summaries into `process-latency`
+- per-activity throughput (items processed) into `process-activity-throughput`
 - coarse lifecycle trend buckets into `process-trends`
 - BPMN model cache into `process-models`
 
 Processes **self-register** by publishing their BPMN 2.0 XML to the
 `process-models` Kafka topic on startup. The monitor discovers processes
 from this registry — no pre-configured process ID list needed.
+
+The dashboard overlays each task in the **Process Diagram** with its aggregate
+statistics — items processed and latency (avg/p95) — and layers any active alarm
+on top (driving the colour), rather than showing a single execution's state. The
+lifecycle events that feed latency (`ACTIVITY_ENTERED`/`ACTIVITY_COMPLETED` pairs)
+are emitted by the generated workers. Validation events (`validation-events`) are
+excluded from the state and fault/alarm topologies so a running shadow never
+disturbs production monitoring.
 
 ## Validation mode
 
@@ -158,18 +167,19 @@ extra workers beside a functional process. A validation build:
   `DURGA_VALIDATION_OFFSET_RESET` for a bounded recent replay);
 - **writes nothing to the real process topics.** Every task output that would normally land on
   `{processId}_{taskId}_output` is diverted to a per-task validation topic
-  `{processId}_{taskId}_output-validation`, and lifecycle events go to `process-events-{processId}-validation`
-  instead of the live event topic;
+  `{processId}_{taskId}_output-validation`, and lifecycle events go to the fixed **`validation-events`**
+  topic (shared by all validated processes and every target) instead of the live `process-events-{processId}`;
 - **suppresses substantial side effects.** Tasks that would mutate the outside world (e.g. writing to
-  object storage) do not do so in validation mode — they only record the alternative response they
-  *would* have produced. Nothing outside the validation topics is modified.
+  object storage) do not do so in validation mode — the plugin runs with a validation
+  `PluginExecutionContext` and only records the alternative response it *would* have produced. Nothing
+  outside the validation topics is modified.
 
-Because each task writes its own validation topic keyed by input, the comparison is done **per task**:
-a change in an early task never contaminates the comparison of later ones. The monitor pairs each
-task's validation output against the live `{processId}_{taskId}_output` for the **same input** and
-classifies each comparison as `EQUAL`, `DIFF`, `PRIOR_MISSING`, or `CANDIDATE_ERROR` using a
-normalized JSON diff with configurable ignore-paths (`durga.validation.ignore.paths`). Results are
-exposed via:
+Because each task reads the live production input for its position and re-emits its result, the
+comparison is done **per task**: a change in an early task never contaminates the comparison of later
+ones. The monitor pairs each task's validation `ACTIVITY_COMPLETED` (from `validation-events`) against
+the live production `ACTIVITY_COMPLETED` for the **same input** and classifies each comparison as
+`EQUAL`, `DIFF`, `PRIOR_MISSING`, or `CANDIDATE_ERROR` using a normalized JSON diff with configurable
+ignore-paths (`durga.validation.ignore.paths`). Results are exposed via:
 
 - `GET /api/validation/summary?processId=<id>` — per-task outcome counts
 - `GET /api/validation/results?processId=&taskId=&status=` — individual comparisons
@@ -177,8 +187,12 @@ exposed via:
 - a **Validation Report** panel in the dashboard (per-task summary + per-instance
   input/prior/candidate diff), and `durga_validation_*` Prometheus metrics
 
-The validation wiring is applied for **both the Java and Rust targets**, so a candidate can be
-validated on either runtime and still be compared against a production process on either runtime.
+The validation wiring is applied for **both the Java and Rust targets**, and both targets chain tasks
+through **identical topics** (see [Code-generation targets](#code-generation-targets)), so a candidate
+can be validated on either runtime and compared against a production process on either runtime — e.g.
+a Rust shadow validating a running Java process, task by task. The
+[`scripts/run-e2e-validation.sh`](scripts/run-e2e-validation.sh) helper starts a validation shadow
+alongside a running `run-e2e-test.sh` feed.
 
 ### Full-stack dev demo (one command)
 
@@ -263,6 +277,7 @@ The API namespace also exposes:
 - `GET /api/instances/{processInstanceId}` — latest state view for one instance
 - `GET /api/processes/{processId}/counts` — state counts per process
 - `GET /api/processes/{processId}/latency` — per-activity latency summaries
+- `GET /api/processes/{processId}/throughput` — per-activity items-processed counts
 - `GET /api/processes/{processId}/trends` — lifecycle trend buckets
 - `GET /api/counts` — counts across all monitored processes
 - `GET /api/stuck?processId=<id>&olderThanSeconds=60` — stuck-instance detection

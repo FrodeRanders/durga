@@ -38,6 +38,12 @@ consumed by both:
   fields, SCREAMING\_SNAKE event types and statuses) is byte-compatible across
   targets, so the monitoring topology, alarm model, and dashboard treat
   Rust-generated tasks exactly as Java tasks.
+\item \textbf{Chaining topics} --- both targets use identical topic names: a task
+  consumes its predecessor's \texttt{\%processId\%\_\%predecessor\%\_output}, a routing
+  gateway writes to each target's \texttt{\%processId\%\_\%target\%\_input}, and the
+  first task consumes \texttt{\%processId\%\_start}. A Java and a Rust realisation of the
+  same model are therefore wire-interchangeable on every topic --- a mixed fleet works,
+  and a shadow of either target can validate a production of either target.
 \end{itemize}
 
 \subsection{The Rust plugin runtime (\texttt{durga-rust})}
@@ -56,9 +62,11 @@ dispatch defaults:
   plugins override this directly.
 \item \texttt{execute\_str(payload, config)} --- text / JSON entry point; text
   plugins override this. The default is unsupported, matching the Java default.
-\item \texttt{execute\_with\_result(payload, config)} --- the structured entry
-  point the generated worker calls; the default wraps \texttt{execute\_bytes} with
-  a content-based idempotency key and the \texttt{PAYLOAD} disposition.
+\item \texttt{execute\_with\_result(payload, config, context)} --- the structured
+  entry point the generated worker calls, carrying a \texttt{PluginExecutionContext};
+  the default wraps \texttt{execute\_bytes} with a content-based idempotency key and the
+  \texttt{PAYLOAD} disposition, ignoring the context. Side-effecting plugins override it
+  to suppress effects when \texttt{context.validation\_mode()} is true.
 \item \texttt{idempotency\_key(payload, config)} --- SHA-256 of payload then
   config, byte-identical to the Java default.
 \end{itemize}
@@ -69,33 +77,28 @@ dispatch defaults:
 the Java record, so routing and inspection plugins declare \texttt{PASSTHROUGH}
 and the generated worker preserves the payload identically on either target.
 
-\subsection{Validation shadow workers}
+\subsection{Validation shadows}
 
 Validation mode (Section~\ref{sec:ValidationMode}) is emitted on both targets. With
-\texttt{--validation}, each plugin task gains a shadow worker beside the production
-worker: the Java target generates a \texttt{\textit{Name}ValidationWorker} bean; the
-Rust target generates a \texttt{\%taskId\%\_validation} binary that calls
-\texttt{run\_validation\_worker}. Both consume the production input topic through a
-dedicated consumer group, suppress side effects, and emit a
-\texttt{ValidationCandidateOutput} to the shared \texttt{validation-candidate-outputs}
-topic. That record is byte-compatible across targets, so the same Java monitor
-comparator pairs Java- and Rust-produced candidates against production without
-distinction. The Rust crate provides the matching \\ \texttt{ValidationCandidateOutput}
-type and the pure \texttt{plan\_validation\_output} decision function, mirroring the
-Java \texttt{ValidationCandidateOutput} and the generated shadow-worker logic.
+\texttt{--validation} the scaffolder generates the \emph{whole} process again, wired to
+read the live production topics through a dedicated consumer group, suppress side effects
+(via the validation \texttt{PluginExecutionContext}), divert each task's output to a
+\texttt{-validation} topic, and emit lifecycle events to the fixed
+\texttt{validation-events} topic. There is no separate shadow-worker class or validation
+binary and no separate candidate wire record: both targets emit ordinary
+\texttt{ProcessEvent} records, and because their chaining topics are identical, a shadow
+of either target validates a production of either target.
 
 \subsection{Status}
 
 Implemented so far: the crate contracts (\texttt{Plugin}, \texttt{PluginResult},
-\texttt{ProcessEvent}, \\ \texttt{ValidationCandidateOutput}, dot-path field helpers),
-the pipeline plugin ports, the pure worker decision logic
-(\texttt{plan\_worker\_output}, \texttt{plan\_validation\_output}), the Rust worker /
-gateway / validation and project (\texttt{Cargo.toml}, \texttt{lib.rs},
+\texttt{PluginExecutionContext}, \texttt{ProcessEvent}, dot-path field helpers), the
+pipeline plugin ports, the pure worker decision logic (\texttt{plan\_worker\_output}),
+the Rust worker / gateway and project (\texttt{Cargo.toml}, \texttt{lib.rs},
 \texttt{build.rs}) templates, and the \texttt{-{}-target rust} switch in the CLI. Rust
 workers use a mature Kafka client (\texttt{rdkafka}) and an async runtime
 (\texttt{tokio}) for the same consume--transform--emit loop the plain-Kafka Java
 worker performs. Rust remains the less-mature target: it currently covers plugin
 tasks, custom-task stubs (with contract modules and \texttt{build.rs} entries),
-exclusive gateways, and validation-mode shadow workers in a
-start/tasks/gateways/end topology, and reports and
-skips unsupported constructs.
+exclusive gateways, and validation mode in a start/tasks/gateways/end topology, and
+reports and skips unsupported constructs.
