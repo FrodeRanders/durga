@@ -84,6 +84,7 @@ public class E2EPipelineIntegrationTest extends KafkaIntegrationTestBase {
                     new NewTopic(TOPICS.activeTopic(), 1, (short) 1),
                     new NewTopic(TOPICS.latencyTopic(), 1, (short) 1),
                     new NewTopic(TOPICS.trendsTopic(), 1, (short) 1),
+                    new NewTopic(TOPICS.throughputTopic(), 1, (short) 1),
                     new NewTopic(TOPICS.modelsTopic(), 1, (short) 1),
                     new NewTopic(VANNAK_TOPIC, 1, (short) 1)
             );
