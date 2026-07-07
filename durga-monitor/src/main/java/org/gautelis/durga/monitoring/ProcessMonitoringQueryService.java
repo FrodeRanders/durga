@@ -140,6 +140,26 @@ public final class ProcessMonitoringQueryService {
     }
 
     /**
+     * Returns per-activity throughput (items processed) for one process definition.
+     *
+     * @param processId process definition identifier
+     * @return throughput rows ordered by activity id
+     */
+    public List<ActivityThroughput> throughputForProcess(String processId) {
+        List<ActivityThroughput> results = new ArrayList<>();
+        try (KeyValueIterator<String, ActivityThroughput> iterator = throughputStore().all()) {
+            while (iterator.hasNext()) {
+                ActivityThroughput row = iterator.next().value;
+                if (row != null && processId.equals(row.processId())) {
+                    results.add(row);
+                }
+            }
+        }
+        results.sort(Comparator.comparing(ActivityThroughput::activityId));
+        return results;
+    }
+
+    /**
      * Finds active instances older than the supplied threshold.
      *
      * @param processId optional process definition filter, or {@code null} for all processes
@@ -230,6 +250,15 @@ public final class ProcessMonitoringQueryService {
         return streams.store(
                 StoreQueryParameters.fromNameAndType(
                         topics.trendsStore(),
+                        QueryableStoreTypes.keyValueStore()
+                )
+        );
+    }
+
+    private ReadOnlyKeyValueStore<String, ActivityThroughput> throughputStore() {
+        return streams.store(
+                StoreQueryParameters.fromNameAndType(
+                        topics.throughputStore(),
                         QueryableStoreTypes.keyValueStore()
                 )
         );

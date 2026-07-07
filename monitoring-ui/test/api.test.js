@@ -21,7 +21,8 @@ test('dashboardRequestPaths URL-encodes process id and threshold', () => {
     '/api/processes/invoice%20review%2F2026/alarms',
     '/api/processes/invoice%20review%2F2026/latency',
     '/api/stuck?processId=invoice%20review%2F2026&olderThanSeconds=30',
-    '/api/processes/invoice%20review%2F2026/trends'
+    '/api/processes/invoice%20review%2F2026/trends',
+    '/api/processes/invoice%20review%2F2026/throughput'
   ])
 })
 
@@ -69,7 +70,8 @@ test('normalizeDashboardResponses defaults missing collections to arrays', () =>
     { body: [{ processId: 'invoice', severity: 'CRITICAL', fireCount: 2 }] },
     { body: [{ activityId: 'review', sampleCount: 1 }] },
     {},
-    { body: 'not an array' }
+    { body: 'not an array' },
+    { body: [{ processId: 'invoice', activityId: 'review', count: 9 }] }
   ])
 
   assert.deepEqual(normalized, {
@@ -80,6 +82,7 @@ test('normalizeDashboardResponses defaults missing collections to arrays', () =>
     alarms: [{ processId: 'invoice', severity: 'CRITICAL', fireCount: 2 }],
     latency: [{ activityId: 'review', sampleCount: 1 }],
     stuck: [],
-    trends: []
+    trends: [],
+    throughput: [{ processId: 'invoice', activityId: 'review', count: 9 }]
   })
 })

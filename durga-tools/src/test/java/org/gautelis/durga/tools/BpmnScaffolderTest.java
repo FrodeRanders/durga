@@ -866,6 +866,44 @@ public class BpmnScaffolderTest {
                 lib.contains("PluginExecutionContext::new(VALIDATION_MODE)"));
         assertFalse("retired validation-candidate path must be gone", lib.contains("run_validation_worker"));
         assertFalse("retired validation-candidate topic must be gone", lib.contains("validation-candidate-outputs"));
+
+        // Cross-target validation: a downstream shadow task must read the PRODUCTION chaining topic
+        // (java-aligned <predecessor>_output), not a rust-only topic, so it can shadow a java
+        // production of the same process.
+        String coerce = Files.readString(outputDir.resolve("src/bin/coerce_types.rs"));
+        assertTrue("shadow must read the production predecessor output topic",
+                coerce.contains("input_topic: \"e2e_pipeline_transform_order_output\""));
+        assertTrue("shadow output must be redirected to a -validation topic",
+                coerce.contains("e2e_pipeline_coerce_types_output-validation"));
+    }
+
+    @Test
+    public void rustAndJavaTargetsUseInterchangeableTopics() throws Exception {
+        System.out.println("TC: rust and java targets chain tasks through identical topics (wire-interchangeable)");
+        Path rustDir = Files.createTempDirectory("durga-rust-interchange-");
+        Path javaDir = Files.createTempDirectory("durga-java-interchange-");
+        runRustGeneration("src/test/resources/bpmn/e2e_pipeline.bpmn", rustDir, false);
+        runGeneration("src/test/resources/bpmn/e2e_pipeline.bpmn", javaDir);
+
+        // Java is authoritative: each task's incoming channel maps to the chaining topic.
+        Map<String, Object> app = readYaml(javaDir.resolve("src/main/resources/application.yml"));
+        Map<String, Object> incoming = mapAt(app, "mp", "messaging", "incoming");
+
+        // task id -> the input topic each rust bin consumes
+        Map<String, String> rustInput = new java.util.HashMap<>();
+        for (Path bin : Files.newDirectoryStream(rustDir.resolve("src/bin"))) {
+            String name = bin.getFileName().toString().replace(".rs", "");
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("input_topic: \"([^\"]+)\"").matcher(Files.readString(bin));
+            if (m.find()) rustInput.put(name, m.group(1));
+        }
+
+        // For every non-gateway task, the rust bin's input topic must equal the java task's input topic.
+        for (String task : new String[]{"transform_order", "coerce_types", "enrich_high_value",
+                "validate_high_value", "aggregate_high_value", "aggregate_low_value"}) {
+            String javaTopic = topicOf(incoming, "e2e_pipeline_" + task + "_in");
+            assertEquals("input topic mismatch for " + task, javaTopic, rustInput.get(task));
+        }
     }
 
     @Test

@@ -233,6 +233,12 @@ pub async fn run_plugin_worker(brokers: &str, cfg: PluginWorker, plugin: Box<dyn
                 )
                 .unwrap_or_else(|_| b"{}".to_vec());
 
+                let key = event.process_instance_id.clone().unwrap_or_default();
+                // Emit ACTIVITY_ENTERED before executing so the monitor can pair it with the
+                // completion below and derive this task's latency (throughput is counted from the
+                // completion alone).
+                send(&producer, EVENTS_TOPIC, &key, &event.activity_entered(&cfg.activity_id).to_json()).await;
+
                 let result = plugin
                     .execute_with_result(
                         &payload_bytes,
@@ -242,7 +248,6 @@ pub async fn run_plugin_worker(brokers: &str, cfg: PluginWorker, plugin: Box<dyn
                     .map_err(|e| e.to_string());
 
                 let plan = plan_worker_output(&event, &cfg.activity_id, cfg.category, cfg.terminal, result);
-                let key = event.process_instance_id.clone().unwrap_or_default();
 
                 for ev in &plan.emits {
                     send(&producer, EVENTS_TOPIC, &key, &ev.to_json()).await;

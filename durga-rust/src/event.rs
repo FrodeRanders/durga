@@ -105,6 +105,12 @@ impl ProcessEvent {
         self.transition(activity_id, Some(payload), Status::Completed, None, EventType::ActivityCompleted)
     }
 
+    /// Entry into an activity, emitted before execution so the monitor can pair it with the
+    /// completion to derive this activity's latency. Carries the input payload forward.
+    pub fn activity_entered(&self, activity_id: &str) -> ProcessEvent {
+        self.transition(activity_id, self.payload.clone(), Status::Started, None, EventType::ActivityEntered)
+    }
+
     /// A routing decision at a gateway, carrying the payload forward.
     pub fn gateway_taken(&self, activity_id: &str, payload: Value) -> ProcessEvent {
         self.transition(activity_id, Some(payload), Status::Completed, None, EventType::GatewayTaken)

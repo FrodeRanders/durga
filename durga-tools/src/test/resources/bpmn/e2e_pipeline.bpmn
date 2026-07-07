@@ -111,16 +111,16 @@
   <bpmndi:BPMNDiagram id="BPMNDiagram_e2e_pipeline">
     <bpmndi:BPMNPlane id="BPMNPlane_e2e_pipeline" bpmnElement="e2e_pipeline">
       <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
-        <dc:Bounds x="167" y="112" width="36" height="36" />
+        <dc:Bounds x="142" y="112" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="153" y="148" width="65" height="14" />
+          <dc:Bounds x="127" y="148" width="65" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="transform_order_di" bpmnElement="transform_order">
-        <dc:Bounds x="285" y="90" width="100" height="80" />
+        <dc:Bounds x="253" y="90" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="coerce_types_di" bpmnElement="coerce_types">
-        <dc:Bounds x="435" y="90" width="100" height="80" />
+        <dc:Bounds x="428" y="90" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="route_by_amount_di" bpmnElement="route_by_amount" isMarkerVisible="true">
         <dc:Bounds x="610" y="105" width="50" height="50" />
@@ -128,66 +128,66 @@
           <dc:Bounds x="592" y="81" width="85" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="aggregate_low_value_di" bpmnElement="aggregate_low_value">
-        <dc:Bounds x="735" y="230" width="100" height="80" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="EndEvent_Low_di" bpmnElement="EndEvent_Low">
-        <dc:Bounds x="917" y="252" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="901" y="288" width="68" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="enrich_high_value_di" bpmnElement="enrich_high_value">
-        <dc:Bounds x="735" y="90" width="100" height="80" />
+        <dc:Bounds x="738" y="90" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="validate_high_value_di" bpmnElement="validate_high_value">
-        <dc:Bounds x="885" y="90" width="100" height="80" />
+        <dc:Bounds x="919" y="90" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="aggregate_high_value_di" bpmnElement="aggregate_high_value">
-        <dc:Bounds x="1035" y="90" width="100" height="80" />
+        <dc:Bounds x="1097" y="90" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EndEvent_High_di" bpmnElement="EndEvent_High">
-        <dc:Bounds x="1217" y="112" width="36" height="36" />
+        <dc:Bounds x="1279" y="112" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1203" y="148" width="64" height="14" />
+          <dc:Bounds x="1265" y="148" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="aggregate_low_value_di" bpmnElement="aggregate_low_value">
+        <dc:Bounds x="738" y="245" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Low_di" bpmnElement="EndEvent_Low">
+        <dc:Bounds x="920" y="267" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="904" y="303" width="68" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_to_transform_di" bpmnElement="Flow_to_transform">
-        <di:waypoint x="203" y="130" />
-        <di:waypoint x="285" y="130" />
+        <di:waypoint x="178" y="130" />
+        <di:waypoint x="253" y="130" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_transform_to_coerce_di" bpmnElement="Flow_transform_to_coerce">
-        <di:waypoint x="385" y="130" />
-        <di:waypoint x="435" y="130" />
+        <di:waypoint x="353" y="130" />
+        <di:waypoint x="428" y="130" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_coerce_to_route_di" bpmnElement="Flow_coerce_to_route">
-        <di:waypoint x="535" y="130" />
+        <di:waypoint x="528" y="130" />
         <di:waypoint x="610" y="130" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_high_value_di" bpmnElement="Flow_high_value">
         <di:waypoint x="660" y="130" />
-        <di:waypoint x="735" y="130" />
+        <di:waypoint x="738" y="130" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_low_value_di" bpmnElement="Flow_low_value">
         <di:waypoint x="635" y="155" />
-        <di:waypoint x="635" y="270" />
-        <di:waypoint x="735" y="270" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_low_aggregate_to_end_di" bpmnElement="Flow_low_aggregate_to_end">
-        <di:waypoint x="835" y="270" />
-        <di:waypoint x="917" y="270" />
+        <di:waypoint x="635" y="285" />
+        <di:waypoint x="738" y="285" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_enrich_to_validate_di" bpmnElement="Flow_enrich_to_validate">
-        <di:waypoint x="835" y="130" />
-        <di:waypoint x="885" y="130" />
+        <di:waypoint x="838" y="130" />
+        <di:waypoint x="919" y="130" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_validate_to_aggregate_di" bpmnElement="Flow_validate_to_aggregate">
-        <di:waypoint x="985" y="130" />
-        <di:waypoint x="1035" y="130" />
+        <di:waypoint x="1019" y="130" />
+        <di:waypoint x="1097" y="130" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_aggregate_to_end_di" bpmnElement="Flow_aggregate_to_end">
-        <di:waypoint x="1135" y="130" />
-        <di:waypoint x="1217" y="130" />
+        <di:waypoint x="1197" y="130" />
+        <di:waypoint x="1279" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_low_aggregate_to_end_di" bpmnElement="Flow_low_aggregate_to_end">
+        <di:waypoint x="838" y="285" />
+        <di:waypoint x="920" y="285" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

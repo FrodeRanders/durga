@@ -9,7 +9,8 @@ export function dashboardRequestPaths(processId, thresholdSeconds) {
     `/api/processes/${pid}/alarms`,
     `/api/processes/${pid}/latency`,
     `/api/stuck?processId=${pid}&olderThanSeconds=${age}`,
-    `/api/processes/${pid}/trends`
+    `/api/processes/${pid}/trends`,
+    `/api/processes/${pid}/throughput`
   ]
 }
 
@@ -50,7 +51,7 @@ export function validationResultsRequestPath(processId, taskId, status) {
 }
 
 export function normalizeDashboardResponses(responses) {
-  const [health, allCounts, allAlarms, counts, alarms, latency, stuck, trends] = responses
+  const [health, allCounts, allAlarms, counts, alarms, latency, stuck, trends, throughput] = responses
   return {
     health: health?.body ?? { streamsState: '...' },
     allCounts: Array.isArray(allCounts?.body) ? allCounts.body : [],
@@ -59,6 +60,7 @@ export function normalizeDashboardResponses(responses) {
     alarms: Array.isArray(alarms?.body) ? alarms.body : [],
     latency: Array.isArray(latency?.body) ? latency.body : [],
     stuck: Array.isArray(stuck?.body) ? stuck.body : [],
-    trends: Array.isArray(trends?.body) ? trends.body : []
+    trends: Array.isArray(trends?.body) ? trends.body : [],
+    throughput: Array.isArray(throughput?.body) ? throughput.body : []
   }
 }

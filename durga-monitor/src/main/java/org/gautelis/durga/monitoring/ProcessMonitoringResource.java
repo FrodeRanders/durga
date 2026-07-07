@@ -105,6 +105,19 @@ public class ProcessMonitoringResource {
     }
 
     @GET
+    @Path("/processes/{processId}/throughput")
+    public Response throughputForProcess(@HeaderParam("Authorization") String authorization,
+                                         @PathParam("processId") String processId) {
+        Response auth = requireAuth(authorization);
+        if (auth != null) return auth;
+        try {
+            return Response.ok(state.queryService().throughputForProcess(processId)).build();
+        } catch (InvalidStateStoreException e) {
+            return Response.status(503).entity(Map.of("error", "state store not queryable yet")).build();
+        }
+    }
+
+    @GET
     @Path("/counts")
     public Response allCounts(@HeaderParam("Authorization") String authorization) {
         Response auth = requireAuth(authorization);

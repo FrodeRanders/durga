@@ -36,8 +36,8 @@ import java.util.regex.Pattern;
  * <p>
  * Subscribes to two streams:
  * <ul>
- *   <li>{@code process-events-.*} — evaluates each lifecycle event against
- *       active alarm configurations.</li>
+ *   <li>{@code process-events-*} (excluding {@code *-validation}) — evaluates each lifecycle
+ *       event against active alarm configurations.</li>
  *   <li>{@code process-models} — processes BPMN model registrations to
  *       dynamically update alarm configurations extracted from Camunda
  *       extension properties.</li>
@@ -76,7 +76,11 @@ public final class FaultDetectionTopology {
     static final String THROUGHPUT_ALARM_PREFIX = "$sla-tput-alarm:";
     static final String LATENCY_SCOPE_PROCESS = "$process";
 
-    public static final String DEFAULT_EVENTS_PATTERN = "process-events-.*";
+    // Excludes the validation events topics (process-events-*-validation): a validation shadow
+    // replays production input and emits its own lifecycle events for the same instance ids, which
+    // would otherwise trip the stuck/cascade detectors with phantom faults. Validation output is
+    // compared separately by ValidationTopology.
+    public static final String DEFAULT_EVENTS_PATTERN = "process-events-(?!.*-validation).*";
     public static final String DEFAULT_ALARMS_TOPIC = "fault-alarms";
     public static final String DEFAULT_MODELS_TOPIC = "process-models";
 

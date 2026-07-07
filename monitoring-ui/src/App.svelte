@@ -516,7 +516,7 @@
             </div>
 
             <section class="panel wide">
-                <BpmnDiagram processId={s.processId} latency={s.latency} counts={s.counts} alarms={s.alarms}/>
+                <BpmnDiagram processId={s.processId} latency={s.latency} throughput={s.throughput} alarms={s.alarms}/>
             </section>
 
             <div class="row-split">

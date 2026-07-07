@@ -28,6 +28,16 @@ public class FaultDetectionTest {
     // ---- hard error ----
 
     @Test
+    public void defaultEventsPatternExcludesValidationTopics() {
+        System.out.println("TC: fault detector event pattern excludes process-events-*-validation so shadow runs never trip alarms");
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile(FaultDetectionTopology.DEFAULT_EVENTS_PATTERN);
+        assertTrue(p.matcher("process-events-e2e_pipeline").matches());
+        assertTrue(p.matcher("process-events-order-proc").matches());
+        assertFalse("validation events must not feed fault detection",
+                p.matcher("process-events-e2e_pipeline-validation").matches());
+    }
+
+    @Test
     public void shouldFireHardErrorOnFirstOccurrence() {
         System.out.println("TC: HARD_ERROR fires alarm on first matching event");
 

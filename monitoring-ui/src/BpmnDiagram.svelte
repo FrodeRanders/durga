@@ -1,5 +1,7 @@
 <script>
-  let { processId = '', latency = [], counts = [], alarms = [] } = $props()
+  import { alarmsByActivity, latencyByActivity, throughputByActivity, buildTaskOverlay, renderOverlayHtml } from './overlays.js'
+
+  let { processId = '', latency = [], throughput = [], alarms = [] } = $props()
 
   let container = $state(null)
   let viewer = null
@@ -12,43 +14,6 @@
   let panning = false
   let panLast = { x: 0, y: 0 }
 
-  function duration(ms) {
-    const value = Number(ms || 0)
-    if (value >= 60000) return `${(value / 60000).toFixed(1)}m`
-    if (value >= 1000) return `${(value / 1000).toFixed(1)}s`
-    return `${value}ms`
-  }
-
-  function latencyClass(p95, slaCount) {
-    if (slaCount > 0) return 'overlay-danger'
-    if (p95 > 30000) return 'overlay-warn'
-    if (p95 > 5000) return 'overlay-slow'
-    return 'overlay-ok'
-  }
-
-  function stateClass(state) {
-    if (state === 'failed') return 'overlay-danger'
-    if (state === 'cancelled') return 'overlay-warn'
-    if (state === 'completed') return 'overlay-ok'
-    return 'overlay-active'
-  }
-
-  function stateLabel(state) {
-    if (!state) return ''
-    return state.charAt(0).toUpperCase() + state.slice(1)
-  }
-
-  function alarmClass(severity) {
-    return severity === 'CRITICAL' ? 'overlay-danger' : 'overlay-warn'
-  }
-
-  function strongerAlarm(current, next) {
-    if (!current) return next
-    if (next.severity === 'CRITICAL' && current.severity !== 'CRITICAL') return next
-    if (current.severity === 'CRITICAL' && next.severity !== 'CRITICAL') return current
-    return String(next.lastTriggeredAt || '').localeCompare(String(current.lastTriggeredAt || '')) > 0 ? next : current
-  }
-
   function applyOverlays() {
     if (!viewer || !rendered) return
 
@@ -56,67 +21,19 @@
     const elementRegistry = viewer.get('elementRegistry')
     overlays.clear()
 
-    const latencyMap = new Map()
-    for (const row of latency) {
-      latencyMap.set(row.activityId, row)
-    }
-
-    const countMap = new Map()
-    for (const row of counts) {
-      if (row.state !== 'active' && row.state !== 'completed' && row.state !== 'failed' && row.state !== 'cancelled') {
-        countMap.set(row.state, row)
-      }
-    }
-
-    const alarmMap = new Map()
-    for (const alarm of alarms) {
-      if (alarm.activityId) {
-        alarmMap.set(alarm.activityId, strongerAlarm(alarmMap.get(alarm.activityId), alarm))
-      }
-    }
+    const latencyMap = latencyByActivity(latency)
+    const throughputMap = throughputByActivity(throughput)
+    const alarmMap = alarmsByActivity(alarms)
 
     for (const element of elementRegistry.getAll()) {
       const id = element.businessObject?.id || element.id
       if (!id) continue
 
-      const alarm = alarmMap.get(id)
-      const lat = latencyMap.get(id)
-      const cnt = countMap.get(id)
-
-      if (alarm) {
-        const cls = alarmClass(alarm.severity)
-        let html = `<div class="bpmn-overlay ${cls}"><span class="overlay-label">${escapeHtml(id)}</span>`
-        html += `<span class="overlay-stat">${escapeHtml(alarm.severity)} alarm x${alarm.fireCount || 1}</span>`
-        if (alarm.lastMessage) {
-          html += `<span class="overlay-sla">${escapeHtml(alarm.lastMessage)}</span>`
-        }
-        html += '</div>'
-        overlays.add(id, { position: { bottom: 0, left: 0 }, html })
-      } else if (lat) {
-        const cls = latencyClass(lat.p95DurationMs, lat.slaViolationCount)
-        let html = `<div class="bpmn-overlay ${cls}"><span class="overlay-label">${escapeHtml(id)}</span>`
-        html += `<span class="overlay-stat">n=${lat.sampleCount} avg=${duration(lat.averageDurationMs)} p95=${duration(lat.p95DurationMs)}</span>`
-        if (lat.slaViolationCount > 0) {
-          html += `<span class="overlay-sla">SLA:${lat.slaViolationCount}</span>`
-        }
-        html += '</div>'
-        overlays.add(id, { position: { bottom: 0, left: 0 }, html })
-      } else if (cnt && Number(cnt.count) > 0) {
-        const cls = stateClass(cnt.state)
-        let html = `<div class="bpmn-overlay ${cls}"><span class="overlay-label">${escapeHtml(id)}</span>`
-        html += `<span class="overlay-stat">${stateLabel(cnt.state)}: ${cnt.count}</span>`
-        html += '</div>'
-        overlays.add(id, { position: { bottom: 0, left: 0 }, html })
+      const model = buildTaskOverlay(id, throughputMap.get(id), latencyMap.get(id), alarmMap.get(id))
+      if (model) {
+        overlays.add(id, { position: { bottom: 0, left: 0 }, html: renderOverlayHtml(model) })
       }
     }
-  }
-
-  function escapeHtml(text) {
-    return String(text)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
   }
 
   function zoomIn() {
@@ -267,7 +184,7 @@
 <div class="diagram-panel">
   <div class="panel-title">
     <h2>Process Diagram</h2>
-    <span>{processId || 'no process'}</span>
+    <span>per-task throughput &amp; latency{processId ? ` · ${processId}` : ''}</span>
   </div>
 
   {#if diagramError}
@@ -278,8 +195,8 @@
     <div class="diagram-legend">
       <span><i class="overlay-ok"></i>Healthy</span>
       <span><i class="overlay-slow"></i>Slow</span>
-      <span><i class="overlay-warn"></i>Warning</span>
-      <span><i class="overlay-danger"></i>Critical</span>
+      <span><i class="overlay-warn"></i>Warning / alarm</span>
+      <span><i class="overlay-danger"></i>Critical / SLA</span>
     </div>
   {/if}
 
@@ -500,9 +417,33 @@
     opacity: 0.85;
   }
 
+  :global(.overlay-stat-muted) {
+    font-size: 0.6rem;
+    font-style: italic;
+    opacity: 0.6;
+  }
+
   :global(.overlay-sla) {
     font-weight: 800;
     color: #c7372f;
     font-size: 0.62rem;
+  }
+
+  :global(.overlay-alarm) {
+    margin-top: 2px;
+    padding-top: 2px;
+    border-top: 1px dashed currentColor;
+    font-weight: 800;
+    font-size: 0.63rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  :global(.overlay-alarm-msg) {
+    font-size: 0.6rem;
+    font-weight: 600;
+    white-space: normal;
+    max-width: 220px;
+    opacity: 0.9;
   }
 </style>

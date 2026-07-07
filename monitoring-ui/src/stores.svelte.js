@@ -22,6 +22,7 @@ let alarms = $state([])
 let latency = $state([])
 let stuck = $state([])
 let trends = $state([])
+let throughput = $state([])
 let instanceView = $state(null)
 let instanceAlarms = $state([])
 let diagramAvailable = $state(false)
@@ -58,6 +59,7 @@ export async function refresh() {
   latency = normalized.latency
   stuck = normalized.stuck
   trends = normalized.trends
+  throughput = normalized.throughput
 }
 
 export async function refreshInstance() {
@@ -151,6 +153,7 @@ export function getState() {
     get latency() { return latency },
     get stuck() { return stuck },
     get trends() { return trends },
+    get throughput() { return throughput },
     get instanceView() { return instanceView },
     get instanceAlarms() { return instanceAlarms },
     get diagramAvailable() { return diagramAvailable },

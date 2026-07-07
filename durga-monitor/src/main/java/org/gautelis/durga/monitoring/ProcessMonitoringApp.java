@@ -152,6 +152,7 @@ public final class ProcessMonitoringApp {
                 topics.activeTopic(),
                 topics.latencyTopic(),
                 topics.trendsTopic(),
+                topics.throughputTopic(),
                 topics.modelsTopic(),
                 FaultDetectionTopology.DEFAULT_ALARMS_TOPIC,
                 ValidationTopology.DEFAULT_CANDIDATE_EVENTS_TOPIC,

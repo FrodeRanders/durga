@@ -40,11 +40,13 @@ public final class ProcessMonitoringTopology {
     public static final String DEFAULT_ACTIVE_TOPIC = "process-active-state";
     public static final String DEFAULT_LATENCY_TOPIC = "process-latency";
     public static final String DEFAULT_TRENDS_TOPIC = "process-trends";
+    public static final String DEFAULT_THROUGHPUT_TOPIC = "process-activity-throughput";
     public static final String DEFAULT_STATE_STORE = "process-state-global-store";
     public static final String DEFAULT_COUNTS_STORE = "process-state-counts-global-store";
     public static final String DEFAULT_ACTIVE_STORE = "process-active-state-global-store";
     public static final String DEFAULT_LATENCY_STORE = "process-latency-global-store";
     public static final String DEFAULT_TRENDS_STORE = "process-trends-global-store";
+    public static final String DEFAULT_THROUGHPUT_STORE = "process-activity-throughput-global-store";
     public static final String DEFAULT_MODELS_TOPIC = "process-models";
     public static final String DEFAULT_MODELS_STORE = "process-models-store";
 
@@ -53,6 +55,7 @@ public final class ProcessMonitoringTopology {
     private static final String LOCAL_LATENCY_STORE = "process-latency-store";
     private static final String LOCAL_ACTIVITY_ENTRY_STORE = "process-activity-entry-store";
     private static final String LOCAL_TRENDS_STORE = "process-trends-store";
+    private static final String LOCAL_THROUGHPUT_STORE = "process-activity-throughput-store";
 
     private static final long SLA_THRESHOLD_MS = slaThresholdMs();
 
@@ -84,6 +87,7 @@ public final class ProcessMonitoringTopology {
         var latencyStatsSerde = JsonSerde.forClass(ActivityLatencyStats.class);
         var latencySummarySerde = JsonSerde.forClass(ActivityLatencySummary.class);
         var trendSerde = JsonSerde.forClass(ProcessTrendPoint.class);
+        var throughputSerde = JsonSerde.forClass(ActivityThroughput.class);
 
         builder.addStateStore(
                 Stores.keyValueStoreBuilder(
@@ -172,6 +176,27 @@ public final class ProcessMonitoringTopology {
                 .mapValues(ProcessTrendPoint::fromKey)
                 .to(topics.trendsTopic(), Produced.with(Serdes.String(), trendSerde));
 
+        // Per-activity throughput: count terminal per-activity events so plugin/data-pipeline tasks
+        // (which emit only ACTIVITY_COMPLETED, never ACTIVITY_ENTERED) still report how many items
+        // they have processed, independent of the latency pairing.
+        KTable<String, ActivityThroughput> throughput = events
+                .filter((processInstanceId, event) -> event.activityId() != null
+                        && !event.activityId().isBlank()
+                        && isThroughputEvent(event.eventType()))
+                .map((processInstanceId, event) ->
+                        KeyValue.pair(event.processId() + ":" + event.activityId(), event))
+                .groupByKey(Grouped.with(Serdes.String(), processEventSerde))
+                .aggregate(
+                        ActivityThroughput::empty,
+                        (key, event, current) -> current.increment(event.processId(), event.activityId()),
+                        Materialized.<String, ActivityThroughput, KeyValueStore<Bytes, byte[]>>as(LOCAL_THROUGHPUT_STORE)
+                                .withKeySerde(Serdes.String())
+                                .withValueSerde(throughputSerde)
+                );
+
+        throughput.toStream()
+                .to(topics.throughputTopic(), Produced.with(Serdes.String(), throughputSerde));
+
         builder.globalTable(
                 topics.stateTopic(),
                 Consumed.with(Serdes.String(), processStateSerde),
@@ -212,6 +237,14 @@ public final class ProcessMonitoringTopology {
                         .withValueSerde(trendSerde)
         );
 
+        builder.globalTable(
+                topics.throughputTopic(),
+                Consumed.with(Serdes.String(), throughputSerde),
+                Materialized.<String, ActivityThroughput, KeyValueStore<Bytes, byte[]>>as(topics.throughputStore())
+                        .withKeySerde(Serdes.String())
+                        .withValueSerde(throughputSerde)
+        );
+
         // Process BPMN model cache: processes post their models keyed by processId
         builder.globalTable(
                 topics.modelsTopic(),
@@ -234,12 +267,14 @@ public final class ProcessMonitoringTopology {
             String activeTopic,
             String latencyTopic,
             String trendsTopic,
+            String throughputTopic,
             String modelsTopic,
             String stateStore,
             String countsStore,
             String activeStore,
             String latencyStore,
             String trendsStore,
+            String throughputStore,
             String modelsStore,
             Pattern eventsPattern,
             boolean multiProcess
@@ -263,17 +298,29 @@ public final class ProcessMonitoringTopology {
                     DEFAULT_ACTIVE_TOPIC,
                     DEFAULT_LATENCY_TOPIC,
                     DEFAULT_TRENDS_TOPIC,
+                    DEFAULT_THROUGHPUT_TOPIC,
                     DEFAULT_MODELS_TOPIC,
                     DEFAULT_STATE_STORE,
                     DEFAULT_COUNTS_STORE,
                     DEFAULT_ACTIVE_STORE,
                     DEFAULT_LATENCY_STORE,
                     DEFAULT_TRENDS_STORE,
+                    DEFAULT_THROUGHPUT_STORE,
                     DEFAULT_MODELS_STORE,
                     ALL_EVENTS_PATTERN,
                     true
             );
         }
+    }
+
+    /**
+     * Whether an event type represents an item flowing out of an activity, and so counts toward that
+     * activity's throughput.
+     */
+    private static boolean isThroughputEvent(ProcessEvent.EventType eventType) {
+        return eventType == ProcessEvent.EventType.ACTIVITY_COMPLETED
+                || eventType == ProcessEvent.EventType.ACTIVITY_ESCALATED
+                || eventType == ProcessEvent.EventType.GATEWAY_TAKEN;
     }
 
     private static final class ActivityLatencyProcessor implements Processor<String, ProcessEvent, String, ActivityLatencyDelta> {

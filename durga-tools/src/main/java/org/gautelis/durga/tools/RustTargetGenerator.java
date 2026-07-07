@@ -104,7 +104,7 @@ final class RustTargetGenerator {
             // VALIDATION_MODE in lib.rs). The plugin itself runs with the validation context so
             // substantial side effects are suppressed.
             String groupId = processId + "-" + task.name + (parsed.validation ? "-validation" : "");
-            String outputTopic = terminal ? "" : validationTopic(inputTopicFor(processId, next, nodes), parsed.validation);
+            String outputTopic = terminal ? "" : validationTopic(outputTopicFor(processId, taskNode), parsed.validation);
             String dlqTopic = validationTopic(processId + "_" + task.name + "_dlq", parsed.validation);
 
             ST bin = group.getInstanceOf("pluginWorkerBin");
@@ -217,9 +217,9 @@ final class RustTargetGenerator {
         bin.add("structName", structName);
         bin.add("pluginConfig", escapeRust(task.pluginConfig != null ? task.pluginConfig : "."));
         bin.add("inputTopic", inputTopicFor(processId, taskNode, nodes));
-        bin.add("outputTopic", terminal ? "" : inputTopicFor(processId, next, nodes));
-        bin.add("dlqTopic", processId + "_" + task.name + "_dlq");
-        bin.add("groupId", processId + "-" + task.name);
+        bin.add("outputTopic", terminal ? "" : validationTopic(outputTopicFor(processId, taskNode), parsed.validation));
+        bin.add("dlqTopic", validationTopic(processId + "_" + task.name + "_dlq", parsed.validation));
+        bin.add("groupId", processId + "-" + task.name + (parsed.validation ? "-validation" : ""));
         bin.add("terminal", terminal);
         write(parsed, binDir.resolve(task.name + ".rs"), bin.render());
 
@@ -278,26 +278,41 @@ final class RustTargetGenerator {
         };
     }
 
-    private static String inputTopic(String processId, String nodeName) {
-        return processId + "_" + nodeName + "_in";
+    /**
+     * Input topic for a node, using the same convention as the Java target
+     * ({@link BpmnScaffolder#resolveTaskInputChannel}) so the two code-generation targets are
+     * wire-interchangeable:
+     * <ul>
+     *   <li>fed by START → {@code <pid>_start}</li>
+     *   <li>fed by a TASK / CALL_ACTIVITY / SUB_PROCESS → {@code <pid>_<predecessor>_output}
+     *       (a node consumes its predecessor's output stream)</li>
+     *   <li>fed by a gateway (XOR/AND/OR) → {@code <pid>_<node>_input} (the gateway routes a token
+     *       into this node's inbox)</li>
+     * </ul>
+     */
+    private static String inputTopicFor(String processId, NodeInfo node, Map<String, NodeInfo> nodes) {
+        if (node == null || node.incomingIds.isEmpty()) {
+            return processId + "_" + (node != null ? node.name : "unknown") + "_input";
+        }
+        NodeInfo source = nodes.get(node.incomingIds.get(0));
+        if (source == null) {
+            return processId + "_" + node.name + "_input";
+        }
+        return switch (source.type) {
+            case START -> processId + "_start";
+            case TASK, CALL_ACTIVITY, SUB_PROCESS -> processId + "_" + source.name + "_output";
+            case XOR, AND, OR -> processId + "_" + node.name + "_input";
+            default -> processId + "_" + node.name + "_input";
+        };
     }
 
     /**
-     * Input topic for a node. A task/gateway fed directly by the start event
-     * consumes the process start topic ({@code <processId>_start}) so the shared
-     * feeder and infrastructure topics line up with the Java target; every other
-     * node consumes {@code <processId>_<name>_in}.
+     * Output topic for a node: its own {@code <pid>_<node>_output} stream, matching the Java target.
+     * A successor task consumes this directly; a routing gateway consumes it and forwards tokens to
+     * its branch targets' {@code _input} topics.
      */
-    private static String inputTopicFor(String processId, NodeInfo node, Map<String, NodeInfo> nodes) {
-        if (node != null) {
-            for (String incomingId : node.incomingIds) {
-                NodeInfo incoming = nodes.get(incomingId);
-                if (incoming != null && incoming.type == NodeType.START) {
-                    return processId + "_start";
-                }
-            }
-        }
-        return inputTopic(processId, node != null ? node.name : "unknown");
+    private static String outputTopicFor(String processId, NodeInfo node) {
+        return processId + "_" + node.name + "_output";
     }
 
     static String escapeRust(String s) {

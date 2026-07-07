@@ -1706,6 +1706,22 @@ public class %className% {
         if (cancellationRegistry.isCancelled(inputEvent.processInstanceId(), "%taskId%")) {
             return msg.ack();
         }
+        // Emit ACTIVITY_ENTERED before executing so the monitor can pair it with the completion
+        // below and derive this task's latency (throughput is counted from the completion alone).
+        processEventsEmitter.send(new ProcessEvent(
+                inputEvent.processInstanceId(),
+                inputEvent.processId(),
+                "%taskId%",
+                inputEvent.tokenId(),
+                inputEvent.correlationId(),
+                inputEvent.payload(),
+                ProcessEvent.Status.STARTED,
+                null,
+                ProcessEvent.EventType.ACTIVITY_ENTERED,
+                inputEvent.processVersion(),
+                inputEvent.businessKey(),
+                inputEvent.timestamp()
+        ).toJson());
         try {
             String payload = inputEvent.payload() != null
                     ? new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputEvent.payload())

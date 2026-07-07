@@ -335,9 +335,13 @@ scaffold_and_build_pipeline_rust() {
 create_rust_topics() {
     local topics=()
     local f name
+    # Rust uses the same chaining-topic naming as java: each task/gateway has an output stream
+    # (<name>_output), a gateway-fed inbox (<name>_input), and a DLQ (<name>_dlq).
     for f in "$GEN_DIR"/src/bin/*.rs; do
         name=$(basename "$f" .rs)
-        topics+=("${E2E_PROCESS_ID}_${name}_in" "${E2E_PROCESS_ID}_${name}_dlq")
+        topics+=("${E2E_PROCESS_ID}_${name}_output" \
+                 "${E2E_PROCESS_ID}_${name}_input" \
+                 "${E2E_PROCESS_ID}_${name}_dlq")
     done
     if [ ${#topics[@]} -gt 0 ]; then
         log "Creating Rust worker topics..."
