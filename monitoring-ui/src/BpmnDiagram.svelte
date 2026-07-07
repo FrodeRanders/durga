@@ -298,6 +298,17 @@
     height: 100%;
   }
 
+  /* The generic svg rule above also matches the bpmn.io "powered by" watermark's
+     inner logo, blowing it up — keep it at its intended small size. */
+  .diagram-container :global(.bjs-powered-by svg) {
+    width: 18px;
+    height: 18px;
+  }
+
+  .diagram-container :global(.bjs-powered-by) {
+    opacity: 0.5;
+  }
+
   .diagram-toolbar {
     position: absolute;
     top: 10px;
