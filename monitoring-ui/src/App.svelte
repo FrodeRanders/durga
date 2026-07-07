@@ -268,10 +268,20 @@
 
     const validationOrder = {DIFF: 0, CANDIDATE_ERROR: 1, PRIOR_MISSING: 2, EQUAL: 3}
 
+    // EQUAL comparisons are the common, uninformative case and quickly fill the panel, so they are
+    // hidden by default and opt-in via this toggle (their count is always shown).
+    let showEqual = $state(false)
+
     function validationResultRows() {
-        return [...s.validationResults].sort((a, b) =>
+        const rows = [...s.validationResults]
+            .filter((r) => showEqual || r.matchStatus !== 'EQUAL')
+        return rows.sort((a, b) =>
             (validationOrder[a.matchStatus] ?? 9) - (validationOrder[b.matchStatus] ?? 9)
             || String(a.processInstanceId ?? '').localeCompare(String(b.processInstanceId ?? '')))
+    }
+
+    function equalResultCount() {
+        return s.validationResults.filter((r) => r.matchStatus === 'EQUAL').length
     }
 
     function validationStatusClass(status) {
@@ -678,7 +688,10 @@
                         <div class="validation-detail">
                             <div class="panel-title">
                                 <h2>{s.validationTask} — comparisons</h2>
-                                <span>{number(validationResultRows().length)} instances</span>
+                                <label class="equal-toggle">
+                                    <input type="checkbox" bind:checked={showEqual}/>
+                                    show equal ({number(equalResultCount())})
+                                </label>
                             </div>
                             {#if validationResultRows().length}
                                 {#each validationResultRows() as r}
@@ -732,6 +745,9 @@
                                         </div>
                                     </details>
                                 {/each}
+                            {:else if equalResultCount() > 0}
+                                <p class="empty">All {number(equalResultCount())} comparisons are in
+                                    parity (EQUAL). Tick "show equal" to list them.</p>
                             {:else}
                                 <p class="empty">No comparisons captured for this task yet.</p>
                             {/if}
@@ -1283,6 +1299,22 @@
         margin-top: 14px;
         padding-top: 12px;
         border-top: 1px solid var(--line);
+    }
+
+    .equal-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    .equal-toggle input {
+        width: auto;
+        height: auto;
+        margin: 0;
     }
 
     .cmp {

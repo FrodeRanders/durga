@@ -143,7 +143,7 @@ use rdkafka::producer::{FutureProducer, FutureRecord};
 
 %if(hasCustom)%pub mod custom;
 
-%endif%pub const EVENTS_TOPIC: &str = %if(validation)%"%eventsTopic%-validation"%else%"%eventsTopic%"%endif%;
+%endif%pub const EVENTS_TOPIC: &str = %if(validation)%"validation-events"%else%"%eventsTopic%"%endif%;
 pub const MODELS_TOPIC: &str = "process-models";
 pub const PROCESS_ID: &str = "%processId%";
 

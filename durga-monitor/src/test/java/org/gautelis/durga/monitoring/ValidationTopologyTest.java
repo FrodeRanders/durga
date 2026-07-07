@@ -15,8 +15,8 @@ public class ValidationTopologyTest {
         System.out.println("TC: validation topology wires prior (production) + candidate (validation) event streams into a materialized results store");
 
         ValidationTopology.ValidationTopics topics = new ValidationTopology.ValidationTopics(
-                "none", // placeholder — regex patterns are used below
-                Pattern.compile("process-events-.*-validation"),
+                "validation-events", // fixed candidate topic
+                null,
                 ProcessMonitoringTopology.DEFAULT_EVENTS_TOPIC,
                 Pattern.compile("process-events-(?!.*-validation).*"),
                 ValidationTopology.DEFAULT_RESULTS_TOPIC,
@@ -26,7 +26,7 @@ public class ValidationTopologyTest {
         Topology topology = ValidationTopology.buildTopology(topics);
         String description = topology.describe().toString();
 
-        assertTrue(description.contains("process-events"));
+        assertTrue(description.contains("validation-events"));
         assertTrue(description.contains(ProcessMonitoringTopology.DEFAULT_EVENTS_TOPIC));
         assertTrue(description.contains(ValidationTopology.DEFAULT_RESULTS_TOPIC));
         assertTrue(description.contains(ValidationTopology.DEFAULT_RESULTS_STORE));

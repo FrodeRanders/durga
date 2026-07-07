@@ -175,7 +175,7 @@ scaffold_java() {
 # PRODUCTION input), so they only need to exist to avoid producer errors on a
 # broker with auto-create disabled.
 create_validation_topics() {
-    local shared="process-events-${E2E_PROCESS_ID}-validation"
+    local shared="validation-events"
     local extra=()
 
     if [ "$TARGET" = "rust" ]; then
@@ -303,7 +303,7 @@ cmd_start() {
     create_validation_topics
 
     echo ""
-    log "The monitor discovers the validation events topic on its next metadata refresh;"
+    log "Validation events go to the fixed 'validation-events' topic the monitor already consumes;"
     log "results appear at:  http://localhost:${MONITOR_PORT}  (Validation Report panel)"
     log "or:  curl -s 'http://localhost:${MONITOR_PORT}/api/validation/summary?processId=${E2E_PROCESS_ID}'"
     echo ""

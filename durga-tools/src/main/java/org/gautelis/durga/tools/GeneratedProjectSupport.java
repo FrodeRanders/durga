@@ -696,13 +696,22 @@ final class GeneratedProjectSupport {
             auto.put("offset", offset);
             config.put("auto", auto);
         }
-        for (Object value : outgoing.values()) {
-            if (!(value instanceof Map<?, ?>)) {
+        for (Map.Entry<String, Object> entry : outgoing.entrySet()) {
+            if (!(entry.getValue() instanceof Map<?, ?>)) {
                 continue;
             }
-            Map<String, Object> config = (Map<String, Object>) value;
+            Map<String, Object> config = (Map<String, Object>) entry.getValue();
             Object topic = config.get("topic");
-            if (topic instanceof String topicName && !topicName.endsWith("-validation")) {
+            if (!(topic instanceof String topicName) || topicName.endsWith("-validation")) {
+                continue;
+            }
+            // Lifecycle events go to a single fixed topic the monitor consumes for comparison
+            // (a fixed source avoids the Kafka Streams "topic unknown to the topology" failure that
+            // a pattern-subscribed comparator hits when a per-process validation topic is created
+            // after it has started). Every other output is redirected to a "-validation" topic.
+            if ("process-events".equals(entry.getKey())) {
+                config.put("topic", "validation-events");
+            } else {
                 config.put("topic", topicName + "-validation");
             }
         }

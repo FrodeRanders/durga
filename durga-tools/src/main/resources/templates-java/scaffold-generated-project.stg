@@ -133,7 +133,7 @@ BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
 RETENTION_MS=%retentionMs%
 
 topics=(
-%if(validationEnabled)%  "%eventsTopic%-validation"
+%if(validationEnabled)%  "validation-events"
   "vannak-metadata-events-validation"
 %tasks:{t|
   "%processId%_%t%_output-validation"

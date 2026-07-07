@@ -37,7 +37,7 @@ import static org.junit.Assert.*;
 public class ValidationTopologyIntegrationTest extends KafkaIntegrationTestBase {
     private static final String SUFFIX = "-val-" + UUID.randomUUID().toString().substring(0, 8);
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(60);
-    private static final String VALIDATION_EVENTS_TOPIC = "process-events-valproc-validation" + SUFFIX;
+    private static final String VALIDATION_EVENTS_TOPIC = "validation-events" + SUFFIX;
     private static final String EVENTS_TOPIC = "process-events-valproc" + SUFFIX;
     private static final String RESULTS_TOPIC = "validation-results" + SUFFIX;
     private static final String RESULTS_STORE = "validation-results-store" + SUFFIX;

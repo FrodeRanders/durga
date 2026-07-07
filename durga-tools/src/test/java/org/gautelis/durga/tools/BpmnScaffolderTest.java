@@ -828,8 +828,8 @@ public class BpmnScaffolderTest {
         // Outputs are redirected to per-task validation topics; nothing production is written.
         assertTrue("task output must be redirected to a per-task validation topic",
                 applicationYaml.contains("data_pipeline_demo_transform_data_output-validation"));
-        assertTrue("lifecycle events must be redirected to the validation events topic",
-                applicationYaml.contains("process-events-data_pipeline_demo-validation"));
+        assertTrue("lifecycle events must go to the fixed validation-events topic",
+                applicationYaml.contains("validation-events"));
         // Input is read from the live topics through a dedicated consumer group.
         assertTrue("shadow must read through a dedicated validation consumer group",
                 applicationYaml.contains("data_pipeline_demo-validation"));
@@ -860,8 +860,8 @@ public class BpmnScaffolderTest {
 
         String lib = Files.readString(outputDir.resolve("src/lib.rs"));
         assertTrue("crate must be flagged validation mode", lib.contains("VALIDATION_MODE: bool = true"));
-        assertTrue("lifecycle events must be redirected to the validation events topic",
-                lib.contains("process-events-e2e_pipeline-validation"));
+        assertTrue("lifecycle events must go to the fixed validation-events topic",
+                lib.contains("EVENTS_TOPIC: &str = \"validation-events\""));
         assertTrue("plugin must run with the validation execution context",
                 lib.contains("PluginExecutionContext::new(VALIDATION_MODE)"));
         assertFalse("retired validation-candidate path must be gone", lib.contains("run_validation_worker"));
@@ -916,7 +916,7 @@ public class BpmnScaffolderTest {
         String lib = Files.readString(outputDir.resolve("src/lib.rs"));
         assertTrue(lib.contains("VALIDATION_MODE: bool = false"));
         assertFalse("production events topic must not be redirected",
-                lib.contains("process-events-e2e_pipeline-validation"));
+                lib.contains("validation-events"));
         String bin = Files.readString(outputDir.resolve("src/bin/transform_order.rs"));
         assertFalse("production worker must not use a validation consumer group",
                 bin.contains("-validation"));
