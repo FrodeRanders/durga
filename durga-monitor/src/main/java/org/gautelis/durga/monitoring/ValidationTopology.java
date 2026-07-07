@@ -80,7 +80,7 @@ public final class ValidationTopology {
 
         KStream<String, JoinInput> candidateInputs = candidateEvents
                 .filter((key, event) -> event != null
-                        && event.eventType() == ProcessEvent.EventType.ACTIVITY_COMPLETED
+                        && isCandidateOutcome(event)
                         && event.processId() != null && event.activityId() != null
                         && event.processInstanceId() != null)
                 .map((key, event) -> KeyValue.pair(candidateKey(event), JoinInput.candidate(event)));
@@ -121,6 +121,22 @@ public final class ValidationTopology {
 
     private static String candidateKey(ProcessEvent event) {
         return event.processId() + ":" + event.activityId() + ":" + event.processInstanceId();
+    }
+
+    /**
+     * Whether a validation-shadow event represents a per-task outcome to compare: a successful
+     * {@code ACTIVITY_COMPLETED}, or a failure signal (a failed status, an attached error, or an
+     * escalation/failure event type) that classifies the candidate as {@code CANDIDATE_ERROR}. The
+     * shadow also emits {@code ACTIVITY_ENTERED} and {@code GATEWAY_TAKEN}, which are not outcomes.
+     */
+    private static boolean isCandidateOutcome(ProcessEvent event) {
+        if (event.eventType() == ProcessEvent.EventType.ACTIVITY_COMPLETED) {
+            return true;
+        }
+        return event.status() == ProcessEvent.Status.FAILED
+                || event.error() != null
+                || event.eventType() == ProcessEvent.EventType.PROCESS_FAILED
+                || event.eventType() == ProcessEvent.EventType.ACTIVITY_ESCALATED;
     }
 
     /**
