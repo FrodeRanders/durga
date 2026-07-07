@@ -6,21 +6,18 @@
 - `--validation` now generates the **complete process as a shadow**, not additive
   shadow workers beside production. The shadow reads the **live production topics**
   through a dedicated consumer group (`{processId}-validation`), writes each task's
-  output/DLQ to `-validation` topics, and emits lifecycle events to a single fixed
-  **`validation-events`** topic — never to a real process topic
+  output/DLQ to `-validation` topics, and emits lifecycle events to a per-process
+  **`process-events-<processId>-validation`** topic — never to a real process topic
 - Side-effect suppression is now explicit: a single
   `executeWithResult(payload, config, PluginExecutionContext)` method (the 2-arg form
   was removed; mirrored by `execute_with_result` in the Rust trait). Side-effecting
   plugins (e.g. `ObjectStoreCollector`) suppress external writes when
   `context.validationMode()` is true while still returning the response they would have
-  produced. **Retired** `ValidationCandidateOutput` and `validation-candidate-outputs`
+  produced. **Retired** `ValidationCandidateOutput` and `retired candidate-output topic`
 - Generated workers emit `ACTIVITY_ENTERED` before executing, so per-task latency is
   measurable for plugin/data-pipeline tasks
-- `ValidationTopology` compares the shadow's `ACTIVITY_COMPLETED` (fixed
-  `validation-events` topic) against production per `processId:activityId:instance`.
-  A fixed candidate source avoids the Kafka Streams "topic unknown to the topology"
-  crash that a pattern-subscribed comparator hits when a per-process validation topic
-  appears after startup
+- `ValidationTopology` compares the shadow's `ACTIVITY_COMPLETED` (per-process
+  `process-events-<processId>-validation` topic) against production per `processId:activityId:instance`.
 - `FaultDetectionTopology` and the main topology exclude `process-events-*-validation`
   (pattern `process-events-(?!.*-validation).*`), so a running shadow never trips
   phantom stuck/cascade alarms or pollutes production state
@@ -52,7 +49,7 @@
   task that runs a candidate implementation against real input on a **dedicated
   consumer group** (`{processId}_{taskId}_validation`), leaving the production input
   index untouched, with side effects suppressed and output diverted to
-  `validation-candidate-outputs` instead of the task output topic
+  `retired candidate-output topic` instead of the task output topic
 - Handled **per task**: each candidate is fed the production input for that task, so
   an early divergence never cascades into later-task comparisons
 - Runtime foundation in `durga-runtime` (`org.gautelis.durga.validation`):

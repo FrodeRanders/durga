@@ -155,7 +155,6 @@ public final class ProcessMonitoringApp {
                 topics.throughputTopic(),
                 topics.modelsTopic(),
                 FaultDetectionTopology.DEFAULT_ALARMS_TOPIC,
-                ValidationTopology.DEFAULT_CANDIDATE_EVENTS_TOPIC,
                 ValidationTopology.DEFAULT_RESULTS_TOPIC);
         Properties adminProps = new Properties();
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);

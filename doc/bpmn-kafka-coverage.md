@@ -4,7 +4,7 @@ This matrix describes the current execution mapping in `durga`. It is a support 
 
 | BPMN element | Kafka mapping in `durga` | Status | Notes |
 | --- | --- | --- | --- |
-| `StartEvent` | Producer to `%processId%_start` plus canonical `process-events` lifecycle emission | Supported | Generated starter classes cover this path. |
+| `StartEvent` | Producer to `%processId%_start` plus canonical `process-events-{processId}` lifecycle emission | Supported | Generated starter classes cover this path. |
 | `ServiceTask` | Auto-completing worker on task input/output topics | Supported | Current generated worker model. |
 | `UserTask` | Waiting-state consumer plus external completion publisher | Supported | Use generated `complete-task.sh` to advance. |
 | `ManualTask` | Waiting-state consumer plus external completion publisher | Supported | Same external completion pattern as user tasks. |
@@ -25,7 +25,7 @@ This matrix describes the current execution mapping in `durga`. It is a support 
 | `IntermediateThrowEvent` with message | Publishes to external message topic and continues flow | Supported | Emits both message topic and lifecycle events. |
 | `IntermediateCatchEvent` with signal | Wait-state consumer plus external signal topic resume | Supported | Use `send-signal-event.sh` to resume. |
 | `IntermediateThrowEvent` with signal | Publishes to external signal topic and continues flow | Supported | Emits both signal topic and lifecycle events. |
-| `BoundaryEvent` with timer | Timeout watcher on `process-events` plus alternate flow handoff | Supported | Tasks and subprocess scopes. Interrupting/non-interrupting. |
+| `BoundaryEvent` with timer | Timeout watcher on `process-events-{processId}` plus alternate flow handoff | Supported | Tasks and subprocess scopes. Interrupting/non-interrupting. |
 | `BoundaryEvent` with error | Watches failed scope/task events and routes into boundary flow | Supported | Tasks and subprocess scopes. |
 | `BoundaryEvent` with escalation | Watches escalated scope/task events and routes into boundary flow | Supported | Tasks and subprocess scopes. |
 | `CallActivity` | Wait-state activity with call/reply topics | Supported | Generated helpers include `complete-call-activity.sh`. |
@@ -54,7 +54,7 @@ This matrix describes the current execution mapping in `durga`. It is a support 
 - message/signal event subprocesses
 - timer/error/escalation event subprocesses inside embedded subprocess scopes
 - process completion
-- monitoring via canonical `process-events`
+- monitoring via canonical `process-events-{processId}`
 
 ## Recommended implementation order
 

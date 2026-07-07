@@ -143,7 +143,7 @@ use rdkafka::producer::{FutureProducer, FutureRecord};
 
 %if(hasCustom)%pub mod custom;
 
-%endif%pub const EVENTS_TOPIC: &str = %if(validation)%"validation-events"%else%"%eventsTopic%"%endif%;
+%endif%pub const EVENTS_TOPIC: &str = %if(validation)%"%eventsTopic%-validation"%else%"%eventsTopic%"%endif%;
 pub const MODELS_TOPIC: &str = "process-models";
 pub const PROCESS_ID: &str = "%processId%";
 
@@ -197,19 +197,23 @@ fn build_producer(brokers: &str) -> FutureProducer {
         .expect("producer creation failed")
 }
 
-async fn send(producer: &FutureProducer, topic: &str, key: &str, payload: &str) {
+async fn send(producer: &FutureProducer, topic: &str, key: &str, payload: &str) -> Result<(), String> {
     let record = FutureRecord::to(topic).key(key).payload(payload);
-    if let Err((e, _)) = producer.send(record, Duration::from_secs(5)).await {
-        eprintln!("[durga] send to {topic} failed: {e}");
-    }
+    producer
+        .send(record, Duration::from_secs(5))
+        .await
+        .map(|_| ())
+        .map_err(|(e, _)| format!("send to {topic} failed: {e}"))
 }
 
 /// Publishes this process's embedded BPMN model to the process-models topic.
 /// Idempotent (keyed by process id); every worker registers on startup, so the
 /// process self-registers regardless of which workers are running.
 pub async fn register_model(producer: &FutureProducer) {
-    send(producer, MODELS_TOPIC, PROCESS_ID, BPMN_MODEL).await;
-    eprintln!("[durga] registered BPMN model for {} ({} bytes)", PROCESS_ID, BPMN_MODEL.len());
+    match send(producer, MODELS_TOPIC, PROCESS_ID, BPMN_MODEL).await {
+        Ok(()) => eprintln!("[durga] registered BPMN model for {} ({} bytes)", PROCESS_ID, BPMN_MODEL.len()),
+        Err(e) => eprintln!("[durga] model registration failed: {e}"),
+    }
 }
 
 /// Runs a plugin task: consume, execute, emit lifecycle, forward or terminate.
@@ -237,7 +241,11 @@ pub async fn run_plugin_worker(brokers: &str, cfg: PluginWorker, plugin: Box<dyn
                 // Emit ACTIVITY_ENTERED before executing so the monitor can pair it with the
                 // completion below and derive this task's latency (throughput is counted from the
                 // completion alone).
-                send(&producer, EVENTS_TOPIC, &key, &event.activity_entered(&cfg.activity_id).to_json()).await;
+                let mut send_failed = false;
+                if let Err(e) = send(&producer, EVENTS_TOPIC, &key, &event.activity_entered(&cfg.activity_id).to_json()).await {
+                    eprintln!("[durga] {e}");
+                    send_failed = true;
+                }
 
                 let result = plugin
                     .execute_with_result(
@@ -250,13 +258,26 @@ pub async fn run_plugin_worker(brokers: &str, cfg: PluginWorker, plugin: Box<dyn
                 let plan = plan_worker_output(&event, &cfg.activity_id, cfg.category, cfg.terminal, result);
 
                 for ev in &plan.emits {
-                    send(&producer, EVENTS_TOPIC, &key, &ev.to_json()).await;
+                    if let Err(e) = send(&producer, EVENTS_TOPIC, &key, &ev.to_json()).await {
+                        eprintln!("[durga] {e}");
+                        send_failed = true;
+                    }
                 }
                 if let (Some(fwd), Some(out)) = (&plan.forward, &cfg.output_topic) {
-                    send(&producer, out, &key, &fwd.to_json()).await;
+                    if let Err(e) = send(&producer, out, &key, &fwd.to_json()).await {
+                        eprintln!("[durga] {e}");
+                        send_failed = true;
+                    }
                 }
                 if let Some(dlq) = &plan.dlq {
-                    send(&producer, &cfg.dlq_topic, &key, dlq).await;
+                    if let Err(e) = send(&producer, &cfg.dlq_topic, &key, dlq).await {
+                        eprintln!("[durga] {e}");
+                        send_failed = true;
+                    }
+                }
+                if send_failed {
+                    eprintln!("[durga] not committing input offset for {} because at least one send failed", cfg.activity_id);
+                    continue;
                 }
                 let _ = consumer.commit_message(&msg, CommitMode::Async);
             }
@@ -288,11 +309,22 @@ pub async fn run_gateway_worker(brokers: &str, cfg: GatewayWorker) {
                 });
                 let key = event.process_instance_id.clone().unwrap_or_default();
                 let taken = event.gateway_taken(&cfg.activity_id, payload);
-                send(&producer, EVENTS_TOPIC, &key, &taken.to_json()).await;
+                let mut send_failed = false;
+                if let Err(e) = send(&producer, EVENTS_TOPIC, &key, &taken.to_json()).await {
+                    eprintln!("[durga] {e}");
+                    send_failed = true;
+                }
                 if let Some(topic) = target {
-                    send(&producer, &topic, &key, &taken.to_json()).await;
+                    if let Err(e) = send(&producer, &topic, &key, &taken.to_json()).await {
+                        eprintln!("[durga] {e}");
+                        send_failed = true;
+                    }
                 } else {
                     eprintln!("[durga] gateway {} matched no branch", cfg.activity_id);
+                }
+                if send_failed {
+                    eprintln!("[durga] not committing input offset for gateway {} because at least one send failed", cfg.activity_id);
+                    continue;
                 }
                 let _ = consumer.commit_message(&msg, CommitMode::Async);
             }

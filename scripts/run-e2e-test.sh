@@ -33,7 +33,7 @@ DURGA_RUST_BUILD_DIR="$PROJECT_DIR/durga-rust-build"
 
 # Code-generation target for the pipeline: 'java' (Quarkus) or 'rust' (Cargo
 # workers). The monitoring server is Java in both cases and observes either via
-# the shared process-events topic. Set with --target on feed/test-run.
+# the per-process lifecycle topic. Set with --target on feed/test-run.
 TARGET="java"
 
 # Automatic (monitor-owned) alarm tuning. Defaults are deliberately sensitive so a
@@ -130,7 +130,7 @@ start_infra() {
 
     log "Creating topics..."
     docker exec durga-redpanda rpk topic create \
-        e2e_pipeline_start process-events-e2e_pipeline vannak-metadata-events process-models 2>/dev/null || true
+        e2e_pipeline_start process-events-e2e_pipeline vannak-metadata-events-e2e_pipeline process-models 2>/dev/null || true
 
     touch "$INFRA_LOCK"
     log "Infrastructure ready."

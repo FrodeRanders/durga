@@ -175,7 +175,7 @@ scaffold_java() {
 # PRODUCTION input), so they only need to exist to avoid producer errors on a
 # broker with auto-create disabled.
 create_validation_topics() {
-    local shared="validation-events"
+    local shared="process-events-${E2E_PROCESS_ID}-validation"
     local extra=()
 
     if [ "$TARGET" = "rust" ]; then
@@ -190,14 +190,14 @@ create_validation_topics() {
         done
     else
         # The generated validation topics.sh is authoritative for the java target;
-        # it already includes the shared events topic and every per-task topic.
+        # it already includes the per-process validation events topic and every per-task topic.
         if [ -f "$GEN_DIR/topics.sh" ]; then
             while IFS= read -r t; do extra+=("$t"); done \
                 < <(grep -hoE '"[^"]+-validation"' "$GEN_DIR/topics.sh" | tr -d '"' | sort -u)
         fi
     fi
 
-    log "Creating validation topics (shared: ${shared}; ${#extra[@]} target-specific)..."
+    log "Creating validation topics (events: ${shared}; ${#extra[@]} target-specific)..."
     rpk_create_topics "$shared" ${extra[@]+"${extra[@]}"}
 }
 
@@ -303,7 +303,7 @@ cmd_start() {
     create_validation_topics
 
     echo ""
-    log "Validation events go to the fixed 'validation-events' topic the monitor already consumes;"
+    log "Validation events go to process-events-${E2E_PROCESS_ID}-validation;"
     log "results appear at:  http://localhost:${MONITOR_PORT}  (Validation Report panel)"
     log "or:  curl -s 'http://localhost:${MONITOR_PORT}/api/validation/summary?processId=${E2E_PROCESS_ID}'"
     echo ""

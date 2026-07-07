@@ -14,7 +14,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * Publishes full-process lifecycle events directly to the process-events topic,
+ * Publishes full-process lifecycle events directly to the per-process events topic,
  * simulating the complete BPMN execution with correct XOR gateway routing.
  * The monitoring topology picks these up to build state, latency, and counts.
  */

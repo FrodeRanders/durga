@@ -28,8 +28,8 @@ not an additional shadow worker beside each production worker. The shadow proces
   representative);
 \item \textbf{writes nothing to a real process topic.} Each task's output is diverted to
   a per-task \texttt{\%processId\%\_\%taskId\%\_output-validation} topic and its DLQ to
-  \texttt{\%processId\%\_\%taskId\%\_dlq-validation}; lifecycle events go to the fixed
-  \texttt{validation-events} topic instead of the live \texttt{process-events-\%processId\%};
+  \texttt{\%processId\%\_\%taskId\%\_dlq-validation}; lifecycle events go to the per-process
+  \texttt{process-events-\%processId\%-validation} topic instead of the live \texttt{process-events-\%processId\%};
 \item runs each plugin with side effects suppressed (Section~\ref{sec:ValidationMode}
   below).
 \end{itemize}
@@ -73,7 +73,7 @@ excluded by comparison ignore paths.
 \end{figure}
 
 The monitor's \texttt{ValidationTopology} pairs each shadow task's
-\texttt{ACTIVITY\_COMPLETED} event (from the fixed \texttt{validation-events} topic)
+\texttt{ACTIVITY\_COMPLETED} event (from the per-process \texttt{process-events-\%processId\%-validation} topic)
 against the production \texttt{ACTIVITY\_COMPLETED} for the same input (from the
 per-process \texttt{process-events-*} streams, excluding validation), keyed identically
 on \texttt{processId:activityId:processInstanceId}. Both sides carry the same instance id
@@ -81,11 +81,10 @@ on \texttt{processId:activityId:processInstanceId}. Both sides carry the same in
 single aggregate, robust to arrival order. A candidate seen before any prior output
 yields \texttt{PRIOR\_MISSING}, superseded when the prior output later arrives.
 
-The candidate side is a \emph{single fixed} topic rather than a per-process regex: a
-pattern-subscribed source feeding a repartition (the join/aggregate) cannot absorb a
-topic created \emph{after} the streams have started, which is exactly when a validation
-run begins. Routing every shadow's events to the fixed \texttt{validation-events} topic
-(created at monitor startup) keeps the comparator robust.
+The candidate side subscribes to \texttt{process-events-*-validation}, while the
+production side subscribes to \texttt{process-events-*} excluding \texttt{*-validation}.
+This keeps shadow lifecycle events out of production state and alarm projections while
+allowing the comparator to pair each shadow task with its production counterpart.
 
 Comparison is a structural, order-sensitive JSON diff (\texttt{JsonComparison}) with
 configurable \emph{ignore paths} (dot-notation, with \texttt{*} and \texttt{[*]}
@@ -113,16 +112,15 @@ Results are written to \texttt{validation-results} and materialized in the
   chaining topics;
 \item \texttt{\%processId\%\_\%taskId\%\_output-validation} and
   \texttt{\%processId\%\_\%taskId\%\_dlq-validation} --- per-task shadow output and DLQ;
-\item \texttt{validation-events} --- the single fixed topic carrying every shadow's
-  lifecycle events (all processes, both targets), consumed by the comparator;
+\item \texttt{process-events-\%processId\%-validation} --- the per-process topic carrying the shadow's
+  lifecycle events, consumed by the comparator;
 \item \texttt{validation-results} --- comparison results, materialized in
   \texttt{validation-results-store}.
 \end{itemize}
 
-The \texttt{validation-events} topic does not begin with \texttt{process-events-}, so the
-main state and fault/alarm topologies (which subscribe to
-\texttt{process-events-(?!.*-validation).*}) never ingest shadow events: a running
-validation cannot trip phantom stuck/cascade alarms or pollute production state.
+The main state and fault/alarm topologies subscribe to
+\texttt{process-events-(?!.*-validation).*}, so they never ingest shadow events: a
+running validation cannot trip phantom stuck/cascade alarms or pollute production state.
 
 \subsection{Reporting interfaces}
 
@@ -149,7 +147,7 @@ comparisons (the common, uninformative case) are hidden by default and opt-in vi
 \subsection{Java and Rust parity}
 
 Both code-generation targets emit the same \texttt{ProcessEvent} lifecycle records to the
-same \texttt{validation-events} topic, and both chain tasks through \emph{identical}
+same \texttt{process-events-\%processId\%-validation} topic, and both chain tasks through \emph{identical}
 topics (Section~\ref{sec:RustTarget}). A shadow is therefore
 wire-interchangeable with production regardless of target: a Rust-generated shadow can
 validate a running Java process (and vice versa), task by task --- a convenient way to
@@ -169,7 +167,7 @@ to the validation topics.
 \hline
 \endhead
 \texttt{PluginExecutionContext} & Passed to the plugin; \texttt{validationMode()} tells side-effecting plugins to suppress external effects. \\
-\texttt{ProcessEvent} (on \texttt{validation-events}) & Shadow $\rightarrow$ comparator: the candidate task's \texttt{ACTIVITY\_COMPLETED} output for the shared input. \\
+\texttt{ProcessEvent} (on \texttt{process-events-\%processId\%-validation}) & Shadow $\rightarrow$ comparator: the candidate task's \texttt{ACTIVITY\_COMPLETED} output for the shared input. \\
 \texttt{JsonComparison} & Structural JSON diff with ignore-path normalization. \\
 \texttt{ValidationResult} & Comparator $\rightarrow$ report record: outcome plus located differences and both payloads. \\
 \texttt{ValidationSummary} & Per-task aggregate counts surfaced to the API, dashboard, and metrics. \\

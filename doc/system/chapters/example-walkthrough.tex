@@ -39,14 +39,14 @@ Kafka topic declarations, helper scripts, and a generated \texttt{README.md}.
 \begin{enumerate}
 \item the starter publishes the initial process event,
 \item task workers consume input topics,
-\item each step emits lifecycle events to \texttt{process-events},
+\item each step emits lifecycle events to \texttt{process-events-\{processId\}},
 \item routing services move the process to the next task or end event,
 \item the orchestrator emits \texttt{PROCESS\_COMPLETED}.
 \end{enumerate}
 
 Richer models add boundaries, subprocess scopes, and event subprocesses but
 follow the same pattern: handlers move through Kafka topics while
-\texttt{process-events} carries the lifecycle truth.
+\texttt{process-events-\{processId\}} carries the lifecycle truth.
 
 \subsection{Exploring the generated process}
 

@@ -254,7 +254,7 @@ spec:
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
 metadata:
-  name: process-events
+  name: process-events-%processId%
   labels:
     strimzi.io/cluster: my-kafka
     app: %processId%
@@ -267,7 +267,7 @@ spec:
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
 metadata:
-  name: vannak-metadata-events
+  name: vannak-metadata-events-%processId%
   labels:
     strimzi.io/cluster: my-kafka
     app: %processId%

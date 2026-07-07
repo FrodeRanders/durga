@@ -23,7 +23,7 @@ the monitor consumes the whole \filepath{process-events-*} family,
 \item validation mode reads the live production topics through a dedicated consumer
 group (\texttt{\%processId\%-validation}), diverts each task's output to
 \filepath{\%processId\%\_\%taskId\%\_output-validation}, and routes lifecycle events to
-the fixed shared topic \filepath{validation-events}; comparison results are materialized
+the per-process validation topic \filepath{process-events-\%processId\%-validation}; comparison results are materialized
 from \filepath{validation-results} (Section~\ref{sec:ValidationMode}).
 \end{itemize}
 

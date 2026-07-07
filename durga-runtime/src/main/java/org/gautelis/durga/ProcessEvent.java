@@ -11,7 +11,8 @@ import java.util.Map;
  * Canonical lifecycle event emitted by generated runtimes and consumed by monitoring projections.
  * <p>
  * Events are keyed by {@code processInstanceId} and carry enough context to reconstruct current
- * process state, failures, and timing information from the shared {@code process-events} topic.
+ * process state, failures, and timing information from the per-process
+ * {@code process-events-{processId}} topic.
  */
 public record ProcessEvent(
         String processInstanceId,

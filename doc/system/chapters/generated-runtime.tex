@@ -63,7 +63,7 @@ topic or boundary path.
 
 Plugin executors and custom delegating workers share the same structure: a CDI bean
 with \texttt{@Incoming} for the task input topic and \texttt{@Channel} emitters for
-output, process-events, and dead-letter topics. The difference is in how the
+output, per-process lifecycle, and dead-letter topics. The difference is in how the
 transformation logic is obtained:
 
 \begin{itemize}
@@ -78,8 +78,8 @@ transformation logic is obtained:
 \end{itemize}
 
 Both patterns include scope cancellation checks, DLQ routing on failure, and
-canonical \texttt{process-events} emission. They also emit a Vannak-compatible
-\texttt{DataIndividualMetadataEvent} to the \\ \texttt{vannak-metadata-events} topic
+canonical \texttt{process-events-\{processId\}} emission. They also emit a Vannak-compatible
+\texttt{DataIndividualMetadataEvent} to the \\ \texttt{vannak-metadata-events-\{processId\}} topic
 after successful execution.
 For both patterns, returned bytes are interpreted as UTF-8. If the result parses
 as a JSON object, that object becomes the next \texttt{ProcessEvent.payload}. If

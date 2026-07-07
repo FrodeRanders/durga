@@ -355,7 +355,7 @@ The monitoring app exposes at \texttt{/api/metrics}:
 \subsection{Monitoring in production}
 
 The monitoring topology (\texttt{ProcessMonitoringApp}) is a separate
-deployment that consumes the canonical \texttt{process-events} topic and
+deployment that consumes the canonical \texttt{process-events-\{processId\}} topic and
 materializes queryable state. In production:
 
 \begin{itemize}

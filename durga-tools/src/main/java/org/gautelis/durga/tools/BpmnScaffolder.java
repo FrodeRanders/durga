@@ -369,6 +369,7 @@ public class BpmnScaffolder {
 
             ST aclsSt = group.getInstanceOf("aclsScript");
             aclsSt.add("processId", processId);
+            aclsSt.add("eventsTopic", eventsTopic);
             aclsSt.add("tasks", tasks);
             aclsSt.add("messageTopics", messageTopics);
             aclsSt.add("callActivities", callActivities);
@@ -484,6 +485,7 @@ public class BpmnScaffolder {
                     workerSt.add("processId", processId);
                     workerSt.add("taskId", task);
                     workerSt.add("inputChannel", taskInputChannels.getOrDefault(task, processId + "_" + task + "_input"));
+                    workerSt.add("eventsTopic", eventsTopic);
                     writeFile(workerPath, workerSt.render());
                     generatedFiles.add(outputRoot.relativize(workerPath).toString());
                 }

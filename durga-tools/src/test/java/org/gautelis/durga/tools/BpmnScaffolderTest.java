@@ -798,7 +798,7 @@ public class BpmnScaffolderTest {
                 "src/main/java/org/gautelis/durga/VannakMetadata.java")));
 
         String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
-        assertTrue(applicationYaml.contains("vannak-metadata-events"));
+        assertTrue(applicationYaml.contains("vannak-metadata-events-data_pipeline_demo"));
     }
 
     @Test
@@ -828,8 +828,8 @@ public class BpmnScaffolderTest {
         // Outputs are redirected to per-task validation topics; nothing production is written.
         assertTrue("task output must be redirected to a per-task validation topic",
                 applicationYaml.contains("data_pipeline_demo_transform_data_output-validation"));
-        assertTrue("lifecycle events must go to the fixed validation-events topic",
-                applicationYaml.contains("validation-events"));
+        assertTrue("lifecycle events must go to the per-process validation topic",
+                applicationYaml.contains("process-events-data_pipeline_demo-validation"));
         // Input is read from the live topics through a dedicated consumer group.
         assertTrue("shadow must read through a dedicated validation consumer group",
                 applicationYaml.contains("data_pipeline_demo-validation"));
@@ -838,8 +838,8 @@ public class BpmnScaffolderTest {
         String topics = Files.readString(outputDir.resolve("topics.sh"));
         assertTrue("topics must create the per-task validation output topic",
                 topics.contains("data_pipeline_demo_transform_data_output-validation"));
-        assertFalse("retired validation-candidate-outputs topic must not be created",
-                topics.contains("validation-candidate-outputs"));
+        assertFalse("retired candidate-output topic must not be created",
+                topics.contains("candidate-outputs"));
     }
 
     @Test
@@ -860,12 +860,12 @@ public class BpmnScaffolderTest {
 
         String lib = Files.readString(outputDir.resolve("src/lib.rs"));
         assertTrue("crate must be flagged validation mode", lib.contains("VALIDATION_MODE: bool = true"));
-        assertTrue("lifecycle events must go to the fixed validation-events topic",
-                lib.contains("EVENTS_TOPIC: &str = \"validation-events\""));
+        assertTrue("lifecycle events must go to the per-process validation topic",
+                lib.contains("EVENTS_TOPIC: &str = \"process-events-e2e_pipeline-validation\""));
         assertTrue("plugin must run with the validation execution context",
                 lib.contains("PluginExecutionContext::new(VALIDATION_MODE)"));
         assertFalse("retired validation-candidate path must be gone", lib.contains("run_validation_worker"));
-        assertFalse("retired validation-candidate topic must be gone", lib.contains("validation-candidate-outputs"));
+        assertFalse("retired validation-candidate topic must be gone", lib.contains("candidate-outputs"));
 
         // Cross-target validation: a downstream shadow task must read the PRODUCTION chaining topic
         // (java-aligned <predecessor>_output), not a rust-only topic, so it can shadow a java
@@ -916,7 +916,7 @@ public class BpmnScaffolderTest {
         String lib = Files.readString(outputDir.resolve("src/lib.rs"));
         assertTrue(lib.contains("VALIDATION_MODE: bool = false"));
         assertFalse("production events topic must not be redirected",
-                lib.contains("validation-events"));
+                lib.contains("process-events-e2e_pipeline-validation"));
         String bin = Files.readString(outputDir.resolve("src/bin/transform_order.rs"));
         assertFalse("production worker must not use a validation consumer group",
                 bin.contains("-validation"));

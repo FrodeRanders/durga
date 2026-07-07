@@ -100,8 +100,8 @@ final class RustTargetGenerator {
 
             // Validation mode is a complete shadow: the production worker is generated, but wired to
             // read the live input through a dedicated consumer group and redirect its output/DLQ to
-            // "-validation" topics (lifecycle events go to the validation events topic via
-            // VALIDATION_MODE in lib.rs). The plugin itself runs with the validation context so
+            // "-validation" topics (including lifecycle events through EVENTS_TOPIC in lib.rs).
+            // The plugin itself runs with the validation context so
             // substantial side effects are suppressed.
             String groupId = processId + "-" + task.name + (parsed.validation ? "-validation" : "");
             String outputTopic = terminal ? "" : validationTopic(outputTopicFor(processId, taskNode), parsed.validation);

@@ -82,7 +82,7 @@ is omitted, later tooling may infer it from the URI scheme.
 The implementation records data objects, data stores, and task associations in
 generated metadata. Generated plugin and custom workers also emit a
 Vannak-compatible \texttt{DataIndividualMetadataEvent} companion record to the
-\texttt{vannak-metadata-events} Kafka topic after successful execution. That
+\texttt{vannak-metadata-events-\{processId\}} Kafka topic after successful execution. That
 event captures process/activity context, payload size and checksums, plugin
 identity/configuration, output fields, and \texttt{DataHandle}/format metadata
 when present.

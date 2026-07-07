@@ -123,7 +123,7 @@ For production, consider declarative topic management via Strimzi `KafkaTopic` C
 ## Monitoring in Production
 
 The Durga monitoring topology (`ProcessMonitoringApp`) is a separate deployment that
-consumes `process-events`. In production:
+consumes the `process-events-*` family. In production:
 
 1. Deploy the monitoring app alongside the pipeline
 2. Or point it at the same Kafka cluster from a separate environment

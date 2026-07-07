@@ -85,7 +85,7 @@ Durga includes experimental support for this pattern:
 - `object-store-collector` writes the current payload to a local file-backed object store and forwards a `DataHandle`-style JSON reference.
 - `object-store-extractor` resolves a `DataHandle`-style JSON reference and emits the referenced bytes.
 - Generated plugin and custom workers can use `handleMode=manual` to operate on the handle JSON itself, or `handleMode=materialize` to load referenced bytes, run the plugin, write the output back to object storage, and forward a new handle.
-- Successful plugin and custom worker executions emit a Vannak-compatible `DataIndividualMetadataEvent` to `vannak-metadata-events`, including process/activity context, payload size/checksum facts, plugin metadata, and handle/format metadata when present.
+- Successful plugin and custom worker executions emit a Vannak-compatible `DataIndividualMetadataEvent` to `vannak-metadata-events-{processId}`, including process/activity context, payload size/checksum facts, plugin metadata, and handle/format metadata when present.
 
 ## BPMN Extension Properties
 

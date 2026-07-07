@@ -396,7 +396,7 @@ public final class ReplayTool {
                 Examples:
                   ReplayTool replay-dlq invoice_process_validate_data_dlq --dry-run
                   ReplayTool replay-dlq invoice_process_validate_data_dlq
-                  ReplayTool replay-offset process-events 0 100 200
+                  ReplayTool replay-offset process-events-invoice_process 0 100 200
                   ReplayTool inspect-dlq invoice_process_enrich_data_dlq
                 """);
     }

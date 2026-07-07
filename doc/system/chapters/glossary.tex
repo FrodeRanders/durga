@@ -3,7 +3,7 @@
 
 \begin{description}
 \item[BPMN] Business Process Model and Notation, the process-modeling notation used as input to Durga.
-\item[Canonical lifecycle stream] The shared \texttt{process-events} topic that carries normalized process and activity events.
+\item[Canonical lifecycle stream] The per-process \texttt{process-events-\%processId\%} topic that carries normalized process and activity events.
 \item[Call activity] A BPMN element used to model invocation of another process-like unit, mapped in Durga through explicit call and reply topics.
 \item[Event subprocess] A subprocess triggered by an event within an enclosing scope instead of by the main sequence flow.
 \item[Execution topics] The generated Kafka topics that move work between tasks, gateways and handlers.
@@ -13,9 +13,9 @@
 \item[ProcessStateView] The repository's materialized per-instance monitoring projection.
 \item[Scope cancellation] The generated runtime behavior that suppresses or redirects normal flow after an interrupting boundary or interrupting event subprocess fires.
 \item[Validation mode] An opt-in mode (\texttt{--validation}) in which the whole process is generated as a complete shadow that reads the live production input on a dedicated consumer group, runs each plugin with a validation \texttt{PluginExecutionContext} (side effects suppressed), and writes to \texttt{-validation} topics, so its output is compared per task against the prior/production output (Section~\ref{sec:ValidationMode}).
-\item[Shadow process] The complete validation-mode process: it mirrors production but reads through a dedicated consumer group and writes only to \texttt{-validation} topics and the fixed \texttt{validation-events} topic, never to a real process topic.
+\item[Shadow process] The complete validation-mode process: it mirrors production but reads through a dedicated consumer group and writes only to \texttt{-validation} topics and the per-process \texttt{process-events-\%processId\%-validation} topic, never to a real process topic.
 \item[Plugin execution context] The \texttt{PluginExecutionContext} passed to \texttt{executeWithResult}; \texttt{validationMode()} tells side-effecting plugins to suppress external effects while still returning the response they would have produced.
-\item[Validation events topic] The single fixed \texttt{validation-events} topic carrying every shadow's lifecycle events (all processes, both targets); the comparator's candidate source.
+\item[Validation events topic] The per-process \texttt{process-events-\%processId\%-validation} topic carrying a shadow's lifecycle events; the comparator's candidate source.
 \item[Activity throughput] The per-activity items-processed count materialized into \texttt{process-activity-throughput} and served at \texttt{/api/processes/\{id\}/throughput}.
 \item[Validation result] A \texttt{ValidationResult} record classifying one comparison as \texttt{EQUAL}, \texttt{DIFF}, \\ \texttt{PRIOR\_MISSING}, or \texttt{CANDIDATE\_ERROR}, with the located differences.
 \item[Scaffolder] The BPMN-driven generator entry point, implemented by:

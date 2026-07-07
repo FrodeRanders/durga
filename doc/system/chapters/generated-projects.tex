@@ -32,8 +32,8 @@ in \texttt{<package>.probes},
 When scaffolded with \texttt{--validation}, the output is instead the \emph{complete}
 process wired for validation: the workers read the live production topics through a
 dedicated consumer group (\texttt{\%processId\%-validation}), each task's output/DLQ are
-redirected to \texttt{-validation} topics, lifecycle events go to the fixed
-\texttt{validation-events} topic, and \texttt{application.yml} plus the topic-creation
+redirected to \texttt{-validation} topics, lifecycle events go to the per-process
+\texttt{process-events-\%processId\%-validation} topic, and \texttt{application.yml} plus the topic-creation
 script are adjusted accordingly. The plugins run with a validation
 \texttt{PluginExecutionContext} so substantial side effects are suppressed
 (Section~\ref{sec:ValidationMode}).
@@ -67,7 +67,7 @@ and after plugin execution (\texttt{handleMode=materialize}).
 
 After successful plugin or custom execution, generated workers emit a
 Vannak-compatible \\ \texttt{DataIndividualMetadataEvent} to the
-\texttt{vannak-metadata-events} Kafka topic. This keeps Durga's lifecycle
+\texttt{vannak-metadata-events-\{processId\}} Kafka topic. This keeps Durga's lifecycle
 \texttt{ProcessEvent} small while exposing item-level metadata for Vannak.
 
 The developer writes a separate implementation class (\texttt{\textit{Name}Impl.java})
@@ -108,7 +108,7 @@ Additional scripts are emitted for specific flags: \texttt{acls.sh} (with
 \item Run \texttt{ModelEnricher} during the build to write implementation metadata
   back into the local BPMN model copy.
 \item Build the generated project, run a starter or scenario, and observe progress
-  through \texttt{process-events}, \texttt{vannak-metadata-events}, and the
+  through \texttt{process-events-\{processId\}}, \texttt{vannak-metadata-events-\{processId\}}, and the
   monitoring views.
 \item When the pipeline needs changes, edit the enriched BPMN model and regenerate.
   Custom implementations survive untouched; plugin workers are fully regenerated.

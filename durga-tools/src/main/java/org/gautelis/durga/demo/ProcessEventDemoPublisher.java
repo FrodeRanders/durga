@@ -14,7 +14,7 @@ import java.util.Properties;
 import java.util.UUID;
 
 /**
- * Publishes a simple synthetic lifecycle directly to the canonical {@code process-events} topic.
+ * Publishes a simple synthetic lifecycle directly to the canonical per-process events topic.
  */
 public final class ProcessEventDemoPublisher {
     private ProcessEventDemoPublisher() {

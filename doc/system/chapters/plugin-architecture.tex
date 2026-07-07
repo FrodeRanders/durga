@@ -111,7 +111,7 @@ The returned bytes are decoded as UTF-8. JSON object results replace the
 are wrapped as \texttt{\{ "\_value": ... \}}. A \texttt{null} result means the
 incoming payload is forwarded unchanged. Generated plugin and custom workers also
 emit a Vannak-compatible \texttt{DataIndividualMetadataEvent} to the
-\texttt{vannak-metadata-events} topic after successful execution.
+\texttt{vannak-metadata-events-\{processId\}} topic after successful execution.
 
 \subsection{Plugin catalog}
 
@@ -209,7 +209,7 @@ template. The executor:
 \item instantiates the plugin as a private field,
 \item delegates each incoming message to \texttt{PluginExecutionSupport.execute(...)},
 \item emits \texttt{ACTIVITY\_COMPLETED} on success,
-\item emits a companion \texttt{DataIndividualMetadataEvent} to \texttt{vannak-metadata-events} on success,
+\item emits a companion \texttt{DataIndividualMetadataEvent} to \texttt{vannak-metadata-events-\{processId\}} on success,
 \item routes failures to a dead-letter topic (\texttt{\%task\%\_dlq}) with structured error records,
 \item respects \texttt{ScopeCancellationRegistry} for interrupting boundary support.
 \end{itemize}

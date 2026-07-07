@@ -68,7 +68,7 @@ mp:
           serializer: "org.apache.kafka.common.serialization.StringSerializer"
       vannak-metadata-events:
         connector: "smallrye-kafka"
-        topic: "vannak-metadata-events"
+        topic: "vannak-metadata-events-%processId%"
         value:
           serializer: "org.apache.kafka.common.serialization.StringSerializer"
 %tasks:{t|
@@ -133,8 +133,8 @@ BOOTSTRAP=${BOOTSTRAP:-localhost:9094}
 RETENTION_MS=%retentionMs%
 
 topics=(
-%if(validationEnabled)%  "validation-events"
-  "vannak-metadata-events-validation"
+%if(validationEnabled)%  "%eventsTopic%-validation"
+  "vannak-metadata-events-%processId%-validation"
 %tasks:{t|
   "%processId%_%t%_output-validation"
   "%processId%_%t%_dlq-validation"
@@ -146,7 +146,7 @@ topics=(
 }%%else%  "%processId%_start"
   "%processId%_state"
   "%eventsTopic%"
-  "vannak-metadata-events"
+  "vannak-metadata-events-%processId%"
 %timers:{t|
   "%processId%_%t%_input"
 }%
@@ -3787,7 +3787,7 @@ spec:
             periodSeconds: 15
 >>
 
-aclsScript(processId, tasks, messageTopics, callActivities, subProcesses) ::= <<
+aclsScript(processId, eventsTopic, tasks, messageTopics, callActivities, subProcesses) ::= <<
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -3796,10 +3796,9 @@ ADMIN=${ADMIN:-admin-client}
 
 echo "Applying Kafka ACLs for process %processId% ..."
 
-kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Read --topic process-events --command-config $ADMIN
-kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Read --topic process-events-monitor --command-config $ADMIN
-kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Write --topic process-events --command-config $ADMIN
-kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Write --topic vannak-metadata-events --command-config $ADMIN
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Read --topic %eventsTopic% --command-config $ADMIN
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Write --topic %eventsTopic% --command-config $ADMIN
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Write --topic vannak-metadata-events-%processId% --command-config $ADMIN
 %tasks:{t|
 kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Read --topic %processId%_%t%_input --command-config $ADMIN
 kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-worker --operation Write --topic %processId%_%t%_output --command-config $ADMIN
@@ -3811,7 +3810,7 @@ kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId
 kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:%processId%-starter --operation Write --topic %processId%_start --command-config $ADMIN
 kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:durga-operator --operation Read --topic %processId% --resource-pattern-type prefixed --command-config $ADMIN
 kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:durga-operator --operation Read --topic %processId%_ --resource-pattern-type prefixed --command-config $ADMIN
-kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:durga-monitoring --operation Read --topic process-events --command-config $ADMIN
+kafka-acls --bootstrap-server $BOOTSTRAP --add --allow-principal User:durga-monitoring --operation Read --topic process-events- --resource-pattern-type prefixed --command-config $ADMIN
 
 echo "Done."
 >>

@@ -252,7 +252,7 @@ the generated worker wraps it as `{ "_value": ... }`. A `null` plugin result kee
 the incoming payload unchanged.
 
 Generated plugin and custom-activity workers also emit a Vannak-compatible
-`DataIndividualMetadataEvent` companion record to the `vannak-metadata-events`
+`DataIndividualMetadataEvent` companion record to the `vannak-metadata-events-{processId}`
 Kafka topic after successful execution. The event includes process/activity
 context, a deterministic `DataIndividualShardId` hash, passive metadata such as
 input size and checksum, active metadata such as plugin id/config and output

@@ -36,7 +36,7 @@ impl Category {
 /// The plan the worker glue should carry out.
 #[derive(Debug, Default)]
 pub struct WorkerPlan {
-    /// Lifecycle events to publish to the process-events topic.
+    /// Lifecycle events to publish to the per-process events topic.
     pub emits: Vec<ProcessEvent>,
     /// Event to forward to the next task's input topic (None = terminal or held).
     pub forward: Option<ProcessEvent>,

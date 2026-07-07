@@ -1,12 +1,10 @@
 //! Validation-mode contracts for the Rust target, mirroring the Java
 //! `org.gautelis.durga.validation` package.
 //!
-//! A shadow worker runs a candidate plugin against real production input on a
-//! dedicated consumer group with side effects suppressed, and emits a
-//! [`ValidationCandidateOutput`] to the shared `validation-candidate-outputs`
-//! topic instead of writing to the task output topic. The record is
-//! wire-compatible with the Java type so the Java monitor pairs it against the
-//! prior/production output regardless of which target produced it.
+//! [`ValidationCandidateOutput`] is retained for the retired first validation
+//! design, where workers emitted explicit candidate-output records instead of
+//! normal lifecycle events. Current generated Rust validation workers publish
+//! lifecycle events to `process-events-<processId>-validation`.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

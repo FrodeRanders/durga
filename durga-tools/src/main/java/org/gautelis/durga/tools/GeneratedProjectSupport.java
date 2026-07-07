@@ -80,7 +80,7 @@ final class GeneratedProjectSupport {
         ));
         outgoing.putIfAbsent("vannak-metadata-events", channelConfig(
                 "smallrye-kafka",
-                "vannak-metadata-events",
+                "vannak-metadata-events-" + processId,
                 "org.apache.kafka.common.serialization.StringSerializer"
         ));
 
@@ -705,15 +705,7 @@ final class GeneratedProjectSupport {
             if (!(topic instanceof String topicName) || topicName.endsWith("-validation")) {
                 continue;
             }
-            // Lifecycle events go to a single fixed topic the monitor consumes for comparison
-            // (a fixed source avoids the Kafka Streams "topic unknown to the topology" failure that
-            // a pattern-subscribed comparator hits when a per-process validation topic is created
-            // after it has started). Every other output is redirected to a "-validation" topic.
-            if ("process-events".equals(entry.getKey())) {
-                config.put("topic", "validation-events");
-            } else {
-                config.put("topic", topicName + "-validation");
-            }
+            config.put("topic", topicName + "-validation");
         }
     }
 

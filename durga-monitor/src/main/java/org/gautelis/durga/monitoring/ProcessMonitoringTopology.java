@@ -34,7 +34,7 @@ public final class ProcessMonitoringTopology {
 
     private static final Logger LOG = LoggerFactory.getLogger(ProcessMonitoringTopology.class);
 
-    public static final String DEFAULT_EVENTS_TOPIC = "process-events";
+    public static final String DEFAULT_EVENTS_TOPIC = "process-events-default";
     public static final String DEFAULT_STATE_TOPIC = "process-state";
     public static final String DEFAULT_COUNTS_TOPIC = "process-state-counts";
     public static final String DEFAULT_ACTIVE_TOPIC = "process-active-state";
@@ -124,8 +124,8 @@ public final class ProcessMonitoringTopology {
         stateByInstance.toStream()
                 .to(topics.stateTopic(), Produced.with(Serdes.String(), processStateSerde));
 
-        stateByInstance.filter((processInstanceId, state) -> state != null && "active".equals(state.lifecycleState()))
-                .toStream()
+        stateByInstance.toStream()
+                .mapValues(state -> state != null && "active".equals(state.lifecycleState()) ? state : null)
                 .to(topics.activeTopic(), Produced.with(Serdes.String(), processStateSerde));
 
         KTable<String, Long> countsByState = stateByInstance

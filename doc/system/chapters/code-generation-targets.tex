@@ -83,8 +83,8 @@ Validation mode (Section~\ref{sec:ValidationMode}) is emitted on both targets. W
 \texttt{--validation} the scaffolder generates the \emph{whole} process again, wired to
 read the live production topics through a dedicated consumer group, suppress side effects
 (via the validation \texttt{PluginExecutionContext}), divert each task's output to a
-\texttt{-validation} topic, and emit lifecycle events to the fixed
-\texttt{validation-events} topic. There is no separate shadow-worker class or validation
+\texttt{-validation} topic, and emit lifecycle events to the per-process
+\texttt{process-events-\%processId\%-validation} topic. There is no separate shadow-worker class or validation
 binary and no separate candidate wire record: both targets emit ordinary
 \texttt{ProcessEvent} records, and because their chaining topics are identical, a shadow
 of either target validates a production of either target.

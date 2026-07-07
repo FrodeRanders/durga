@@ -11,12 +11,10 @@ import java.util.Map;
 /**
  * Output of a task run in validation mode by a shadow worker.
  * <p>
- * A shadow worker consumes the same production input as the deployed task (via a dedicated consumer
- * group so production offsets are untouched), executes the <em>candidate</em> implementation with
- * all real side effects suppressed, and emits this record to the shared
- * {@code validation-candidate-outputs} topic instead of writing to the task's production output
- * topic. It carries both the shared {@code inputPayload} and the candidate {@code outputPayload} so
- * the comparator can pair it against the prior/production output for the same
+ * This is the retained DTO for the retired first validation-mode design, where a shadow worker
+ * emitted an explicit candidate-output record instead of a normal lifecycle event. It carries both
+ * the shared {@code inputPayload} and the candidate {@code outputPayload} so a comparator can pair
+ * it against the prior/production output for the same
  * {@code (processId, activityId, processInstanceId)} and produce a {@link ValidationResult}.
  * <p>
  * Records are keyed on the Kafka topic by {@link #key()}.

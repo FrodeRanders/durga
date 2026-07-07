@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
  */
 public final class ValidationTopology {
 
-    public static final String DEFAULT_CANDIDATE_EVENTS_TOPIC = "validation-events";
+    public static final String DEFAULT_CANDIDATE_EVENTS_PATTERN = "process-events-.*-validation";
     public static final String DEFAULT_RESULTS_TOPIC = "validation-results";
     public static final String DEFAULT_RESULTS_STORE = "validation-results-store";
 
@@ -160,17 +160,11 @@ public final class ValidationTopology {
         /**
          * Validation topics matching the monitoring app's all-process configuration. Ignore paths
          * are read from the {@code durga.validation.ignore.paths} system property (comma-separated).
-         * <p>
-         * The candidate side is a single fixed topic ({@code validation-events}) rather than a
-         * per-process regex: validation-shadow events for every process land here, keyed by
-         * {@code processId:activityId:instance}. A fixed source avoids the Kafka Streams limitation
-         * where a pattern-subscribed source feeding a repartition cannot absorb a topic that is
-         * created after the streams have started (which is exactly when a validation run begins).
          */
         public static ValidationTopics forAllProcesses() {
             return new ValidationTopics(
-                    DEFAULT_CANDIDATE_EVENTS_TOPIC,
                     null,
+                    Pattern.compile(DEFAULT_CANDIDATE_EVENTS_PATTERN),
                     ProcessMonitoringTopology.DEFAULT_EVENTS_TOPIC,
                     PRODUCTION_EVENTS_PATTERN,
                     DEFAULT_RESULTS_TOPIC,

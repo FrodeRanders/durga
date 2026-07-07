@@ -37,13 +37,13 @@ import static org.junit.Assert.*;
 public class ValidationTopologyIntegrationTest extends KafkaIntegrationTestBase {
     private static final String SUFFIX = "-val-" + UUID.randomUUID().toString().substring(0, 8);
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(60);
-    private static final String VALIDATION_EVENTS_TOPIC = "validation-events" + SUFFIX;
     private static final String EVENTS_TOPIC = "process-events-valproc" + SUFFIX;
+    private static final String VALIDATION_EVENTS_TOPIC = EVENTS_TOPIC + "-validation";
     private static final String RESULTS_TOPIC = "validation-results" + SUFFIX;
     private static final String RESULTS_STORE = "validation-results-store" + SUFFIX;
     private static final ValidationTopology.ValidationTopics TOPICS =
             new ValidationTopology.ValidationTopics(
-                    VALIDATION_EVENTS_TOPIC, null, EVENTS_TOPIC,
+                    null, Pattern.compile(Pattern.quote(VALIDATION_EVENTS_TOPIC)), EVENTS_TOPIC,
                     Pattern.compile(Pattern.quote(EVENTS_TOPIC)),
                     RESULTS_TOPIC, RESULTS_STORE, List.of("ts"));
 

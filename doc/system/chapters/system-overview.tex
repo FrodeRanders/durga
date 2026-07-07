@@ -51,7 +51,7 @@ onto Kafka channels and lifecycle events.
         \node[box, right=10mm of scaffolder] (generated) {Generated process\\project (fat jar)};
         \node[box, right=10mm of generated] (topics) {Execution topics\\and handlers};
 
-        \node[box, below=10mm of scaffolder] (events) {Canonical\\process-events};
+        \node[box, below=10mm of scaffolder] (events) {Canonical\\process-events-\{processId\}};
         \node[modelbox, below=10mm of generated] (models) {Process-models\\(BPMN registry)};
 
         \node[box, below=10mm of models] (monitoring) {Kafka Streams\\monitoring};

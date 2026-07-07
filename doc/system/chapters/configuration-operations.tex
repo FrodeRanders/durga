@@ -25,8 +25,8 @@ Available flags: \texttt{--dry-run}, \texttt{--out <dir>},
 
 \texttt{--validation} generates the whole process in validation mode (Java or Rust), so
 a candidate implementation runs against the live production input on a dedicated consumer
-group with side effects suppressed, writing to \texttt{-validation} topics and the fixed
-\texttt{validation-events} topic instead of the real ones, for per-task comparison
+group with side effects suppressed, writing to \texttt{-validation} topics and the
+per-process \texttt{process-events-\%processId\%-validation} topic instead of the real ones, for per-task comparison
 against production. See Section~\ref{sec:ValidationMode}. The default output (without the
 flag) is unchanged.
 
@@ -52,9 +52,9 @@ exerciser classes in \texttt{<pkg>.probes}.
 \texttt{--event-topic <topic>} overrides the physical Kafka topic name for
 canonical lifecycle events. The default is \texttt{process-events-<processId>},
 so each pipeline writes to its own topic by default. Use this flag to direct
-multiple pipelines to a shared topic (e.g. \texttt{--event-topic process-events})
+multiple pipelines to a shared qualified topic (e.g. \texttt{--event-topic process-events-orders})
 or to use a custom naming scheme. The logical channel names
-\texttt{process-events} and \texttt{process-events-monitor} in the
+\texttt{process-events-\{processId\}} and \texttt{process-events-monitor} in the
 generated code stay unchanged; only the physical topic mapping in
 \texttt{application.yml} is affected.
 
@@ -104,7 +104,7 @@ In normal local startup:
 Durga uses several layers of state:
 \begin{itemize}
 \item transport history on execution topics,
-\item canonical lifecycle history on \texttt{process-events},
+\item canonical lifecycle history on \texttt{process-events-\{processId\}},
 \item materialized latest state and counts in Kafka Streams stores and corresponding topics,
 \item local waiting and cancellation bookkeeping inside some generated handlers.
 \end{itemize}

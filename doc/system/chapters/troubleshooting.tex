@@ -50,7 +50,7 @@ the lifecycle model.
 \subsection{An external completion arrives after cancellation}
 
 The generated runtime now suppresses much of this post-cancel progress, but late events can still
-be confusing during debugging. In such cases, the canonical \texttt{process-events} stream is the
+be confusing during debugging. In such cases, the canonical \texttt{process-events-\{processId\}} stream is the
 best source of truth: check whether cancellation happened before the late completion arrived.
 
 \subsection{Monitoring counts do not match raw topic intuition}
@@ -64,7 +64,7 @@ is the intended read model for ``how many instances are in state X right now''.
 The dashboard reads materialized monitoring stores, not raw execution topics. Missing trend or
 latency rows usually means no supported lifecycle event has reached the monitoring topology yet,
 the Streams stores are still restoring, or old monitoring topics contain records produced by an
-older projection version. For persistent inconsistencies, compare \texttt{process-events},
+older projection version. For persistent inconsistencies, compare \texttt{process-events-\{processId\}},
 \texttt{process-trends}, \texttt{process-latency}, and the monitoring application logs.
 
 \subsection{The generated output looks harder to understand than expected}

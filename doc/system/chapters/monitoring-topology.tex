@@ -71,14 +71,12 @@ application runs these as separate \texttt{KafkaStreams} instances with separate
 application IDs and state directories.
 
 Validation mode adds a fourth separate topology. \texttt{ValidationTopology}
-merges the shadow's task completions (from the fixed \texttt{validation-events} topic)
+merges the shadow's task completions (from the per-process \texttt{process-events-\%processId\%-validation} topic)
 with the prior/production output (the \texttt{ACTIVITY\_COMPLETED} lifecycle event on
 the \texttt{process-events-*} streams), keyed on
 \texttt{processId:activityId:processInstanceId}, and materializes a \\
 \texttt{ValidationResult} per task per instance in \texttt{validation-results-store}. The
-candidate source is a single fixed topic (not a per-process regex) because a
-pattern-subscribed source feeding the join's repartition cannot absorb a topic created
-after the streams have started --- which is when a validation run begins.
+candidate source is the \texttt{process-events-*-validation} topic pattern.
 It runs as its own \texttt{KafkaStreams} instance and is described in
 Section~\ref{sec:ValidationMode}.
 
@@ -166,7 +164,7 @@ scans it for global, process-specific, and latest-instance-specific alarm views.
 \subsection{Relationship to demos}
 
 Repository-level demo publishers and scenario runners emit synthetic lifecycle
-events directly to \\ \texttt{process-events}, making the monitoring subsystem
+events directly to \\ \texttt{process-events-\{processId\}}, making the monitoring subsystem
 independently testable without a full generated process runtime.
 
 \subsection{Current shape}

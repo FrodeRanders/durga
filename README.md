@@ -72,7 +72,7 @@ Output lands in `generated/` by default:
 - `pom.xml` and `README.md` for the generated project
 - runtime contracts for `DataHandle`, handle-aware plugin execution, and
   Vannak-compatible `DataIndividualMetadataEvent` records on
-  `vannak-metadata-events`
+  `vannak-metadata-events-{processId}`
 - Helper scripts: `demo-scenario.sh`, `send-task-input.sh`, `complete-task.sh`,
   `fail-task.sh`, `escalate-task.sh`, `complete-call-activity.sh`,
   `send-message-event.sh`, `send-signal-event.sh`, `watch-process-events.sh`,
@@ -145,7 +145,7 @@ The dashboard overlays each task in the **Process Diagram** with its aggregate
 statistics — items processed and latency (avg/p95) — and layers any active alarm
 on top (driving the colour), rather than showing a single execution's state. The
 lifecycle events that feed latency (`ACTIVITY_ENTERED`/`ACTIVITY_COMPLETED` pairs)
-are emitted by the generated workers. Validation events (`validation-events`) are
+are emitted by the generated workers. Validation events (`process-events-<processId>-validation`) are
 excluded from the state and fault/alarm topologies so a running shadow never
 disturbs production monitoring.
 
@@ -167,8 +167,8 @@ extra workers beside a functional process. A validation build:
   `DURGA_VALIDATION_OFFSET_RESET` for a bounded recent replay);
 - **writes nothing to the real process topics.** Every task output that would normally land on
   `{processId}_{taskId}_output` is diverted to a per-task validation topic
-  `{processId}_{taskId}_output-validation`, and lifecycle events go to the fixed **`validation-events`**
-  topic (shared by all validated processes and every target) instead of the live `process-events-{processId}`;
+  `{processId}_{taskId}_output-validation`, and lifecycle events go to the per-process
+  **`process-events-{processId}-validation`** topic instead of the live `process-events-{processId}`;
 - **suppresses substantial side effects.** Tasks that would mutate the outside world (e.g. writing to
   object storage) do not do so in validation mode — the plugin runs with a validation
   `PluginExecutionContext` and only records the alternative response it *would* have produced. Nothing
@@ -176,7 +176,7 @@ extra workers beside a functional process. A validation build:
 
 Because each task reads the live production input for its position and re-emits its result, the
 comparison is done **per task**: a change in an early task never contaminates the comparison of later
-ones. The monitor pairs each task's validation `ACTIVITY_COMPLETED` (from `validation-events`) against
+ones. The monitor pairs each task's validation `ACTIVITY_COMPLETED` (from `process-events-<processId>-validation`) against
 the live production `ACTIVITY_COMPLETED` for the **same input** and classifies each comparison as
 `EQUAL`, `DIFF`, `PRIOR_MISSING`, or `CANDIDATE_ERROR` using a normalized JSON diff with configurable
 ignore-paths (`durga.validation.ignore.paths`). Results are exposed via:

@@ -14,7 +14,7 @@ import java.util.Properties;
 import java.util.UUID;
 
 /**
- * Publishes named monitoring scenarios directly to the canonical {@code process-events} topic.
+ * Publishes named monitoring scenarios directly to the canonical per-process events topic.
  */
 public final class ProcessEventScenarioRunner {
     private static String topic;

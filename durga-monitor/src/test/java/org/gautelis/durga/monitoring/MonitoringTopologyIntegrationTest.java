@@ -193,6 +193,25 @@ public class MonitoringTopologyIntegrationTest extends KafkaIntegrationTestBase 
     }
 
     @Test
+    public void shouldRemoveCompletedInstancesFromActiveIndex() {
+        System.out.println("TC: completed instances are tombstoned from the active index and no longer appear stuck");
+
+        String instanceId = "pi-not-stuck-1";
+        produceEvent(instanceId, "stuck_proc", "start", ProcessEvent.EventType.PROCESS_STARTED, "2026-04-03T08:00:00Z");
+        produceEvent(instanceId, "stuck_proc", "long-task", ProcessEvent.EventType.ACTIVITY_ENTERED, "2026-04-03T08:01:00Z");
+
+        waitForCondition(() -> queryService.stuckInstances("stuck_proc", 1).stream()
+                .anyMatch(s -> instanceId.equals(s.processInstanceId())), DEFAULT_TIMEOUT);
+
+        produceEvent(instanceId, "stuck_proc", "completed", ProcessEvent.EventType.PROCESS_COMPLETED, "2026-04-03T08:02:00Z");
+
+        waitForCondition(() -> queryService.findInstance(instanceId)
+                .map(s -> "completed".equals(s.lifecycleState())).orElse(false), DEFAULT_TIMEOUT);
+        waitForCondition(() -> queryService.stuckInstances("stuck_proc", 1).stream()
+                .noneMatch(s -> instanceId.equals(s.processInstanceId())), DEFAULT_TIMEOUT);
+    }
+
+    @Test
     public void shouldMaterializeProcessStateFromUnkeyedLifecycleEvents() {
         System.out.println("TC: materializes process state from unkeyed lifecycle event values");
 

@@ -199,7 +199,7 @@ public class TransformDataWorker {
     public CompletionStage<Void> handle(Message<String> msg) {
         // ... boilerplate, cancellation check, DLQ ...
         byte[] output = PluginExecutionSupport.execute(implementation, payload, config);
-        // ... emit output, process-events, Vannak metadata event ...
+        // ... emit output, process-events-{processId}, Vannak metadata event ...
     }
 }
 ```
@@ -214,7 +214,7 @@ execution path. `handleMode=manual` passes `DataHandle` JSON to the implementati
 `handleMode=materialize` reads the referenced object-store bytes, runs the
 implementation, writes the output back to the store, and forwards a new handle.
 On successful execution, generated workers also emit a
-`DataIndividualMetadataEvent` to `vannak-metadata-events`.
+`DataIndividualMetadataEvent` to `vannak-metadata-events-{processId}`.
 
 The developer writes:
 

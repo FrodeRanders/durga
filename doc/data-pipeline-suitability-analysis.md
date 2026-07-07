@@ -262,7 +262,7 @@ In consequence:
 Vannak reduces but does not eliminate the key gaps:
 
 - Durga generated plugin and custom workers now emit Vannak-compatible
-  `DataIndividualMetadataEvent` records automatically to `vannak-metadata-events`.
+  `DataIndividualMetadataEvent` records automatically to `vannak-metadata-events-{processId}`.
   This is a first bridge, not yet a production interoperability package.
 - Durga's `ProcessEvent` Java record does not yet carry typed metadata refs,
   schema version, item identity, source offsets, or lineage fields in a way that
@@ -271,7 +271,7 @@ Vannak reduces but does not eliminate the key gaps:
   execution path produce useful metadata, but their mapping into Vannak passive
   and active metadata should be stabilized as a schema contract.
 - Vannak's Kafka ingest path must consume and index the Durga
-  `vannak-metadata-events` topic as a supported compatibility path.
+  `vannak-metadata-events-{processId}` topics as a supported path.
 - Vannak's full Ipto integration and Kafka smoke tests are gated integration
   tests, not always-on release gates.
 - There is no shared schema/contract package between Durga Java and Vannak Rust
@@ -645,8 +645,8 @@ contract:
 
 - Keep the Java record and Rust type for `DataIndividualMetadataEvent` aligned.
 - Shared JSON schema or Avro/Protobuf schema for the metadata event.
-- Generated Durga emitters for Vannak metadata topics, currently the shared
-  `vannak-metadata-events` topic.
+- Generated Durga emitters for per-process Vannak metadata topics, currently
+  `vannak-metadata-events-{processId}`.
 - Mapping from `DataHandle` and plugin metadata into Vannak passive/active
   metadata fields.
 - Stable idempotency-key rules.
