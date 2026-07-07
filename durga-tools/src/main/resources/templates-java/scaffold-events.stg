@@ -28,14 +28,14 @@ public class %className% {
             new ConcurrentHashMap<String, ScheduledFuture>();
 
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
     @Channel("%outputChannel%")
     Emitter<String> outputEmitter;
 
-    @Incoming("process-events-monitor")
+    @Incoming("lifecycle-events-monitor")
     public CompletionStage<Void> onProcessEvent(Message<String> msg) {
         ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
         if (!"%attachedTaskId%".equals(event.activityId())) {
@@ -196,14 +196,14 @@ public class %className% {
     ScopeCancellationRegistry cancellationRegistry;
 
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
     @Channel("%outputChannel%")
     Emitter<String> outputEmitter;
 
-    @Incoming("process-events-monitor")
+    @Incoming("lifecycle-events-monitor")
     public CompletionStage<Void> onProcessEvent(Message<String> msg) {
         ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
         if (!"%attachedTaskId%".equals(event.activityId()) || event.status() != ProcessEvent.Status.FAILED) {
@@ -304,14 +304,14 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
     @Channel("%outputChannel%")
     Emitter<String> outputEmitter;
 
-    @Incoming("process-events-monitor")
+    @Incoming("lifecycle-events-monitor")
     public CompletionStage<Void> onProcessEvent(Message<String> msg) {
         ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
         if (!"%attachedTaskId%".equals(event.activityId()) || event.status() != ProcessEvent.Status.ESCALATED) {
@@ -415,7 +415,7 @@ import java.util.concurrent.TimeUnit;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -554,14 +554,14 @@ public class %className% {
     ScopeCancellationRegistry cancellationRegistry;
 
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
     @Channel("%outputChannel%")
     Emitter<String> outputEmitter;
 
-    @Incoming("process-events-monitor")
+    @Incoming("lifecycle-events-monitor")
     public CompletionStage<Void> onProcessEvent(Message<String> msg) {
         ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
         if ("%messageId%".equals(event.activityId())
@@ -679,7 +679,7 @@ public class %className% {
     ScopeCancellationRegistry cancellationRegistry;
 
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -775,14 +775,14 @@ public class %className% {
     ScopeCancellationRegistry cancellationRegistry;
 
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
     @Channel("%outputChannel%")
     Emitter<String> outputEmitter;
 
-    @Incoming("process-events-monitor")
+    @Incoming("lifecycle-events-monitor")
     public CompletionStage<Void> onProcessEvent(Message<String> msg) {
         ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
         if ("%signalId%".equals(event.activityId())
@@ -900,7 +900,7 @@ public class %className% {
     ScopeCancellationRegistry cancellationRegistry;
 
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -998,7 +998,7 @@ public class %className% {
     ScopeCancellationRegistry cancellationRegistry;
 
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -1013,7 +1013,7 @@ public class %className% {
     @Channel("%nextChannel%")
     Emitter<String> nextEmitter;
 
-    @Incoming("process-events-monitor")
+    @Incoming("lifecycle-events-monitor")
     public CompletionStage<Void> onProcessEvent(Message<String> msg) {
         ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
         if ("%taskId%".equals(event.activityId())

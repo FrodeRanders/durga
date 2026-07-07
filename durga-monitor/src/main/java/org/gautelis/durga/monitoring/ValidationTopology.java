@@ -60,6 +60,9 @@ public final class ValidationTopology {
         if (topics.eventsPattern() != null) {
             productionEvents = builder.stream(topics.eventsPattern(), Consumed.with(Serdes.String(), eventSerde));
         } else {
+            if (topics.eventsTopic() == null || topics.eventsTopic().isBlank()) {
+                throw new IllegalArgumentException("eventsTopic is required when eventsPattern is not configured");
+            }
             productionEvents = builder.stream(topics.eventsTopic(), Consumed.with(Serdes.String(), eventSerde));
         }
 
@@ -75,6 +78,9 @@ public final class ValidationTopology {
         if (topics.candidatePattern() != null) {
             candidateEvents = builder.stream(topics.candidatePattern(), Consumed.with(Serdes.String(), eventSerde));
         } else {
+            if (topics.candidateTopic() == null || topics.candidateTopic().isBlank()) {
+                throw new IllegalArgumentException("candidateTopic is required when candidatePattern is not configured");
+            }
             candidateEvents = builder.stream(topics.candidateTopic(), Consumed.with(Serdes.String(), eventSerde));
         }
 
@@ -165,7 +171,7 @@ public final class ValidationTopology {
             return new ValidationTopics(
                     null,
                     Pattern.compile(DEFAULT_CANDIDATE_EVENTS_PATTERN),
-                    ProcessMonitoringTopology.DEFAULT_EVENTS_TOPIC,
+                    null,
                     PRODUCTION_EVENTS_PATTERN,
                     DEFAULT_RESULTS_TOPIC,
                     DEFAULT_RESULTS_STORE,

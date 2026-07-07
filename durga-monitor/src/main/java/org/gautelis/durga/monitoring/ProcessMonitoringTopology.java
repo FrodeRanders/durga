@@ -34,7 +34,6 @@ public final class ProcessMonitoringTopology {
 
     private static final Logger LOG = LoggerFactory.getLogger(ProcessMonitoringTopology.class);
 
-    public static final String DEFAULT_EVENTS_TOPIC = "process-events-default";
     public static final String DEFAULT_STATE_TOPIC = "process-state";
     public static final String DEFAULT_COUNTS_TOPIC = "process-state-counts";
     public static final String DEFAULT_ACTIVE_TOPIC = "process-active-state";
@@ -102,6 +101,9 @@ public final class ProcessMonitoringTopology {
             events = builder.stream(topics.eventsPattern(),
                     Consumed.with(Serdes.String(), processEventSerde));
         } else {
+            if (topics.eventsTopic() == null || topics.eventsTopic().isBlank()) {
+                throw new IllegalArgumentException("eventsTopic is required when eventsPattern is not configured");
+            }
             events = builder.stream(topics.eventsTopic(),
                     Consumed.with(Serdes.String(), processEventSerde));
         }
@@ -292,7 +294,7 @@ public final class ProcessMonitoringTopology {
          */
         public static MonitoringTopics forAllProcesses() {
             return new MonitoringTopics(
-                    DEFAULT_EVENTS_TOPIC,
+                    null,
                     DEFAULT_STATE_TOPIC,
                     DEFAULT_COUNTS_TOPIC,
                     DEFAULT_ACTIVE_TOPIC,

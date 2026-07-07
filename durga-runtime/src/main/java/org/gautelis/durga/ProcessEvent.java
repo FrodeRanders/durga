@@ -65,7 +65,7 @@ public record ProcessEvent(
     }
 
     /**
-     * Creates a lifecycle event using the legacy compact signature.
+     * Creates a lifecycle event using the compact convenience signature.
      * <p>
      * The event type is inferred from {@code status} and the timestamp defaults to the current
      * instant.

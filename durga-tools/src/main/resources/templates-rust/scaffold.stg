@@ -121,6 +121,27 @@ Set the broker and start each worker (one process per task):
 KAFKA_BROKERS=localhost:9094 cargo run --bin transform_order
 ```
 
+Workers publish lifecycle/output records and the consumed input offset in one
+Kafka transaction. Each worker therefore needs a stable transaction identity.
+By default the generated runtime uses a local identity based on host name and
+process id:
+
+```
+%processId%-<activityId>-$HOSTNAME-$PID-tx
+```
+
+For deployment, set `DURGA_WORKER_INSTANCE_ID` to a stable worker identity such
+as a Kubernetes StatefulSet ordinal, systemd instance id, or scheduler-assigned
+lease id:
+
+```
+DURGA_WORKER_INSTANCE_ID=worker-0 KAFKA_BROKERS=localhost:9094 cargo run --bin transform_order
+```
+
+Kafka fences older producers that reuse the same transaction id. A future Durga
+control plane can replace the environment-provided identity with a coordinator
+or Raft-backed lease allocator without changing the worker protocol.
+
 Feed the pipeline by publishing a `PROCESS_STARTED` `ProcessEvent` to the first
 task's input topic (`%processId%_<firstTask>_in`).
 >>
@@ -138,14 +159,16 @@ use std::time::Duration;
 use durga_rust::{eval_condition, plan_worker_output, Category, Plugin, PluginExecutionContext, ProcessEvent};
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
-use rdkafka::message::Message;
-use rdkafka::producer::{FutureProducer, FutureRecord};
+use rdkafka::message::{BorrowedMessage, Message};
+use rdkafka::producer::{FutureProducer, FutureRecord, Producer};
+use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
 
 %if(hasCustom)%pub mod custom;
 
 %endif%pub const EVENTS_TOPIC: &str = %if(validation)%"%eventsTopic%-validation"%else%"%eventsTopic%"%endif%;
 pub const MODELS_TOPIC: &str = "process-models";
 pub const PROCESS_ID: &str = "%processId%";
+const TRANSACTION_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Whether this crate was generated in validation mode. In validation mode plugins run with a
 /// validation execution context so substantial side effects are suppressed, and all outputs are
@@ -190,11 +213,33 @@ fn build_consumer(brokers: &str, group_id: &str, topic: &str) -> StreamConsumer 
     consumer
 }
 
-fn build_producer(brokers: &str) -> FutureProducer {
+fn build_model_producer(brokers: &str) -> FutureProducer {
     ClientConfig::new()
         .set("bootstrap.servers", brokers)
         .create()
-        .expect("producer creation failed")
+        .expect("model producer creation failed")
+}
+
+fn build_transactional_producer(brokers: &str, transaction_id: &str) -> FutureProducer {
+    let producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", brokers)
+        .set("transactional.id", transaction_id)
+        .set("enable.idempotence", "true")
+        .set("transaction.timeout.ms", "30000")
+        .create()
+        .expect("transactional producer creation failed");
+    producer
+        .init_transactions(TRANSACTION_TIMEOUT)
+        .expect("transaction initialization failed");
+    producer
+}
+
+fn transaction_id(activity_id: &str) -> String {
+    let instance_id = std::env::var("DURGA_WORKER_INSTANCE_ID").unwrap_or_else(|_| {
+        let host = std::env::var("HOSTNAME").unwrap_or_else(|_| "local".to_string());
+        format!("{}-{}", host, std::process::id())
+    });
+    format!("{}-{}-{}-tx", PROCESS_ID, activity_id, instance_id)
 }
 
 async fn send(producer: &FutureProducer, topic: &str, key: &str, payload: &str) -> Result<(), String> {
@@ -216,13 +261,56 @@ pub async fn register_model(producer: &FutureProducer) {
     }
 }
 
+fn offset_for_message(msg: &BorrowedMessage<'_>) -> Result<TopicPartitionList, String> {
+    let mut offsets = TopicPartitionList::new();
+    offsets
+        .add_partition_offset(msg.topic(), msg.partition(), Offset::Offset(msg.offset() + 1))
+        .map_err(|e| format!("building transaction offset failed: {e}"))?;
+    Ok(offsets)
+}
+
+fn abort_transaction(producer: &FutureProducer) {
+    if let Err(e) = producer.abort_transaction(TRANSACTION_TIMEOUT) {
+        eprintln!("[durga] transaction abort failed: {e}");
+    }
+}
+
+fn begin_transaction(producer: &FutureProducer) -> bool {
+    match producer.begin_transaction() {
+        Ok(()) => true,
+        Err(e) => {
+            eprintln!("[durga] transaction begin failed: {e}");
+            false
+        }
+    }
+}
+
+fn commit_transaction_for_message(
+    producer: &FutureProducer,
+    consumer: &StreamConsumer,
+    msg: &BorrowedMessage<'_>,
+) -> Result<(), String> {
+    let offsets = offset_for_message(msg)?;
+    let metadata = consumer
+        .group_metadata()
+        .ok_or_else(|| "consumer group metadata is unavailable".to_string())?;
+    producer
+        .send_offsets_to_transaction(&offsets, &metadata, TRANSACTION_TIMEOUT)
+        .map_err(|e| format!("sending offsets to transaction failed: {e}"))?;
+    producer
+        .commit_transaction(TRANSACTION_TIMEOUT)
+        .map_err(|e| format!("transaction commit failed: {e}"))
+}
+
 /// Runs a plugin task: consume, execute, emit lifecycle, forward or terminate.
 pub async fn run_plugin_worker(brokers: &str, cfg: PluginWorker, plugin: Box<dyn Plugin + Send + Sync>) {
     let consumer = build_consumer(brokers, &cfg.group_id, &cfg.input_topic);
-    let producer = build_producer(brokers);
-    register_model(&producer).await;
+    let model_producer = build_model_producer(brokers);
+    register_model(&model_producer).await;
+    let tx_id = transaction_id(&cfg.activity_id);
+    let producer = build_transactional_producer(brokers, &tx_id);
     eprintln!("[durga] {} consuming {}", cfg.activity_id, cfg.input_topic);
-    loop {
+    'worker: loop {
         match consumer.recv().await {
             Err(e) => eprintln!("[durga] consume error: {e}"),
             Ok(msg) => {
@@ -238,13 +326,15 @@ pub async fn run_plugin_worker(brokers: &str, cfg: PluginWorker, plugin: Box<dyn
                 .unwrap_or_else(|_| b"{}".to_vec());
 
                 let key = event.process_instance_id.clone().unwrap_or_default();
-                // Emit ACTIVITY_ENTERED before executing so the monitor can pair it with the
-                // completion below and derive this task's latency (throughput is counted from the
-                // completion alone).
-                let mut send_failed = false;
+                if !begin_transaction(&producer) {
+                    continue 'worker;
+                }
+                // Emit ACTIVITY_ENTERED in the same transaction as the completion/output records
+                // and input offset. A failed later send aborts the whole unit.
                 if let Err(e) = send(&producer, EVENTS_TOPIC, &key, &event.activity_entered(&cfg.activity_id).to_json()).await {
                     eprintln!("[durga] {e}");
-                    send_failed = true;
+                    abort_transaction(&producer);
+                    continue 'worker;
                 }
 
                 let result = plugin
@@ -260,26 +350,29 @@ pub async fn run_plugin_worker(brokers: &str, cfg: PluginWorker, plugin: Box<dyn
                 for ev in &plan.emits {
                     if let Err(e) = send(&producer, EVENTS_TOPIC, &key, &ev.to_json()).await {
                         eprintln!("[durga] {e}");
-                        send_failed = true;
+                        abort_transaction(&producer);
+                        continue 'worker;
                     }
                 }
                 if let (Some(fwd), Some(out)) = (&plan.forward, &cfg.output_topic) {
                     if let Err(e) = send(&producer, out, &key, &fwd.to_json()).await {
                         eprintln!("[durga] {e}");
-                        send_failed = true;
+                        abort_transaction(&producer);
+                        continue 'worker;
                     }
                 }
                 if let Some(dlq) = &plan.dlq {
                     if let Err(e) = send(&producer, &cfg.dlq_topic, &key, dlq).await {
                         eprintln!("[durga] {e}");
-                        send_failed = true;
+                        abort_transaction(&producer);
+                        continue 'worker;
                     }
                 }
-                if send_failed {
-                    eprintln!("[durga] not committing input offset for {} because at least one send failed", cfg.activity_id);
-                    continue;
+                if let Err(e) = commit_transaction_for_message(&producer, &consumer, &msg) {
+                    eprintln!("[durga] {e}");
+                    abort_transaction(&producer);
+                    continue 'worker;
                 }
-                let _ = consumer.commit_message(&msg, CommitMode::Async);
             }
         }
     }
@@ -288,10 +381,12 @@ pub async fn run_plugin_worker(brokers: &str, cfg: PluginWorker, plugin: Box<dyn
 /// Runs an exclusive gateway: consume, pick the first matching branch, forward.
 pub async fn run_gateway_worker(brokers: &str, cfg: GatewayWorker) {
     let consumer = build_consumer(brokers, &cfg.group_id, &cfg.input_topic);
-    let producer = build_producer(brokers);
-    register_model(&producer).await;
+    let model_producer = build_model_producer(brokers);
+    register_model(&model_producer).await;
+    let tx_id = transaction_id(&cfg.activity_id);
+    let producer = build_transactional_producer(brokers, &tx_id);
     eprintln!("[durga] gateway {} consuming {}", cfg.activity_id, cfg.input_topic);
-    loop {
+    'gateway: loop {
         match consumer.recv().await {
             Err(e) => eprintln!("[durga] consume error: {e}"),
             Ok(msg) => {
@@ -309,24 +404,28 @@ pub async fn run_gateway_worker(brokers: &str, cfg: GatewayWorker) {
                 });
                 let key = event.process_instance_id.clone().unwrap_or_default();
                 let taken = event.gateway_taken(&cfg.activity_id, payload);
-                let mut send_failed = false;
+                if !begin_transaction(&producer) {
+                    continue 'gateway;
+                }
                 if let Err(e) = send(&producer, EVENTS_TOPIC, &key, &taken.to_json()).await {
                     eprintln!("[durga] {e}");
-                    send_failed = true;
+                    abort_transaction(&producer);
+                    continue 'gateway;
                 }
                 if let Some(topic) = target {
                     if let Err(e) = send(&producer, &topic, &key, &taken.to_json()).await {
                         eprintln!("[durga] {e}");
-                        send_failed = true;
+                        abort_transaction(&producer);
+                        continue 'gateway;
                     }
                 } else {
                     eprintln!("[durga] gateway {} matched no branch", cfg.activity_id);
                 }
-                if send_failed {
-                    eprintln!("[durga] not committing input offset for gateway {} because at least one send failed", cfg.activity_id);
-                    continue;
+                if let Err(e) = commit_transaction_for_message(&producer, &consumer, &msg) {
+                    eprintln!("[durga] {e}");
+                    abort_transaction(&producer);
+                    continue 'gateway;
                 }
-                let _ = consumer.commit_message(&msg, CommitMode::Async);
             }
         }
     }

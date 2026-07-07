@@ -16,7 +16,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -100,7 +100,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -216,7 +216,7 @@ public class %className% {
             new ConcurrentHashMap<String, ProcessEvent>();
 
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -228,7 +228,7 @@ public class %className% {
     Emitter<String> %o.emitter%;
 }%
 
-    @Incoming("process-events-monitor")
+    @Incoming("lifecycle-events-monitor")
     public CompletionStage<Void> onProcessEvent(Message<String> msg) {
         ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
         if (!"%enclosingScopeActivityId%".equals(event.activityId())) {
@@ -375,7 +375,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -387,7 +387,7 @@ public class %className% {
     Emitter<String> %o.emitter%;
 }%
 
-    @Incoming("process-events-monitor")
+    @Incoming("lifecycle-events-monitor")
     public CompletionStage<Void> onProcessEvent(Message<String> msg) {
         ProcessEvent triggerEvent = ProcessEvent.fromJson(msg.getPayload());
         if ("%enclosingScopeActivityId%".equals(triggerEvent.activityId())) {
@@ -508,7 +508,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -522,7 +522,7 @@ public class %className% {
     @Channel("%completionChannel%")
     Emitter<String> completionEmitter;
 
-    @Incoming("process-events-monitor")
+    @Incoming("lifecycle-events-monitor")
     public CompletionStage<Void> onScopeSignal(Message<String> msg) {
         ProcessEvent event = ProcessEvent.fromJson(msg.getPayload());
         if ("%subProcessId%".equals(event.activityId())
@@ -665,7 +665,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -732,7 +732,7 @@ public class %className% {
             new ProcessStateStore("localhost:9094", "%processId%_state", "%processId%");
 
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
 %incomingMethodsBlock%

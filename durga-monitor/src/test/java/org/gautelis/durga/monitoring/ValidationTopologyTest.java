@@ -17,7 +17,7 @@ public class ValidationTopologyTest {
         ValidationTopology.ValidationTopics topics = new ValidationTopology.ValidationTopics(
                 null,
                 Pattern.compile("process-events-.*-validation"),
-                ProcessMonitoringTopology.DEFAULT_EVENTS_TOPIC,
+                null,
                 Pattern.compile("process-events-(?!.*-validation).*"),
                 ValidationTopology.DEFAULT_RESULTS_TOPIC,
                 ValidationTopology.DEFAULT_RESULTS_STORE,

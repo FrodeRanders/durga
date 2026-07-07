@@ -20,7 +20,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -28,7 +28,7 @@ public class %className% {
     Emitter<String> outputEmitter;
 
     @Inject
-    @Channel("vannak-metadata-events")
+    @Channel("metadata-events")
     Emitter<String> vannakMetadataEmitter;
 
     @Inject
@@ -204,7 +204,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -260,7 +260,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -323,7 +323,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -597,7 +597,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -671,7 +671,7 @@ public class %className% {
     ScopeCancellationRegistry cancellationRegistry;
 
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     MutinyEmitter<String> processEventsEmitter;
 
     @Inject
@@ -769,7 +769,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -839,7 +839,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -904,7 +904,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -973,7 +973,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -1040,7 +1040,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
 %outputs:{ output |
@@ -1310,7 +1310,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -1520,7 +1520,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -1532,7 +1532,7 @@ public class %className% {
     Emitter<String> dlqEmitter;
 
     @Inject
-    @Channel("vannak-metadata-events")
+    @Channel("metadata-events")
     Emitter<String> vannakMetadataEmitter;
 
     @Inject
@@ -1680,7 +1680,7 @@ import java.util.concurrent.CompletionStage;
 @ApplicationScoped
 public class %className% {
     @Inject
-    @Channel("process-events")
+    @Channel("lifecycle-events")
     Emitter<String> processEventsEmitter;
 
     @Inject
@@ -1692,7 +1692,7 @@ public class %className% {
     Emitter<String> dlqEmitter;
 
     @Inject
-    @Channel("vannak-metadata-events")
+    @Channel("metadata-events")
     Emitter<String> vannakMetadataEmitter;
 
     @Inject

@@ -789,7 +789,7 @@ public class BpmnScaffolderTest {
         assertTrue(content.contains("outputPayload"));
         assertTrue(content.contains("mapper.readTree(outputText)"));
         assertTrue(content.contains("outputPayload,"));
-        assertTrue(content.contains("@Channel(\"vannak-metadata-events\")"));
+        assertTrue(content.contains("@Channel(\"metadata-events\")"));
         assertTrue(content.contains("VannakMetadata.pluginEvent("));
 
         assertTrue(Files.exists(outputDir.resolve(
@@ -864,8 +864,18 @@ public class BpmnScaffolderTest {
                 lib.contains("EVENTS_TOPIC: &str = \"process-events-e2e_pipeline-validation\""));
         assertTrue("plugin must run with the validation execution context",
                 lib.contains("PluginExecutionContext::new(VALIDATION_MODE)"));
+        assertTrue("transaction identity must be configurable for deployment",
+                lib.contains("DURGA_WORKER_INSTANCE_ID"));
+        assertTrue("transaction offsets must be committed atomically with output sends",
+                lib.contains("send_offsets_to_transaction"));
         assertFalse("retired validation-candidate path must be gone", lib.contains("run_validation_worker"));
         assertFalse("retired validation-candidate topic must be gone", lib.contains("candidate-outputs"));
+
+        String readme = Files.readString(outputDir.resolve("README.md"));
+        assertTrue("Rust README must document worker transaction identity",
+                readme.contains("DURGA_WORKER_INSTANCE_ID"));
+        assertTrue("Rust README must leave room for a future coordinator-backed identity",
+                readme.contains("Raft-backed lease allocator"));
 
         // Cross-target validation: a downstream shadow task must read the PRODUCTION chaining topic
         // (java-aligned <predecessor>_output), not a rust-only topic, so it can shadow a java
@@ -915,8 +925,15 @@ public class BpmnScaffolderTest {
         assertFalse(Files.exists(outputDir.resolve("src/bin/transform_order_validation.rs")));
         String lib = Files.readString(outputDir.resolve("src/lib.rs"));
         assertTrue(lib.contains("VALIDATION_MODE: bool = false"));
+        assertTrue("production Rust runtime must use transactional offset commits",
+                lib.contains("send_offsets_to_transaction"));
+        assertTrue("production Rust runtime must expose deployment worker identity",
+                lib.contains("DURGA_WORKER_INSTANCE_ID"));
         assertFalse("production events topic must not be redirected",
                 lib.contains("process-events-e2e_pipeline-validation"));
+        String readme = Files.readString(outputDir.resolve("README.md"));
+        assertTrue("Rust README must document worker transaction identity",
+                readme.contains("DURGA_WORKER_INSTANCE_ID"));
         String bin = Files.readString(outputDir.resolve("src/bin/transform_order.rs"));
         assertFalse("production worker must not use a validation consumer group",
                 bin.contains("-validation"));
@@ -973,7 +990,7 @@ public class BpmnScaffolderTest {
         assertTrue("connect-source.json missing", output.contains("connect-source.json"));
         assertTrue("connect-sink.json missing", output.contains("connect-sink.json"));
         assertTrue("source topics not populated", output.contains("order_events_pipeline_start"));
-        assertTrue("sink topics not populated", output.contains("process-events"));
+        assertTrue("sink topics not populated", output.contains("lifecycle-events"));
         assertTrue("connector class placeholder missing", output.contains("<fill in connector class>"));
     }
 
@@ -996,7 +1013,7 @@ public class BpmnScaffolderTest {
         assertTrue("source missing connector.class", sourceContent.contains("connector.class"));
 
         String sinkContent = Files.readString(sinkJson);
-        assertTrue("sink missing process-events", sinkContent.contains("process-events"));
+        assertTrue("sink missing process-events topic", sinkContent.contains("process-events-order_events_pipeline"));
         assertTrue("sink missing terminal output topic",
                 sinkContent.contains("order_events_pipeline_normalize_timestamp_output")
                 || sinkContent.contains("order_events_pipeline_mask_customer_email_low_value_output"));

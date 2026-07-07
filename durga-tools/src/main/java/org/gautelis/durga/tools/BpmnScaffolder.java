@@ -849,7 +849,7 @@ public class BpmnScaffolder {
                 && target.type != NodeType.SIGNAL_CATCH && target.type != NodeType.SIGNAL_THROW) {
             return Optional.empty();
         }
-        String channel = target.type == NodeType.END ? "process-events" : inputEmitterChannel(processId, target.name);
+        String channel = target.type == NodeType.END ? "lifecycle-events" : inputEmitterChannel(processId, target.name);
         return Optional.of(new OutputSpec(
                 "task" + toClassName(target.name) + "Emitter",
                 channel,

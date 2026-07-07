@@ -105,7 +105,7 @@ final class SubProcessTemplateGenerator {
             completionTemplate.add("scopeActivityIds", spec.scopeActivityIds);
             completionTemplate.add("incomingMethodsBlock", buildOrchestratorMethodsBlock(completionInputs));
             completionTemplate.add("completionChannel", processId + "_" + spec.name + "_output_emit");
-            completionTemplate.add("outputChannel", outerOutput.map(output -> output.channel).orElse("process-events"));
+            completionTemplate.add("outputChannel", outerOutput.map(output -> output.channel).orElse("lifecycle-events"));
             completionTemplate.add("outputActivityId", outerOutput.map(output -> output.taskId).orElse("completed"));
             completionTemplate.add("outputNodeType", outerOutput.map(output -> output.nodeType.code).orElse("endEvent"));
             if (!dryRun) {

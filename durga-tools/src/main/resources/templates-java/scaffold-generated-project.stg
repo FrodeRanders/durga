@@ -15,7 +15,7 @@ quarkus:
 mp:
   messaging:
     incoming:
-      process-events-monitor:
+      lifecycle-events-monitor:
         connector: "smallrye-kafka"
         topic: "%eventsTopic%"
         value:
@@ -61,12 +61,12 @@ mp:
           deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
 }%
     outgoing:
-      process-events:
+      lifecycle-events:
         connector: "smallrye-kafka"
         topic: "%eventsTopic%"
         value:
           serializer: "org.apache.kafka.common.serialization.StringSerializer"
-      vannak-metadata-events:
+      metadata-events:
         connector: "smallrye-kafka"
         topic: "vannak-metadata-events-%processId%"
         value:

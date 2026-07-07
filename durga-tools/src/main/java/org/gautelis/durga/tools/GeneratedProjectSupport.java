@@ -67,18 +67,18 @@ final class GeneratedProjectSupport {
         Map<String, Object> incoming = ensureMap(messaging, "incoming");
         Map<String, Object> outgoing = ensureMap(messaging, "outgoing");
 
-        incoming.putIfAbsent("process-events-monitor", channelConfig(
+        incoming.putIfAbsent("lifecycle-events-monitor", channelConfig(
                 "smallrye-kafka",
                 BpmnScaffolder.eventsTopic,
                 "org.apache.kafka.common.serialization.StringDeserializer"
         ));
 
-        outgoing.putIfAbsent("process-events", channelConfig(
+        outgoing.putIfAbsent("lifecycle-events", channelConfig(
                 "smallrye-kafka",
                 BpmnScaffolder.eventsTopic,
                 "org.apache.kafka.common.serialization.StringSerializer"
         ));
-        outgoing.putIfAbsent("vannak-metadata-events", channelConfig(
+        outgoing.putIfAbsent("metadata-events", channelConfig(
                 "smallrye-kafka",
                 "vannak-metadata-events-" + processId,
                 "org.apache.kafka.common.serialization.StringSerializer"
