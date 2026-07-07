@@ -11,6 +11,21 @@ BPMN → Kafka code generation and process monitoring. Two tools:
 - **Scaffolder** — reads a BPMN model and generates Kafka-oriented worker, gateway, orchestration, and topic setup skeletons.
 - **Monitoring app** — a Quarkus SPA that tracks all running Durga processes via Kafka Streams, showing state, latency, stuck instances, and BPMN diagrams with live overlays.
 
+### Code-generation targets
+
+The scaffolder generates the same process for either of two runtime targets, selected with
+`--target` (default `java`):
+
+- **Java** (`--target java`) — a Quarkus/SmallRye Reactive Messaging project. Each task, gateway,
+  and orchestrator becomes a CDI bean wired to Kafka channels; the shared plugin runtime is
+  `durga-runtime`.
+- **Rust** (`--target rust`) — a Cargo crate where each task and gateway becomes a binary under
+  `src/bin/`, sharing a runtime in `src/lib.rs` and depending on the `durga-rust` plugin crate.
+
+Both targets emit the **same `ProcessEvent` wire format** and the same topic layout, so the Java
+monitor observes a Rust-generated process unchanged and a mixed Java/Rust fleet is fully
+interoperable.
+
 [System manual](doc/system/sysdoc.pdf) | [BPMN coverage matrix](doc/bpmn-kafka-coverage.md) | [Beta support boundary](doc/beta-support-boundary.md) | [Maturity plan](doc/maturity-plan.md) | [Release checklist](doc/release-checklist.md) | [Operations hardening](doc/operations-hardening.md) | [Deployment guide](doc/deployment.md) | [Plugin architecture](doc/data-pipeline-blueprint.md) | [Testcontainers setup](doc/testcontainers-setup.md)
 
 ## Quick start
@@ -69,8 +84,8 @@ Flags:
 - `--out <dir>` — custom output directory
 - `--event-topic <topic>` — override the canonical lifecycle event topic (default: `process-events-{processId}`). Each pipeline gets an isolated topic by default; use this flag to share a topic across pipelines or use a custom name.
 - `--transactions` — generate transactional workers using Kafka producer/consumer APIs
-- `--target java|rust` — code-generation target (default `java`)
-- `--validation` — additionally generate a validation-mode shadow worker per plugin task (see [Validation mode](#validation-mode))
+- `--target java|rust` — code-generation target (default `java`; see [Code-generation targets](#code-generation-targets))
+- `--validation` — generate the process in **validation mode**: a complete shadow of an existing process that reads the same live input but writes to validation topics instead of the real ones (see [Validation mode](#validation-mode))
 
 The generator skips existing files in `src/main/java/`, merges new channels into
 `application.yml`, and evaluates gateway conditions from BPMN `conditionExpression` at runtime.
@@ -127,28 +142,34 @@ from this registry — no pre-configured process ID list needed.
 
 ## Validation mode
 
-Validation mode runs a **not-yet-released** implementation of a task against real
-input, alongside the current/prior version, and reports where the candidate
-produces the **same** output and where it **diverges** — handled **per task**, so a
-change in an early task never contaminates the comparison of later ones.
+Validation mode is a step on the path to a **follow-up release**. You regenerate the process from a
+modified BPMN model (a candidate — new plugin versions, changed routing, a different topology) with
+`--validation`, and run it as a **complete shadow** of the process that is currently in production
+(or of a prior implementation). The shadow exercises the candidate against real traffic and
+**documents** what it *would* have produced, so a supervisor can compare the candidate's behaviour
+against the running process before promoting it.
 
-Scaffold with `--validation` to generate, for each plugin task, a **shadow worker**
-beside the production worker. The shadow worker:
+`--validation` is a **mode**, not an add-on: it produces one process, wired differently, rather than
+extra workers beside a functional process. A validation build:
 
-- consumes the same production input via a **dedicated consumer group**
-  (`{processId}_{taskId}_validation`), so the production input index is never
-  disturbed (start at `latest` by default, or set `DURGA_VALIDATION_OFFSET_RESET`
-  for a bounded recent replay);
-- runs the candidate with **side effects suppressed**;
-- writes nothing to the task output topic or `process-events` — its output is
-  diverted to `validation-candidate-outputs`.
+- **reads the same live input topics** as the production process, but through a **distinct consumer
+  group** (`{processId}-validation`), so it runs alongside the real process without stealing its
+  messages or advancing its offsets (start at `latest` by default, or set
+  `DURGA_VALIDATION_OFFSET_RESET` for a bounded recent replay);
+- **writes nothing to the real process topics.** Every task output that would normally land on
+  `{processId}_{taskId}_output` is diverted to a per-task validation topic
+  `{processId}_{taskId}_output-validation`, and lifecycle events go to `process-events-{processId}-validation`
+  instead of the live event topic;
+- **suppresses substantial side effects.** Tasks that would mutate the outside world (e.g. writing to
+  object storage) do not do so in validation mode — they only record the alternative response they
+  *would* have produced. Nothing outside the validation topics is modified.
 
-The monitor's `ValidationTopology` pairs each candidate output against the
-prior/production output for the **same input** (keyed by
-`processId:activityId:processInstanceId`, robust to arrival order) and classifies
-each comparison as `EQUAL`, `DIFF`, `PRIOR_MISSING`, or `CANDIDATE_ERROR` using a
-normalized JSON diff with configurable ignore-paths (`durga.validation.ignore.paths`).
-Results land in `validation-results` and are exposed via:
+Because each task writes its own validation topic keyed by input, the comparison is done **per task**:
+a change in an early task never contaminates the comparison of later ones. The monitor pairs each
+task's validation output against the live `{processId}_{taskId}_output` for the **same input** and
+classifies each comparison as `EQUAL`, `DIFF`, `PRIOR_MISSING`, or `CANDIDATE_ERROR` using a
+normalized JSON diff with configurable ignore-paths (`durga.validation.ignore.paths`). Results are
+exposed via:
 
 - `GET /api/validation/summary?processId=<id>` — per-task outcome counts
 - `GET /api/validation/results?processId=&taskId=&status=` — individual comparisons
@@ -156,8 +177,8 @@ Results land in `validation-results` and are exposed via:
 - a **Validation Report** panel in the dashboard (per-task summary + per-instance
   input/prior/candidate diff), and `durga_validation_*` Prometheus metrics
 
-Both the Java and Rust targets emit shadow workers; the `ValidationCandidateOutput`
-wire record is identical across targets, so a mixed fleet feeds the same comparator.
+The validation wiring is applied for **both the Java and Rust targets**, so a candidate can be
+validated on either runtime and still be compared against a production process on either runtime.
 
 ### Full-stack dev demo (one command)
 

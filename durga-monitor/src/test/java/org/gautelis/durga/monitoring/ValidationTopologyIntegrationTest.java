@@ -14,7 +14,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.gautelis.durga.KafkaIntegrationTestBase;
 import org.gautelis.durga.ProcessEvent;
-import org.gautelis.durga.validation.ValidationCandidateOutput;
 import org.gautelis.durga.validation.ValidationResult;
 import org.junit.After;
 import org.junit.Before;
@@ -31,19 +30,22 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.regex.Pattern;
 
 import static org.junit.Assert.*;
 
 public class ValidationTopologyIntegrationTest extends KafkaIntegrationTestBase {
     private static final String SUFFIX = "-val-" + UUID.randomUUID().toString().substring(0, 8);
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(60);
-    private static final String CANDIDATE_TOPIC = "validation-candidate-outputs" + SUFFIX;
-    private static final String EVENTS_TOPIC = "process-events" + SUFFIX;
+    private static final String VALIDATION_EVENTS_TOPIC = "process-events-valproc-validation" + SUFFIX;
+    private static final String EVENTS_TOPIC = "process-events-valproc" + SUFFIX;
     private static final String RESULTS_TOPIC = "validation-results" + SUFFIX;
     private static final String RESULTS_STORE = "validation-results-store" + SUFFIX;
     private static final ValidationTopology.ValidationTopics TOPICS =
             new ValidationTopology.ValidationTopics(
-                    CANDIDATE_TOPIC, EVENTS_TOPIC, null, RESULTS_TOPIC, RESULTS_STORE, List.of("ts"));
+                    VALIDATION_EVENTS_TOPIC, null, EVENTS_TOPIC,
+                    Pattern.compile(Pattern.quote(EVENTS_TOPIC)),
+                    RESULTS_TOPIC, RESULTS_STORE, List.of("ts"));
 
     private KafkaProducer<String, String> producer;
     private KafkaStreams streams;
@@ -56,7 +58,7 @@ public class ValidationTopologyIntegrationTest extends KafkaIntegrationTestBase 
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         try (AdminClient admin = AdminClient.create(props)) {
             admin.createTopics(List.of(
-                    new NewTopic(CANDIDATE_TOPIC, 1, (short) 1),
+                    new NewTopic(VALIDATION_EVENTS_TOPIC, 1, (short) 1),
                     new NewTopic(EVENTS_TOPIC, 1, (short) 1),
                     new NewTopic(RESULTS_TOPIC, 1, (short) 1)
             )).all().get();
@@ -115,7 +117,6 @@ public class ValidationTopologyIntegrationTest extends KafkaIntegrationTestBase 
         waitForStatus(instance, ValidationResult.MatchStatus.EQUAL);
         ValidationResult result = result(instance).orElseThrow();
         assertTrue(result.diffs().isEmpty());
-        assertEquals("v1", result.priorVersion());
         assertEquals("candidate", result.candidateVersion());
     }
 
@@ -191,21 +192,21 @@ public class ValidationTopologyIntegrationTest extends KafkaIntegrationTestBase 
     }
 
     private void produceCandidateSuccess(String instance, Map<String, Object> outputPayload) {
-        ValidationCandidateOutput candidate = new ValidationCandidateOutput(
-                "valproc", "transform", instance, "transform", "tok", "corr", "BK",
-                "candidate", Map.of("in", true), outputPayload,
-                "PAYLOAD", null, "idem-" + instance, null, null, "2026-07-01T10:00:01Z");
-        producer.send(new ProducerRecord<>(CANDIDATE_TOPIC, candidate.key(), candidate.toJson()));
+        ProcessEvent event = new ProcessEvent(
+                instance, "valproc", "transform", "tok", "corr",
+                outputPayload, ProcessEvent.Status.COMPLETED, null,
+                ProcessEvent.EventType.ACTIVITY_COMPLETED, "candidate", "BK", "2026-07-01T10:00:01Z");
+        producer.send(new ProducerRecord<>(VALIDATION_EVENTS_TOPIC, instance, event.toJson()));
         producer.flush();
     }
 
     private void produceCandidateError(String instance) {
-        ValidationCandidateOutput candidate = new ValidationCandidateOutput(
-                "valproc", "transform", instance, "transform", "tok", "corr", "BK",
-                "candidate", Map.of("in", true), null,
-                null, "boom", null, "FAIL",
-                new ProcessEvent.ErrorInfo("boom", "VALIDATION_CANDIDATE_FAILED"), "2026-07-01T10:00:01Z");
-        producer.send(new ProducerRecord<>(CANDIDATE_TOPIC, candidate.key(), candidate.toJson()));
+        ProcessEvent event = new ProcessEvent(
+                instance, "valproc", "transform", "tok", "corr",
+                null, ProcessEvent.Status.FAILED,
+                new ProcessEvent.ErrorInfo("boom", "VALIDATION_CANDIDATE_FAILED"),
+                ProcessEvent.EventType.PROCESS_FAILED, "candidate", "BK", "2026-07-01T10:00:01Z");
+        producer.send(new ProducerRecord<>(VALIDATION_EVENTS_TOPIC, instance, event.toJson()));
         producer.flush();
     }
 

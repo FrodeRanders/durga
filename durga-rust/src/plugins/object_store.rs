@@ -108,6 +108,22 @@ pub fn store(payload: &[u8], config: &HashMap<String, String>) -> Result<StoredO
     })
 }
 
+/// Computes the metadata a [`store`] call would produce *without* writing
+/// anything. Used in validation mode to describe the object that would have
+/// been stored while suppressing the external side effect. The returned URI
+/// carries the `validation:` scheme to make it explicit that nothing was
+/// written.
+pub fn describe(payload: &[u8]) -> StoredObject {
+    let id = Uuid::new_v4().to_string();
+    StoredObject {
+        uri: format!("validation:not-stored/{id}"),
+        id,
+        bytes: payload.len(),
+        sha256: sha256_hex(payload),
+        created_at: Utc::now().to_rfc3339(),
+    }
+}
+
 /// Resolves the `layout` config into directory segments between the prefix and
 /// the (always UUID) filename. The layout is a `/`-separated list of tokens:
 /// `date` / `date:hour` / `date:minute` (expands to `yyyy/MM/dd`[/HH][/mm] UTC),

@@ -73,7 +73,8 @@ public class DeadLetterRouterTest {
         Plugin plugin = new DeadLetterRouter();
         PluginResult result = plugin.executeWithResult(
                 Plugin.toBytes("{\"status\":\"error\",\"order_id\":7}"),
-                "field=status routes={ok:success,error:failure} default=other");
+                "field=status routes={ok:success,error:failure} default=other",
+                PluginExecutionContext.production());
         assertEquals(PluginResult.OutputDisposition.PASSTHROUGH, result.disposition());
         assertEquals("failure", Plugin.toString(result.output()));
     }

@@ -63,7 +63,7 @@ public class FormatDetectorTest {
     public void shouldDeclarePassthroughDisposition() throws Exception {
         System.out.println("TC: inspection result is PASSTHROUGH so the original payload is preserved downstream");
         Plugin plugin = new FormatDetector();
-        PluginResult result = plugin.executeWithResult(Plugin.toBytes("{\"order_id\":7}"), ".");
+        PluginResult result = plugin.executeWithResult(Plugin.toBytes("{\"order_id\":7}"), ".", PluginExecutionContext.production());
         assertEquals(PluginResult.OutputDisposition.PASSTHROUGH, result.disposition());
     }
 }

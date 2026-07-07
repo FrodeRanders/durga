@@ -244,7 +244,12 @@ public final class ProcessMonitoringTopology {
             Pattern eventsPattern,
             boolean multiProcess
     ) {
-        private static final Pattern ALL_EVENTS_PATTERN = Pattern.compile("process-events-.*");
+        /**
+         * Matches all {@code process-events-*} topics except the validation events topics
+         * ({@code process-events-*-validation}), so the production monitor is not polluted
+         * by shadow-process lifecycle events.
+         */
+        private static final Pattern ALL_EVENTS_PATTERN = Pattern.compile("process-events-(?!.*-validation).*");
 
         /**
          * Returns topic and store names for monitoring ALL processes in a single instance.

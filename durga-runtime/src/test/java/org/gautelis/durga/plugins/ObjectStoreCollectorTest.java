@@ -41,6 +41,47 @@ public class ObjectStoreCollectorTest {
     }
 
     @Test
+    public void shouldSuppressStoreWriteInValidationMode() throws Exception {
+        System.out.println("TC: validation-mode execution documents the handle without writing to the store");
+        Path root = temporaryFolder.newFolder("validation-objects").toPath();
+        ObjectStoreCollector collector = new ObjectStoreCollector();
+
+        PluginResult result = collector.executeWithResult(
+                Plugin.toBytes("{\"orderId\":7}"),
+                "store=" + root + ";prefix=orders;asset=RawOrders",
+                PluginExecutionContext.validation());
+
+        JsonNode output = mapper.readTree(result.output());
+        JsonNode handle = output.get("dataHandle");
+        assertEquals("RawOrders", handle.get("name").asText());
+        assertEquals(PluginResult.OutputDisposition.SIDE_EFFECT, result.disposition());
+        assertTrue("validation URI must mark the object as not stored",
+                handle.get("uri").asText().startsWith("validation:not-stored/"));
+
+        try (java.util.stream.Stream<Path> walk = Files.walk(root)) {
+            assertFalse("no object file must be written in validation mode",
+                    walk.anyMatch(Files::isRegularFile));
+        }
+    }
+
+    @Test
+    public void shouldStoreNormallyForProductionContext() throws Exception {
+        System.out.println("TC: production-context execution still writes to the store");
+        Path root = temporaryFolder.newFolder("production-objects").toPath();
+        ObjectStoreCollector collector = new ObjectStoreCollector();
+
+        PluginResult result = collector.executeWithResult(
+                Plugin.toBytes("{\"orderId\":7}"),
+                "store=" + root + ";prefix=orders",
+                PluginExecutionContext.production());
+
+        JsonNode handle = mapper.readTree(result.output()).get("dataHandle");
+        assertTrue(handle.get("uri").asText().startsWith("file:"));
+        Path storedFile = Path.of(java.net.URI.create(handle.get("uri").asText()));
+        assertTrue(Files.exists(storedFile));
+    }
+
+    @Test
     public void shouldSupportConfiguredHandleField() throws Exception {
         System.out.println("TC: emits object handle under configured field name");
         Path root = temporaryFolder.newFolder("custom-field").toPath();

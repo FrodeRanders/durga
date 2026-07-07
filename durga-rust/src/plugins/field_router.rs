@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use crate::pipeline::field_at;
-use crate::plugin::{Plugin, PluginError};
+use crate::plugin::{Plugin, PluginError, PluginExecutionContext};
 use crate::result::PluginResult;
 
 pub struct DeadLetterRouter {
@@ -90,7 +90,12 @@ impl Plugin for DeadLetterRouter {
         Ok(Some(Self::from_config(config).route(payload)))
     }
 
-    fn execute_with_result(&self, payload: &[u8], config: &str) -> Result<PluginResult, PluginError> {
+    fn execute_with_result(
+        &self,
+        payload: &[u8],
+        config: &str,
+        _context: &PluginExecutionContext,
+    ) -> Result<PluginResult, PluginError> {
         let output = self.execute_bytes(payload, config)?;
         Ok(PluginResult::passthrough(output, self.idempotency_key(payload, config)))
     }
@@ -129,6 +134,7 @@ mod tests {
             .execute_with_result(
                 br#"{"status":"shipped","order_id":7}"#,
                 "field=status routes={shipped:high} default=default",
+                &PluginExecutionContext::production(),
             )
             .unwrap();
         assert_eq!(res.disposition(), OutputDisposition::Passthrough);

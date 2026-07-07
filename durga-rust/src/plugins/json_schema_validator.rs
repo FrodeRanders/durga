@@ -20,7 +20,7 @@ use regex::Regex;
 use serde_json::Value;
 
 use crate::pipeline::field_at;
-use crate::plugin::{Plugin, PluginError};
+use crate::plugin::{Plugin, PluginError, PluginExecutionContext};
 use crate::result::PluginResult;
 
 #[derive(Default)]
@@ -276,7 +276,12 @@ impl Plugin for JsonSchemaValidator {
         Ok(Some(Self::validate(payload, config)?))
     }
 
-    fn execute_with_result(&self, payload: &[u8], config: &str) -> Result<PluginResult, PluginError> {
+    fn execute_with_result(
+        &self,
+        payload: &[u8],
+        config: &str,
+        _context: &PluginExecutionContext,
+    ) -> Result<PluginResult, PluginError> {
         let text = std::str::from_utf8(payload)?;
         let (schema_config, on_invalid) = parse_config(config);
         let idempotency_key = self.idempotency_key(payload, config);
@@ -328,7 +333,7 @@ mod tests {
         let schema = r#"{"type":"object","required":["name"]}"#;
         let plugin = JsonSchemaValidator::new();
         let result = plugin
-            .execute_with_result(br#"{"email":"a@b.com"}"#, schema)
+            .execute_with_result(br#"{"email":"a@b.com"}"#, schema, &PluginExecutionContext::production())
             .unwrap();
         assert_eq!(result.error_strategy(), Some(ErrorStrategy::Dlq));
     }
@@ -340,6 +345,7 @@ mod tests {
             .execute_with_result(
                 br#"{"email":"a@b.com"}"#,
                 r#"schema={"type":"object","required":["name"]};onInvalid=skip"#,
+                &PluginExecutionContext::production(),
             )
             .unwrap();
         assert_eq!(skip.error_strategy(), Some(ErrorStrategy::Skip));
@@ -348,6 +354,7 @@ mod tests {
             .execute_with_result(
                 br#"{"email":"a@b.com"}"#,
                 r#"schema={"type":"object","required":["name"]};onInvalid=fail"#,
+                &PluginExecutionContext::production(),
             )
             .unwrap();
         assert_eq!(fail.error_strategy(), Some(ErrorStrategy::Fail));
@@ -357,7 +364,7 @@ mod tests {
     fn on_invalid_with_compact_config() {
         let plugin = JsonSchemaValidator::new();
         let invalid = plugin
-            .execute_with_result(br#"{"order_id":7}"#, "required=order_id,amount;onInvalid=skip")
+            .execute_with_result(br#"{"order_id":7}"#, "required=order_id,amount;onInvalid=skip", &PluginExecutionContext::production())
             .unwrap();
         assert_eq!(invalid.error_strategy(), Some(ErrorStrategy::Skip));
 
@@ -365,6 +372,7 @@ mod tests {
             .execute_with_result(
                 br#"{"order_id":7,"amount":12.5}"#,
                 "required=order_id,amount;onInvalid=skip",
+                &PluginExecutionContext::production(),
             )
             .unwrap();
         assert!(valid.is_success());
@@ -377,6 +385,7 @@ mod tests {
             .execute_with_result(
                 br#"{"name":"Alice"}"#,
                 r#"schema={"type":"object","required":["name"]};onInvalid=fail"#,
+                &PluginExecutionContext::production(),
             )
             .unwrap();
         assert!(result.is_success());

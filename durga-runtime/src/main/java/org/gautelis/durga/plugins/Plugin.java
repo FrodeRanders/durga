@@ -11,9 +11,7 @@ import java.util.HexFormat;
  * Plugins receive a raw payload and a configuration string, and return a
  * transformed payload. If the transformation fails, they throw.
  * <p>
- * The generated worker always calls {@link #executeWithResult(byte[], String)},
- * which by default wraps the legacy {@link #execute(byte[], String)} with an
- * idempotency key.
+ * The generated worker always calls {@link #executeWithResult(byte[], String, PluginExecutionContext)}.
  * <ul>
  * <li><b>Text / JSON plugins</b> — override {@link #execute(String, String)}.
  *     The default {@code byte[]} overload handles UTF-8 conversion.</li>
@@ -61,27 +59,33 @@ public interface Plugin {
 
     /**
      * Structured execution that returns a {@link PluginResult} with idempotency
-     * key and optional metadata. The generated worker calls this method.
+     * key and optional metadata. The generated worker always calls this method,
+     * passing {@link PluginExecutionContext#production()} in a normal build and
+     * {@link PluginExecutionContext#validation()} in a validation-mode build.
      * <p>
      * The default implementation delegates to {@link #execute(byte[], String)}
-     * and wraps the result with a content-based idempotency key.
+     * and wraps the result with a content-based idempotency key, ignoring the
+     * context (safe for pure transforms).
      * <p>
      * Override this method directly if your plugin needs to:
      * <ul>
      * <li>Declare an explicit idempotency strategy</li>
      * <li>Return side-effect metadata</li>
      * <li>Signal a non-exceptional error strategy (DLQ, skip)</li>
+     * <li>Suppress substantial side effects when
+     *     {@link PluginExecutionContext#validationMode()} is {@code true}</li>
      * </ul>
      *
      * @param payload raw input bytes
      * @param config  plugin configuration string
+     * @param context the execution context (never {@code null})
      * @return structured plugin result
      * @throws Exception if processing fails and the error strategy is FAIL
      */
-    default PluginResult executeWithResult(byte[] payload, String config) throws Exception {
+    default PluginResult executeWithResult(byte[] payload, String config, PluginExecutionContext context)
+            throws Exception {
         byte[] output = execute(payload, config);
-        String idempotencyKey = idempotencyKey(payload, config);
-        return PluginResult.success(output, idempotencyKey);
+        return PluginResult.success(output, idempotencyKey(payload, config));
     }
 
     /**

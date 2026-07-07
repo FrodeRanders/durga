@@ -1661,7 +1661,7 @@ public class %className% {
 }
 >>
 
-pluginExecutorClass(packageName, className, processId, taskId, inputChannel, taskType, pluginRef, pluginConfig, pluginImplClass, category, taskReads, taskWrites, taskStores, hasLineage, isRoute, isValidate, isAggregate) ::= <<
+pluginExecutorClass(packageName, className, processId, taskId, inputChannel, taskType, pluginRef, pluginConfig, pluginImplClass, category, taskReads, taskWrites, taskStores, hasLineage, isRoute, isValidate, isAggregate, validation) ::= <<
 package %packageName%;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -1712,7 +1712,8 @@ public class %className% {
                     : "{}";
             PluginResult pluginResult = plugin.executeWithResult(
                     payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                    "%pluginConfig%");
+                    "%pluginConfig%",
+                    %if(validation)%org.gautelis.durga.plugins.PluginExecutionContext.validation()%else%org.gautelis.durga.plugins.PluginExecutionContext.production()%endif%);
             if (pluginResult.errorStrategy() == PluginResult.ErrorStrategy.SKIP) {
                 return msg.ack();
             }

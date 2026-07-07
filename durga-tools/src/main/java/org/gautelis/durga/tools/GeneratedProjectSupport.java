@@ -46,7 +46,7 @@ final class GeneratedProjectSupport {
             List<String> subProcesses,
             Path outputRoot,
             Map<String, String> taskInputChannels,
-            List<String> validationTasks
+            boolean validation
     ) {
         Path outputPath = outputRoot.resolve("src/main/resources/application.yml");
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
@@ -209,21 +209,15 @@ final class GeneratedProjectSupport {
             ));
         }
 
-        if (validationTasks != null && !validationTasks.isEmpty()) {
-            // Validation-mode shadow workers consume the production input topic through a dedicated
-            // consumer group (a separate index) so the production offset is never advanced, and
-            // divert their output to a shared topic rather than the task output channel.
-            outgoing.putIfAbsent("validation-candidate-outputs", channelConfig(
-                    "smallrye-kafka",
-                    "validation-candidate-outputs",
-                    "org.apache.kafka.common.serialization.StringSerializer"
-            ));
-            for (String task : validationTasks) {
-                String validationChannel = processId + "_" + task + "_validation_in";
-                String inputTopic = taskInputChannels.getOrDefault(task, processId + "_" + task + "_input");
-                String groupId = processId + "_" + task + "_validation";
-                incoming.putIfAbsent(validationChannel, validationIncomingConfig(inputTopic, groupId));
-            }
+        if (validation) {
+            // Validation mode is a complete shadow of the process: it reads the same live input
+            // topics as production but must never write to a real process topic. Applied uniformly:
+            //   - every incoming channel keeps its production topic but reads through a dedicated
+            //     consumer group ("{processId}-validation") so the production offsets are untouched;
+            //   - every outgoing channel is redirected to a "<topic>-validation" topic, so task
+            //     outputs land on {processId}_{taskId}_output-validation, lifecycle events on
+            //     process-events-{processId}-validation, and nothing production is modified.
+            applyValidationWiring(incoming, outgoing, processId + "-validation");
         }
 
         try {
@@ -677,23 +671,41 @@ final class GeneratedProjectSupport {
     }
 
     /**
-     * Incoming channel for a validation shadow worker: reads the production input topic through a
-     * dedicated consumer group so the production offset is untouched. The offset reset defaults to
-     * {@code latest} (live concurrent) and is overridable via {@code DURGA_VALIDATION_OFFSET_RESET}
-     * (e.g. {@code earliest} for a bounded historic replay near the tail).
+     * Rewrites the assembled channel maps for validation mode. Incoming channels keep their
+     * production topic but gain a dedicated consumer group (so the shadow process reads live input
+     * without stealing it or advancing production offsets); outgoing channels are redirected to a
+     * {@code <topic>-validation} topic so the shadow writes nothing to real process topics.
+     * <p>
+     * The offset reset defaults to {@code latest} (live concurrent) and is overridable via
+     * {@code DURGA_VALIDATION_OFFSET_RESET} (e.g. {@code earliest} for a bounded historic replay).
      */
-    private static Map<String, Object> validationIncomingConfig(String topic, String groupId) {
-        Map<String, Object> config = channelConfig(
-                "smallrye-kafka", topic, "org.apache.kafka.common.serialization.StringDeserializer");
-        Map<String, Object> group = new LinkedHashMap<>();
-        group.put("id", groupId);
-        config.put("group", group);
-        Map<String, Object> auto = new LinkedHashMap<>();
-        Map<String, Object> offset = new LinkedHashMap<>();
-        offset.put("reset", "${DURGA_VALIDATION_OFFSET_RESET:latest}");
-        auto.put("offset", offset);
-        config.put("auto", auto);
-        return config;
+    @SuppressWarnings("unchecked")
+    private static void applyValidationWiring(Map<String, Object> incoming, Map<String, Object> outgoing,
+                                              String groupId) {
+        for (Object value : incoming.values()) {
+            if (!(value instanceof Map<?, ?>)) {
+                continue;
+            }
+            Map<String, Object> config = (Map<String, Object>) value;
+            Map<String, Object> group = new LinkedHashMap<>();
+            group.put("id", groupId);
+            config.put("group", group);
+            Map<String, Object> auto = new LinkedHashMap<>();
+            Map<String, Object> offset = new LinkedHashMap<>();
+            offset.put("reset", "${DURGA_VALIDATION_OFFSET_RESET:latest}");
+            auto.put("offset", offset);
+            config.put("auto", auto);
+        }
+        for (Object value : outgoing.values()) {
+            if (!(value instanceof Map<?, ?>)) {
+                continue;
+            }
+            Map<String, Object> config = (Map<String, Object>) value;
+            Object topic = config.get("topic");
+            if (topic instanceof String topicName && !topicName.endsWith("-validation")) {
+                config.put("topic", topicName + "-validation");
+            }
+        }
     }
 
     private static Map<String, Object> ensureMap(Map<String, Object> root, String key) {

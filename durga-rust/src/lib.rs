@@ -19,7 +19,7 @@ pub mod plugins;
 
 pub use event::{ErrorInfo, EventType, ProcessEvent, Status};
 pub use expr::eval_condition;
-pub use plugin::{default_idempotency_key, Plugin, PluginError};
+pub use plugin::{default_idempotency_key, Plugin, PluginError, PluginExecutionContext};
 pub use result::{ErrorStrategy, OutputDisposition, PluginResult};
 pub use validation::{plan_validation_output, ValidationCandidateOutput};
 pub use worker::{plan_worker_output, Category, WorkerPlan};

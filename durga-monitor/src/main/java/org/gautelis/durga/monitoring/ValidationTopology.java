@@ -13,7 +13,6 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.gautelis.durga.ProcessEvent;
-import org.gautelis.durga.validation.ValidationCandidateOutput;
 import org.gautelis.durga.validation.ValidationResult;
 
 import java.util.ArrayList;
@@ -24,19 +23,17 @@ import java.util.regex.Pattern;
 /**
  * Kafka Streams read model for validation mode.
  * <p>
- * Pairs a shadow worker's candidate output (from {@code validation-candidate-outputs}) against the
- * prior/production output for the same input — the {@code ACTIVITY_COMPLETED} lifecycle event on
- * the process-events stream — and computes a {@link ValidationResult} per task per instance.
+ * Pairs the validation-process shadow output (the ACTIVITY_COMPLETED lifecycle event from the
+ * validation events stream) against the prior/production output for the same activity+instance
+ * from the production events stream, and computes a {@link ValidationResult} per task per instance.
  * <p>
- * The two sides are keyed identically on {@code processId:activityId:processInstanceId} and merged
- * into a single aggregate so the comparison is robust to arrival order: in live-concurrent mode the
- * candidate may arrive before or after the production output. Whichever arrives first seeds the
- * join state; when the candidate is present a result is emitted (a candidate seen before any prior
- * output yields {@code PRIOR_MISSING}, which is superseded when the prior output later arrives).
+ * Both sides carry identical identity keys ({@code processId:activityId:processInstanceId}) and are
+ * merged into a single aggregate so the comparison is robust to arrival order: in live-concurrent
+ * mode the validation event may arrive before or after the production event.
  */
 public final class ValidationTopology {
 
-    public static final String DEFAULT_CANDIDATE_TOPIC = "validation-candidate-outputs";
+    public static final String DEFAULT_CANDIDATE_EVENTS_TOPIC = "process-events"; // regex resolves the real topics
     public static final String DEFAULT_RESULTS_TOPIC = "validation-results";
     public static final String DEFAULT_RESULTS_STORE = "validation-results-store";
 
@@ -49,36 +46,44 @@ public final class ValidationTopology {
      * Builds the validation comparison topology.
      *
      * @param topics topic, store, and ignore-path configuration
-     * @return topology that joins candidate and prior output and materializes comparison results
+     * @return topology that joins prior (production) and validation (candidate) output and materializes results
      */
     public static Topology buildTopology(ValidationTopics topics) {
         StreamsBuilder builder = new StreamsBuilder();
         var eventSerde = JsonSerde.forClass(ProcessEvent.class);
-        var candidateSerde = JsonSerde.forClass(ValidationCandidateOutput.class);
         var joinInputSerde = JsonSerde.forClass(JoinInput.class);
         var joinStateSerde = JsonSerde.forClass(ValidationJoinState.class);
         var resultSerde = JsonSerde.forClass(ValidationResult.class);
 
-        KStream<String, ProcessEvent> events;
+        // Production events (excludes validation-event topics).
+        KStream<String, ProcessEvent> productionEvents;
         if (topics.eventsPattern() != null) {
-            events = builder.stream(topics.eventsPattern(), Consumed.with(Serdes.String(), eventSerde));
+            productionEvents = builder.stream(topics.eventsPattern(), Consumed.with(Serdes.String(), eventSerde));
         } else {
-            events = builder.stream(topics.eventsTopic(), Consumed.with(Serdes.String(), eventSerde));
+            productionEvents = builder.stream(topics.eventsTopic(), Consumed.with(Serdes.String(), eventSerde));
         }
 
-        KStream<String, JoinInput> priorInputs = events
+        KStream<String, JoinInput> priorInputs = productionEvents
                 .filter((key, event) -> event != null
                         && event.eventType() == ProcessEvent.EventType.ACTIVITY_COMPLETED
                         && event.processId() != null && event.activityId() != null
                         && event.processInstanceId() != null)
                 .map((key, event) -> KeyValue.pair(priorKey(event), JoinInput.prior(event)));
 
-        KStream<String, JoinInput> candidateInputs = builder
-                .stream(topics.candidateTopic(), Consumed.with(Serdes.String(), candidateSerde))
-                .filter((key, candidate) -> candidate != null
-                        && candidate.processId() != null && candidate.taskId() != null
-                        && candidate.processInstanceId() != null)
-                .map((key, candidate) -> KeyValue.pair(candidate.key(), JoinInput.candidate(candidate)));
+        // Validation (candidate) events from the per-process shadow stream.
+        KStream<String, ProcessEvent> candidateEvents;
+        if (topics.candidatePattern() != null) {
+            candidateEvents = builder.stream(topics.candidatePattern(), Consumed.with(Serdes.String(), eventSerde));
+        } else {
+            candidateEvents = builder.stream(topics.candidateTopic(), Consumed.with(Serdes.String(), eventSerde));
+        }
+
+        KStream<String, JoinInput> candidateInputs = candidateEvents
+                .filter((key, event) -> event != null
+                        && event.eventType() == ProcessEvent.EventType.ACTIVITY_COMPLETED
+                        && event.processId() != null && event.activityId() != null
+                        && event.processInstanceId() != null)
+                .map((key, event) -> KeyValue.pair(candidateKey(event), JoinInput.candidate(event)));
 
         List<String> ignorePaths = topics.ignorePaths();
 
@@ -111,21 +116,36 @@ public final class ValidationTopology {
     }
 
     private static String priorKey(ProcessEvent event) {
-        return ValidationCandidateOutput.key(event.processId(), event.activityId(), event.processInstanceId());
+        return event.processId() + ":" + event.activityId() + ":" + event.processInstanceId();
+    }
+
+    private static String candidateKey(ProcessEvent event) {
+        return event.processId() + ":" + event.activityId() + ":" + event.processInstanceId();
     }
 
     /**
-     * Names, event source, and comparison ignore paths for the validation topology.
+     * Names, event sources, and comparison ignore paths for the validation topology.
      */
     public record ValidationTopics(
             String candidateTopic,
+            Pattern candidatePattern,
             String eventsTopic,
             Pattern eventsPattern,
             String resultsTopic,
             String resultsStore,
             List<String> ignorePaths
     ) {
-        private static final Pattern ALL_EVENTS_PATTERN = Pattern.compile("process-events-.*");
+        /**
+         * Matches all production (non-validation) events topics.
+         */
+        private static final Pattern PRODUCTION_EVENTS_PATTERN =
+                Pattern.compile("process-events-(?!.*-validation).*");
+
+        /**
+         * Matches all validation events topics ({@code process-events-*-validation}).
+         */
+        private static final Pattern VALIDATION_EVENTS_PATTERN =
+                Pattern.compile("process-events-.*-validation");
 
         /**
          * Validation topics matching the monitoring app's all-process configuration. Ignore paths
@@ -133,9 +153,10 @@ public final class ValidationTopology {
          */
         public static ValidationTopics forAllProcesses() {
             return new ValidationTopics(
-                    DEFAULT_CANDIDATE_TOPIC,
+                    DEFAULT_RESULTS_TOPIC + "-candidate-input",
+                    VALIDATION_EVENTS_PATTERN,
                     ProcessMonitoringTopology.DEFAULT_EVENTS_TOPIC,
-                    ALL_EVENTS_PATTERN,
+                    PRODUCTION_EVENTS_PATTERN,
                     DEFAULT_RESULTS_TOPIC,
                     DEFAULT_RESULTS_STORE,
                     ignorePathsFromProperty()
@@ -156,11 +177,11 @@ public final class ValidationTopology {
     }
 
     /**
-     * One side of the merge: either a candidate output or a prior/production event.
+     * One side of the merge: either a validation-candidate event or a prior/production event.
      */
-    public record JoinInput(ValidationCandidateOutput candidate, ProcessEvent prior) {
-        static JoinInput candidate(ValidationCandidateOutput candidate) {
-            return new JoinInput(candidate, null);
+    public record JoinInput(ProcessEvent candidate, ProcessEvent prior) {
+        static JoinInput candidate(ProcessEvent event) {
+            return new JoinInput(event, null);
         }
 
         static JoinInput prior(ProcessEvent prior) {
@@ -172,7 +193,7 @@ public final class ValidationTopology {
      * Accumulated join state for one {@code processId:activityId:processInstanceId} key.
      */
     public record ValidationJoinState(
-            ValidationCandidateOutput candidate,
+            ProcessEvent candidate,
             Map<String, Object> priorPayload,
             String priorVersion
     ) {

@@ -73,47 +73,14 @@ final class TaskRoutingGenerator {
                 worker.add("isRoute", "route".equals(cat));
                 worker.add("isValidate", "validate".equals(cat));
                 worker.add("isAggregate", "aggregate".equals(cat));
+                worker.add("validation", validation);
             }
             addLineageToTemplate(worker, taskLineage, task.name);
             if (!dryRun) {
                 BpmnScaffolder.writeFile(outputFile, worker.render());
             }
             generatedFiles.add(outputRoot.relativize(outputFile).toString());
-
-            if (validation && task.kind == TaskKind.PLUGIN && task.pluginRef != null) {
-                generateValidationWorker(group, javaOutput, outputRoot, generatedFiles, dryRun,
-                        processId, task, existingSources);
-            }
         }
-    }
-
-    private static void generateValidationWorker(
-            STGroupString group,
-            Path javaOutput,
-            Path outputRoot,
-            List<String> generatedFiles,
-            boolean dryRun,
-            String processId,
-            TaskSpec task,
-            Set<String> existingSources
-    ) {
-        String className = BpmnScaffolder.toClassName(task.name) + "ValidationWorker";
-        Path outputFile = javaOutput.resolve(className + ".java");
-        if (Files.exists(outputFile) || existingSources.contains(className + ".java")) {
-            return;
-        }
-        ST worker = group.getInstanceOf("validationWorkerClass");
-        worker.add("packageName", BpmnScaffolder.generatedPackage);
-        worker.add("className", className);
-        worker.add("processId", processId);
-        worker.add("taskId", task.name);
-        worker.add("pluginRef", task.pluginRef);
-        worker.add("pluginConfig", escapeJava(task.pluginConfig != null ? task.pluginConfig : "."));
-        worker.add("pluginImplClass", task.pluginImplClass);
-        if (!dryRun) {
-            BpmnScaffolder.writeFile(outputFile, worker.render());
-        }
-        generatedFiles.add(outputRoot.relativize(outputFile).toString());
     }
 
     private static String computeTaskInputChannel(String processId, Map<String, NodeInfo> nodes, String taskId) {

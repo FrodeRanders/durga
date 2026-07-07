@@ -57,7 +57,7 @@ public final class DeadLetterRouter implements Plugin {
      * worker does not overwrite the payload with the route key.
      */
     @Override
-    public PluginResult executeWithResult(byte[] payload, String config) throws Exception {
+    public PluginResult executeWithResult(byte[] payload, String config, PluginExecutionContext context) throws Exception {
         byte[] output = execute(payload, config);
         return PluginResult.passthrough(output, idempotencyKey(payload, config));
     }

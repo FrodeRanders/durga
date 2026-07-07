@@ -11,6 +11,38 @@ use crate::result::PluginResult;
 /// `serde_json`, UTF-8 decoding, etc. ergonomically.
 pub type PluginError = Box<dyn std::error::Error + Send + Sync>;
 
+/// Execution context passed to a plugin so it can adapt to the mode the
+/// generated worker runs in. In validation mode a plugin must not perform
+/// substantial side effects (external writes, mutations); it should instead
+/// return the response it would have produced. Mirrors the Java
+/// `org.gautelis.durga.plugins.PluginExecutionContext`.
+#[derive(Clone, Copy, Debug)]
+pub struct PluginExecutionContext {
+    validation_mode: bool,
+}
+
+impl PluginExecutionContext {
+    /// Context for a normal production execution: side effects are performed.
+    pub fn production() -> Self {
+        PluginExecutionContext { validation_mode: false }
+    }
+
+    /// Context for a validation-mode execution: substantial side effects must be suppressed.
+    pub fn validation() -> Self {
+        PluginExecutionContext { validation_mode: true }
+    }
+
+    /// Builds a context for the given mode.
+    pub fn new(validation_mode: bool) -> Self {
+        PluginExecutionContext { validation_mode }
+    }
+
+    /// Whether the plugin runs as part of a validation-mode shadow process.
+    pub fn validation_mode(&self) -> bool {
+        self.validation_mode
+    }
+}
+
 /// Contract for data pipeline plugins.
 ///
 /// Plugins receive a raw payload and a configuration string and return a
@@ -42,10 +74,18 @@ pub trait Plugin {
         Err("Plugin does not support text payloads — override execute_bytes instead".into())
     }
 
-    /// Structured execution the generated worker calls. Default wraps
-    /// [`Plugin::execute_bytes`] with a content-based idempotency key and the
-    /// default `PAYLOAD` disposition.
-    fn execute_with_result(&self, payload: &[u8], config: &str) -> Result<PluginResult, PluginError> {
+    /// Structured execution the generated worker calls, carrying the
+    /// [`PluginExecutionContext`]. Default wraps [`Plugin::execute_bytes`] with a
+    /// content-based idempotency key and the default `PAYLOAD` disposition,
+    /// ignoring the context (safe for pure transforms). Plugins that perform
+    /// substantial side effects must override this to suppress them when
+    /// [`PluginExecutionContext::validation_mode`] is true.
+    fn execute_with_result(
+        &self,
+        payload: &[u8],
+        config: &str,
+        _context: &PluginExecutionContext,
+    ) -> Result<PluginResult, PluginError> {
         let output = self.execute_bytes(payload, config)?;
         Ok(PluginResult::success(output, self.idempotency_key(payload, config)))
     }

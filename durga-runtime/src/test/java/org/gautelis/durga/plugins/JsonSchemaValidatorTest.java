@@ -164,7 +164,7 @@ public class JsonSchemaValidatorTest {
     public void shouldReturnSuccessWhenValidViaResult() throws Exception {
         System.out.println("TC: executeWithResult returns success for a valid payload");
         String config = "{\"type\":\"object\",\"required\":[\"name\"]}";
-        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"name\":\"Alice\"}"), config);
+        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"name\":\"Alice\"}"), config, PluginExecutionContext.production());
         assertTrue(result.isSuccess());
         assertNull(result.errorStrategy());
         assertEquals("{\"name\":\"Alice\"}", Plugin.toString(result.output()));
@@ -174,7 +174,7 @@ public class JsonSchemaValidatorTest {
     public void shouldRouteInvalidToDlqByDefault() throws Exception {
         System.out.println("TC: executeWithResult routes invalid payload to DLQ when onInvalid is absent");
         String config = "{\"type\":\"object\",\"required\":[\"name\"]}";
-        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"email\":\"a@b.com\"}"), config);
+        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"email\":\"a@b.com\"}"), config, PluginExecutionContext.production());
         assertEquals(PluginResult.ErrorStrategy.DLQ, result.errorStrategy());
     }
 
@@ -182,7 +182,7 @@ public class JsonSchemaValidatorTest {
     public void shouldSkipInvalidWhenOnInvalidSkip() throws Exception {
         System.out.println("TC: executeWithResult skips invalid payload when onInvalid=skip");
         String config = "schema={\"type\":\"object\",\"required\":[\"name\"]};onInvalid=skip";
-        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"email\":\"a@b.com\"}"), config);
+        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"email\":\"a@b.com\"}"), config, PluginExecutionContext.production());
         assertEquals(PluginResult.ErrorStrategy.SKIP, result.errorStrategy());
     }
 
@@ -190,7 +190,7 @@ public class JsonSchemaValidatorTest {
     public void shouldFailInvalidWhenOnInvalidFail() throws Exception {
         System.out.println("TC: executeWithResult fails process for invalid payload when onInvalid=fail");
         String config = "schema={\"type\":\"object\",\"required\":[\"name\"]};onInvalid=fail";
-        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"email\":\"a@b.com\"}"), config);
+        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"email\":\"a@b.com\"}"), config, PluginExecutionContext.production());
         assertEquals(PluginResult.ErrorStrategy.FAIL, result.errorStrategy());
     }
 
@@ -198,10 +198,10 @@ public class JsonSchemaValidatorTest {
     public void shouldHonorOnInvalidWithCompactConfig() throws Exception {
         System.out.println("TC: executeWithResult honors onInvalid directive appended to compact config");
         String config = "required=order_id,amount;onInvalid=skip";
-        PluginResult invalid = validator.executeWithResult(Plugin.toBytes("{\"order_id\":7}"), config);
+        PluginResult invalid = validator.executeWithResult(Plugin.toBytes("{\"order_id\":7}"), config, PluginExecutionContext.production());
         assertEquals(PluginResult.ErrorStrategy.SKIP, invalid.errorStrategy());
         PluginResult valid = validator.executeWithResult(
-                Plugin.toBytes("{\"order_id\":7,\"amount\":12.5}"), config);
+                Plugin.toBytes("{\"order_id\":7,\"amount\":12.5}"), config, PluginExecutionContext.production());
         assertTrue(valid.isSuccess());
     }
 
@@ -209,7 +209,7 @@ public class JsonSchemaValidatorTest {
     public void shouldStayValidWhenPayloadPassesWithOnInvalid() throws Exception {
         System.out.println("TC: executeWithResult returns success even when onInvalid directive is present");
         String config = "schema={\"type\":\"object\",\"required\":[\"name\"]};onInvalid=fail";
-        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"name\":\"Alice\"}"), config);
+        PluginResult result = validator.executeWithResult(Plugin.toBytes("{\"name\":\"Alice\"}"), config, PluginExecutionContext.production());
         assertTrue(result.isSuccess());
     }
 
@@ -218,7 +218,7 @@ public class JsonSchemaValidatorTest {
         System.out.println("TC: blank config performs no validation and returns the payload unchanged");
         byte[] result = validator.execute(Plugin.toBytes("{\"name\":\"Alice\"}"), "");
         assertEquals("{\"name\":\"Alice\"}", Plugin.toString(result));
-        PluginResult structured = validator.executeWithResult(Plugin.toBytes("{\"x\":1}"), "   ");
+        PluginResult structured = validator.executeWithResult(Plugin.toBytes("{\"x\":1}"), "   ", PluginExecutionContext.production());
         assertTrue(structured.isSuccess());
     }
 }

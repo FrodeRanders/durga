@@ -803,69 +803,85 @@ public class BpmnScaffolderTest {
 
     @Test
     public void validationModeGeneratesShadowWorkersChannelsAndTopics() throws Exception {
-        System.out.println("TC: --validation generates shadow workers, dedicated validation channels, and topics for plugin tasks");
+        System.out.println("TC: --validation generates a complete shadow process wired to validation topics via a distinct consumer group");
         Path outputDir = Files.createTempDirectory("durga-validation-test-");
         runGenerationWithValidation("src/test/resources/bpmn/data_pipeline_demo.bpmn", outputDir);
 
-        Path shadow = outputDir.resolve(
-                "src/main/java/org/example/generated/TransformDataValidationWorker.java");
-        assertTrue("shadow worker not generated", Files.exists(shadow));
-        String shadowContent = Files.readString(shadow);
-        assertTrue(shadowContent.contains("@Incoming(\"data_pipeline_demo_transform_data_validation_in\")"));
-        assertTrue(shadowContent.contains("@Channel(\"validation-candidate-outputs\")"));
-        assertTrue(shadowContent.contains("ValidationCandidateOutput"));
-        assertTrue(shadowContent.contains("plugin.executeWithResult("));
-        assertFalse("shadow worker must not emit lifecycle events", shadowContent.contains("processEventsEmitter"));
-        assertFalse("shadow worker must not emit to the task output channel", shadowContent.contains("_out\")"));
+        // Validation mode is a complete process: the normal production plugin worker is generated
+        // (not a separate shadow worker), but it runs the plugin with the validation execution
+        // context so substantial side effects are suppressed.
+        Path worker = outputDir.resolve(
+                "src/main/java/org/example/generated/TransformDataPluginExecutor.java");
+        assertTrue("plugin worker not generated", Files.exists(worker));
+        String workerContent = Files.readString(worker);
+        assertTrue("worker must run the plugin in validation context",
+                workerContent.contains("PluginExecutionContext.validation()"));
 
-        assertTrue("ValidationCandidateOutput runtime type not generated", Files.exists(outputDir.resolve(
+        assertFalse("no separate shadow worker must be generated", Files.exists(outputDir.resolve(
+                "src/main/java/org/example/generated/TransformDataValidationWorker.java")));
+        assertFalse("retired ValidationCandidateOutput must not be generated", Files.exists(outputDir.resolve(
                 "src/main/java/org/gautelis/durga/validation/ValidationCandidateOutput.java")));
+        assertTrue("generated project must carry the PluginExecutionContext contract", Files.exists(outputDir.resolve(
+                "src/main/java/org/gautelis/durga/plugins/PluginExecutionContext.java")));
 
         String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
-        assertTrue(applicationYaml.contains("data_pipeline_demo_transform_data_validation_in"));
-        assertTrue(applicationYaml.contains("validation-candidate-outputs"));
-        assertTrue("dedicated consumer group missing",
-                applicationYaml.contains("data_pipeline_demo_transform_data_validation"));
+        // Outputs are redirected to per-task validation topics; nothing production is written.
+        assertTrue("task output must be redirected to a per-task validation topic",
+                applicationYaml.contains("data_pipeline_demo_transform_data_output-validation"));
+        assertTrue("lifecycle events must be redirected to the validation events topic",
+                applicationYaml.contains("process-events-data_pipeline_demo-validation"));
+        // Input is read from the live topics through a dedicated consumer group.
+        assertTrue("shadow must read through a dedicated validation consumer group",
+                applicationYaml.contains("data_pipeline_demo-validation"));
         assertTrue("configurable offset reset missing", applicationYaml.contains("DURGA_VALIDATION_OFFSET_RESET"));
 
         String topics = Files.readString(outputDir.resolve("topics.sh"));
-        assertTrue(topics.contains("validation-candidate-outputs"));
-        assertTrue(topics.contains("validation-results"));
+        assertTrue("topics must create the per-task validation output topic",
+                topics.contains("data_pipeline_demo_transform_data_output-validation"));
+        assertFalse("retired validation-candidate-outputs topic must not be created",
+                topics.contains("validation-candidate-outputs"));
     }
 
     @Test
     public void rustValidationTargetGeneratesShadowBinsAndRuntime() throws Exception {
-        System.out.println("TC: --target rust --validation generates shadow worker bins and validation runtime glue");
+        System.out.println("TC: --target rust --validation generates a complete shadow crate wired to validation topics");
         Path outputDir = Files.createTempDirectory("durga-rust-validation-test-");
         runRustGeneration("src/test/resources/bpmn/e2e_pipeline.bpmn", outputDir, true);
 
-        Path shadowBin = outputDir.resolve("src/bin/transform_order_validation.rs");
-        assertTrue("rust shadow worker bin not generated", Files.exists(shadowBin));
-        String binContent = Files.readString(shadowBin);
-        assertTrue(binContent.contains("run_validation_worker"));
-        assertTrue(binContent.contains("ValidationWorker"));
-        assertTrue(binContent.contains("e2e_pipeline-transform_order-validation"));
-        assertTrue(binContent.contains("DURGA_VALIDATION_CANDIDATE_VERSION"));
+        // The production worker bin is generated (not a separate shadow bin) but wired for validation.
+        Path bin = outputDir.resolve("src/bin/transform_order.rs");
+        assertTrue("rust worker bin not generated", Files.exists(bin));
+        String binContent = Files.readString(bin);
+        assertTrue("worker must read through a dedicated validation consumer group",
+                binContent.contains("e2e_pipeline-transform_order-validation"));
+
+        assertFalse("no separate shadow bin must be generated",
+                Files.exists(outputDir.resolve("src/bin/transform_order_validation.rs")));
 
         String lib = Files.readString(outputDir.resolve("src/lib.rs"));
-        assertTrue(lib.contains("pub async fn run_validation_worker"));
-        assertTrue(lib.contains("validation-candidate-outputs"));
-        assertTrue(lib.contains("DURGA_VALIDATION_OFFSET_RESET"));
-
-        assertFalse("gateway must not get a validation bin",
-                Files.exists(outputDir.resolve("src/bin/route_by_amount_validation.rs")));
+        assertTrue("crate must be flagged validation mode", lib.contains("VALIDATION_MODE: bool = true"));
+        assertTrue("lifecycle events must be redirected to the validation events topic",
+                lib.contains("process-events-e2e_pipeline-validation"));
+        assertTrue("plugin must run with the validation execution context",
+                lib.contains("PluginExecutionContext::new(VALIDATION_MODE)"));
+        assertFalse("retired validation-candidate path must be gone", lib.contains("run_validation_worker"));
+        assertFalse("retired validation-candidate topic must be gone", lib.contains("validation-candidate-outputs"));
     }
 
     @Test
     public void rustDefaultTargetHasNoValidationArtifacts() throws Exception {
-        System.out.println("TC: rust generation without --validation produces no shadow bins or validation runtime");
+        System.out.println("TC: rust generation without --validation produces a production crate");
         Path outputDir = Files.createTempDirectory("durga-rust-no-validation-test-");
         runRustGeneration("src/test/resources/bpmn/e2e_pipeline.bpmn", outputDir, false);
 
         assertFalse(Files.exists(outputDir.resolve("src/bin/transform_order_validation.rs")));
         String lib = Files.readString(outputDir.resolve("src/lib.rs"));
-        assertFalse(lib.contains("run_validation_worker"));
-        assertFalse(lib.contains("validation-candidate-outputs"));
+        assertTrue(lib.contains("VALIDATION_MODE: bool = false"));
+        assertFalse("production events topic must not be redirected",
+                lib.contains("process-events-e2e_pipeline-validation"));
+        String bin = Files.readString(outputDir.resolve("src/bin/transform_order.rs"));
+        assertFalse("production worker must not use a validation consumer group",
+                bin.contains("-validation"));
     }
 
     @Test
@@ -879,9 +895,13 @@ public class BpmnScaffolderTest {
         assertFalse(Files.exists(outputDir.resolve(
                 "src/main/java/org/gautelis/durga/validation/ValidationCandidateOutput.java")));
         String topics = Files.readString(outputDir.resolve("topics.sh"));
-        assertFalse(topics.contains("validation-candidate-outputs"));
+        assertFalse(topics.contains("-validation"));
         String applicationYaml = Files.readString(outputDir.resolve("src/main/resources/application.yml"));
-        assertFalse(applicationYaml.contains("validation-candidate-outputs"));
+        assertFalse(applicationYaml.contains("-validation"));
+        Path worker = outputDir.resolve(
+                "src/main/java/org/example/generated/TransformDataPluginExecutor.java");
+        assertTrue("plugin worker must run in production context by default",
+                Files.readString(worker).contains("PluginExecutionContext.production()"));
     }
 
     @Test

@@ -98,6 +98,15 @@ final class RustTargetGenerator {
             NodeInfo next = firstTarget(taskNode, nodes, flowsBySource);
             boolean terminal = next == null || next.type == NodeType.END;
 
+            // Validation mode is a complete shadow: the production worker is generated, but wired to
+            // read the live input through a dedicated consumer group and redirect its output/DLQ to
+            // "-validation" topics (lifecycle events go to the validation events topic via
+            // VALIDATION_MODE in lib.rs). The plugin itself runs with the validation context so
+            // substantial side effects are suppressed.
+            String groupId = processId + "-" + task.name + (parsed.validation ? "-validation" : "");
+            String outputTopic = terminal ? "" : validationTopic(inputTopicFor(processId, next, nodes), parsed.validation);
+            String dlqTopic = validationTopic(processId + "_" + task.name + "_dlq", parsed.validation);
+
             ST bin = group.getInstanceOf("pluginWorkerBin");
             bin.add("processId", processId);
             bin.add("crateLib", crateLib);
@@ -105,26 +114,13 @@ final class RustTargetGenerator {
             bin.add("structName", structName);
             bin.add("pluginConfig", escapeRust(task.pluginConfig != null ? task.pluginConfig : "."));
             bin.add("inputTopic", inputTopicFor(processId, taskNode, nodes));
-            bin.add("outputTopic", terminal ? "" : inputTopicFor(processId, next, nodes));
-            bin.add("dlqTopic", processId + "_" + task.name + "_dlq");
-            bin.add("groupId", processId + "-" + task.name);
+            bin.add("outputTopic", outputTopic);
+            bin.add("dlqTopic", dlqTopic);
+            bin.add("groupId", groupId);
             bin.add("categoryVariant", categoryVariant(task.pluginCategory));
             bin.add("terminal", terminal);
             write(parsed, binDir.resolve(task.name + ".rs"), bin.render());
             workers++;
-
-            if (parsed.validation) {
-                ST validationBin = group.getInstanceOf("validationWorkerBin");
-                validationBin.add("processId", processId);
-                validationBin.add("crateLib", crateLib);
-                validationBin.add("activityId", task.name);
-                validationBin.add("structName", structName);
-                validationBin.add("pluginConfig", escapeRust(task.pluginConfig != null ? task.pluginConfig : "."));
-                validationBin.add("inputTopic", inputTopicFor(processId, taskNode, nodes));
-                validationBin.add("groupId", processId + "-" + task.name + "-validation");
-                write(parsed, binDir.resolve(task.name + "_validation.rs"), validationBin.render());
-                workers++;
-            }
         }
 
         boolean hasCustom = !customModules.isEmpty();
@@ -168,13 +164,13 @@ final class RustTargetGenerator {
             if (node.type != NodeType.XOR) {
                 continue;
             }
-            String branches = branchesBlock(processId, node, nodes, flowsBySource);
+            String branches = branchesBlock(processId, node, nodes, flowsBySource, parsed.validation);
             ST bin = group.getInstanceOf("gatewayWorkerBin");
             bin.add("processId", processId);
             bin.add("crateLib", crateLib);
             bin.add("activityId", node.name);
             bin.add("inputTopic", inputTopicFor(processId, node, nodes));
-            bin.add("groupId", processId + "-" + node.name);
+            bin.add("groupId", processId + "-" + node.name + (parsed.validation ? "-validation" : ""));
             bin.add("branchesBlock", branches);
             write(parsed, binDir.resolve(node.name + ".rs"), bin.render());
             workers++;
@@ -245,7 +241,7 @@ final class RustTargetGenerator {
     }
 
     private static String branchesBlock(String processId, NodeInfo gateway, Map<String, NodeInfo> nodes,
-                                        Map<String, List<FlowInfo>> flowsBySource) {
+                                        Map<String, List<FlowInfo>> flowsBySource, boolean validation) {
         List<FlowInfo> flows = flowsBySource.get(gateway.id);
         StringBuilder conditional = new StringBuilder();
         StringBuilder fallback = new StringBuilder();
@@ -255,7 +251,7 @@ final class RustTargetGenerator {
                 if (target == null) {
                     continue;
                 }
-                String topic = inputTopicFor(processId, target, nodes);
+                String topic = validationTopic(inputTopicFor(processId, target, nodes), validation);
                 boolean isDefault = flow.id.equals(gateway.defaultFlowId)
                         || flow.condition == null || flow.condition.isBlank();
                 if (isDefault) {
@@ -306,6 +302,14 @@ final class RustTargetGenerator {
 
     static String escapeRust(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    /** Suffixes a production topic with {@code -validation} in validation mode so the shadow never writes a real topic. */
+    private static String validationTopic(String topic, boolean validation) {
+        if (!validation || topic == null || topic.isEmpty() || topic.endsWith("-validation")) {
+            return topic;
+        }
+        return topic + "-validation";
     }
 
     private static void write(ParsedArgs parsed, Path path, String content) {

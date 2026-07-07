@@ -17,6 +17,31 @@ public final class ObjectStoreCollector implements Plugin {
     public byte[] execute(byte[] payload, String config) throws Exception {
         Map<String, String> options = ObjectStoreSupport.parseConfig(config);
         ObjectStoreSupport.StoredObject stored = ObjectStoreSupport.store(payload, options);
+        return buildOutput(payload, options, stored);
+    }
+
+    /**
+     * In validation mode the external object-store write is suppressed: the plugin computes and
+     * returns the handle it <em>would</em> have produced (with a synthetic, non-stored URI) so a
+     * supervisor can compare the candidate response, but nothing is written to storage.
+     */
+    @Override
+    public PluginResult executeWithResult(byte[] payload, String config, PluginExecutionContext context)
+            throws Exception {
+        Map<String, String> options = ObjectStoreSupport.parseConfig(config);
+        if (context != null && context.validationMode()) {
+            ObjectStoreSupport.StoredObject described = ObjectStoreSupport.describe(payload);
+            byte[] output = buildOutput(payload, options, described);
+            return PluginResult.sideEffect(output, idempotencyKey(payload, config),
+                    "validation: object-store write suppressed");
+        }
+        ObjectStoreSupport.StoredObject stored = ObjectStoreSupport.store(payload, options);
+        byte[] output = buildOutput(payload, options, stored);
+        return PluginResult.success(output, idempotencyKey(payload, config));
+    }
+
+    private byte[] buildOutput(byte[] payload, Map<String, String> options,
+                               ObjectStoreSupport.StoredObject stored) {
         FormatDetector.Detection detection = FormatDetector.detect(payload);
         String assetName = options.getOrDefault("asset", options.getOrDefault("name", "payload"));
         String schema = options.get("schema");

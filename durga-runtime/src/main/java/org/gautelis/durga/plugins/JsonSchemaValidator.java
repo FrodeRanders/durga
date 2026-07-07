@@ -67,7 +67,7 @@ public final class JsonSchemaValidator implements Plugin {
     }
 
     @Override
-    public PluginResult executeWithResult(byte[] payload, String config) throws Exception {
+    public PluginResult executeWithResult(byte[] payload, String config, PluginExecutionContext context) throws Exception {
         String pluginName = "json-schema-validator";
         Counter counter = Metrics.registry().counter("plugin.executions", "plugin", pluginName);
         Timer timer = Metrics.registry().timer("plugin.duration", "plugin", pluginName);

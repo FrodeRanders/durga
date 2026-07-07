@@ -315,14 +315,8 @@ public class BpmnScaffolder {
 
         List<String> allTimers = combineNames(timers, boundaryTimers);
         List<String> externalTopics = combineNames(messageTopics, signalTopics);
-        List<String> validationTasks = parsed.validation
-                ? taskSpecs.stream()
-                        .filter(t -> t.kind == TaskKind.PLUGIN && t.pluginRef != null)
-                        .map(t -> t.name)
-                        .toList()
-                : List.of();
         String yamlPreview = renderYamlPreview(group, processId, tasks, allTimers, externalTopics, callActivities, subProcesses);
-        String topicsPreview = renderTopicsPreview(group, processId, tasks, allTimers, externalTopics, callActivities, subProcesses, retentionMs, !validationTasks.isEmpty());
+        String topicsPreview = renderTopicsPreview(group, processId, tasks, allTimers, externalTopics, callActivities, subProcesses, retentionMs, parsed.validation);
         String bpmnFileName = bpmnFile.toPath().getFileName().toString();
         String pomPreview = renderPomPreview(group, processId, bpmnFileName);
         String runLocalPreview = renderRunLocalPreview(group, processId);
@@ -344,7 +338,7 @@ public class BpmnScaffolder {
             // accumulating channel config across repeated scaffold runs.
             GeneratedProjectSupport.mergeApplicationYaml(
                     processId, tasks, allTimers, externalTopics, callActivities, subProcesses, outputRoot,
-                    taskInputChannels, validationTasks
+                    taskInputChannels, parsed.validation
             );
             Path topicsPath = outputRoot.resolve("topics.sh");
             writeFile(topicsPath, topicsPreview);
@@ -1109,16 +1103,13 @@ public class BpmnScaffolder {
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "plugins/Plugin.java", "pluginInterfaceClass");
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
+                "plugins/PluginExecutionContext.java", "pluginExecutionContextClass");
+        writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "plugins/PluginResult.java", "pluginResultClass");
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "plugins/PipelinePlugin.java", "pipelinePluginClass");
         writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
                 "plugins/PluginExecutionSupport.java", "pluginExecutionSupportClass");
-
-        if (parsed.validation) {
-            writeCoreClass(group, coreJavaOutput, outputRoot, generatedFiles, dryRun,
-                    "validation/ValidationCandidateOutput.java", "validationCandidateOutputClass");
-        }
 
         // Model registration bean — publishes BPMN to process-models topic on startup
         {

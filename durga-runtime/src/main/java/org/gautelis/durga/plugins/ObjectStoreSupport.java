@@ -92,6 +92,18 @@ final class ObjectStoreSupport {
     }
 
     /**
+     * Computes the metadata a {@link #store} call would produce <em>without</em> writing anything.
+     * Used in validation mode to describe the object that would have been stored while suppressing
+     * the external side effect. The returned URI carries the {@code validation:} scheme to make it
+     * explicit that no object was written.
+     */
+    static StoredObject describe(byte[] payload) {
+        String id = UUID.randomUUID().toString();
+        return new StoredObject(id, "validation:not-stored/" + id, payload.length, sha256(payload),
+                Instant.now().toString());
+    }
+
+    /**
      * Resolves the {@code layout} config into directory segments placed between
      * the prefix and the (always UUID) filename. The layout is a {@code /}-separated
      * list of tokens, each one of:

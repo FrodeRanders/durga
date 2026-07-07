@@ -8,7 +8,7 @@
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
-use crate::plugin::{Plugin, PluginError};
+use crate::plugin::{Plugin, PluginError, PluginExecutionContext};
 use crate::result::PluginResult;
 
 #[derive(Debug, Clone)]
@@ -200,7 +200,12 @@ impl Plugin for FormatDetector {
         Ok(Some(Value::Object(output).to_string().into_bytes()))
     }
 
-    fn execute_with_result(&self, payload: &[u8], config: &str) -> Result<PluginResult, PluginError> {
+    fn execute_with_result(
+        &self,
+        payload: &[u8],
+        config: &str,
+        _context: &PluginExecutionContext,
+    ) -> Result<PluginResult, PluginError> {
         let output = self.execute_bytes(payload, config)?;
         Ok(PluginResult::passthrough(output, self.idempotency_key(payload, config)))
     }
@@ -226,7 +231,7 @@ mod tests {
     #[test]
     fn uses_configured_field_and_is_passthrough() {
         let fd = FormatDetector::new();
-        let res = fd.execute_with_result(br#"{"a":1}"#, "field=fmt").unwrap();
+        let res = fd.execute_with_result(br#"{"a":1}"#, "field=fmt", &PluginExecutionContext::production()).unwrap();
         assert_eq!(res.disposition(), OutputDisposition::Passthrough);
         let v: Value = serde_json::from_slice(res.output().unwrap()).unwrap();
         assert!(v.get("fmt").is_some());

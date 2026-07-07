@@ -4,6 +4,7 @@ import org.apache.kafka.streams.Topology;
 import org.junit.Test;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 
@@ -11,12 +12,13 @@ public class ValidationTopologyTest {
 
     @Test
     public void shouldBuildValidationComparisonTopology() {
-        System.out.println("TC: validation topology wires candidate + prior sources into a materialized results store");
+        System.out.println("TC: validation topology wires prior (production) + candidate (validation) event streams into a materialized results store");
 
         ValidationTopology.ValidationTopics topics = new ValidationTopology.ValidationTopics(
-                ValidationTopology.DEFAULT_CANDIDATE_TOPIC,
+                "none", // placeholder — regex patterns are used below
+                Pattern.compile("process-events-.*-validation"),
                 ProcessMonitoringTopology.DEFAULT_EVENTS_TOPIC,
-                null,
+                Pattern.compile("process-events-(?!.*-validation).*"),
                 ValidationTopology.DEFAULT_RESULTS_TOPIC,
                 ValidationTopology.DEFAULT_RESULTS_STORE,
                 List.of("meta.timestamp"));
@@ -24,7 +26,7 @@ public class ValidationTopologyTest {
         Topology topology = ValidationTopology.buildTopology(topics);
         String description = topology.describe().toString();
 
-        assertTrue(description.contains(ValidationTopology.DEFAULT_CANDIDATE_TOPIC));
+        assertTrue(description.contains("process-events"));
         assertTrue(description.contains(ProcessMonitoringTopology.DEFAULT_EVENTS_TOPIC));
         assertTrue(description.contains(ValidationTopology.DEFAULT_RESULTS_TOPIC));
         assertTrue(description.contains(ValidationTopology.DEFAULT_RESULTS_STORE));

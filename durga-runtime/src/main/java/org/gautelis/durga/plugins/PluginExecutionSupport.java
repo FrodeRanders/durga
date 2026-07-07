@@ -36,24 +36,27 @@ public final class PluginExecutionSupport {
     }
 
     private static Result execute(Plugin plugin, byte[] payload, String config, boolean sandbox) throws Exception {
+        PluginExecutionContext context = sandbox
+                ? PluginExecutionContext.validation()
+                : PluginExecutionContext.production();
         Map<String, String> options = ObjectStoreSupport.parseConfig(config);
         String mode = options.getOrDefault("handleMode", options.getOrDefault("dataHandleMode", "payload"));
         String pluginConfig = options.getOrDefault("pluginConfig", config);
         if (!"materialize".equalsIgnoreCase(mode)) {
-            PluginResult pluginResult = plugin.executeWithResult(payload, pluginConfig);
+            PluginResult pluginResult = plugin.executeWithResult(payload, pluginConfig, context);
             return new Result(pluginResult.output(), payload, false, pluginResult.idempotencyKey(),
                     pluginResult.errorStrategy(), pluginResult.sideEffectDescription(), pluginResult.metadata());
         }
 
         Handle inputHandle = findHandle(payload, ObjectStoreSupport.handleField(options));
         if (inputHandle == null) {
-            PluginResult pluginResult = plugin.executeWithResult(payload, pluginConfig);
+            PluginResult pluginResult = plugin.executeWithResult(payload, pluginConfig, context);
             return new Result(pluginResult.output(), payload, false, pluginResult.idempotencyKey(),
                     pluginResult.errorStrategy(), pluginResult.sideEffectDescription(), pluginResult.metadata());
         }
 
         byte[] rawInput = ObjectStoreSupport.read(inputHandle.uri());
-        PluginResult pluginResult = plugin.executeWithResult(rawInput, pluginConfig);
+        PluginResult pluginResult = plugin.executeWithResult(rawInput, pluginConfig, context);
         byte[] rawOutput = pluginResult.output();
         if (rawOutput == null) {
             rawOutput = rawInput;

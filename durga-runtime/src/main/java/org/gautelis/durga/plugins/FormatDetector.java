@@ -32,7 +32,7 @@ public final class FormatDetector implements Plugin {
      * unchanged via {@link PluginResult.OutputDisposition#PASSTHROUGH}.
      */
     @Override
-    public PluginResult executeWithResult(byte[] payload, String config) throws Exception {
+    public PluginResult executeWithResult(byte[] payload, String config, PluginExecutionContext context) throws Exception {
         byte[] output = execute(payload, config);
         return PluginResult.passthrough(output, idempotencyKey(payload, config));
     }
