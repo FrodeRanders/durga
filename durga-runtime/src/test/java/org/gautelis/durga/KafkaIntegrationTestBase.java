@@ -24,7 +24,8 @@ import java.util.List;
  * Picks a random free host port per test class to avoid collisions.
  */
 public abstract class KafkaIntegrationTestBase {
-    private static final int KAFKA_PORT = 9092;
+    private static final int KAFKA_INTERNAL_PORT = 9092;
+    private static final int KAFKA_EXTERNAL_PORT = 9094;
 
     protected static GenericContainer<?> kafka;
     protected static String bootstrapServers;
@@ -53,13 +54,15 @@ public abstract class KafkaIntegrationTestBase {
 
         String containerHost = envOr("DURGA_DOCKER_HOST_IP", "localhost");
         int hostPort = findFreePort();
-        int port = KAFKA_PORT;
 
         kafka = new GenericContainer<>(DockerImageName.parse("confluentinc/cp-kafka:7.8.0"))
                 .withEnv("KAFKA_NODE_ID", "1")
-                .withEnv("KAFKA_LISTENER_SECURITY_PROTOCOL_MAP", "BROKER:PLAINTEXT,CONTROLLER:PLAINTEXT")
-                .withEnv("KAFKA_LISTENERS", "BROKER://0.0.0.0:" + port + ",CONTROLLER://0.0.0.0:9093")
-                .withEnv("KAFKA_ADVERTISED_LISTENERS", "BROKER://" + containerHost + ":" + hostPort)
+                .withEnv("KAFKA_LISTENER_SECURITY_PROTOCOL_MAP", "BROKER:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
+                .withEnv("KAFKA_LISTENERS", "BROKER://0.0.0.0:" + KAFKA_INTERNAL_PORT
+                        + ",EXTERNAL://0.0.0.0:" + KAFKA_EXTERNAL_PORT
+                        + ",CONTROLLER://0.0.0.0:9093")
+                .withEnv("KAFKA_ADVERTISED_LISTENERS", "BROKER://localhost:" + KAFKA_INTERNAL_PORT
+                        + ",EXTERNAL://" + containerHost + ":" + hostPort)
                 .withEnv("KAFKA_PROCESS_ROLES", "broker,controller")
                 .withEnv("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@localhost:9093")
                 .withEnv("KAFKA_CONTROLLER_LISTENER_NAMES", "CONTROLLER")
@@ -69,11 +72,11 @@ public abstract class KafkaIntegrationTestBase {
                 .withEnv("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
                 .withEnv("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
                 .withEnv("CLUSTER_ID", "MkU3OEVBNTcwNTJENDM2Qk")
-                .withExposedPorts(port)
+                .withExposedPorts(KAFKA_EXTERNAL_PORT)
                 .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig()
                         .withPortBindings(new com.github.dockerjava.api.model.PortBinding(
                                 com.github.dockerjava.api.model.Ports.Binding.bindPort(hostPort),
-                                new com.github.dockerjava.api.model.ExposedPort(port))))
+                                new com.github.dockerjava.api.model.ExposedPort(KAFKA_EXTERNAL_PORT))))
                 .waitingFor(Wait.forLogMessage(".*Kafka Server started.*", 1)
                         .withStartupTimeout(Duration.ofSeconds(90)));
         kafka.start();
@@ -98,7 +101,7 @@ public abstract class KafkaIntegrationTestBase {
             socket.setReuseAddress(true);
             return socket.getLocalPort();
         } catch (IOException e) {
-            return KAFKA_PORT + 10000;
+            return KAFKA_EXTERNAL_PORT + 10000;
         }
     }
 
