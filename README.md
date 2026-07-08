@@ -371,4 +371,4 @@ Processes (or data pipelines) are managed using any BPMN modeler, such as Camund
 ![The pipeline demo, viewed in Camunda Modeler](./doc/images/data_pipeline_demo.png)
 
 The monitoring tool also uses the BPMN model as a backdrop to presenting statistics.
-![The monitoring tool](./doc/images/monitoring.png)
+![The monitoring tool](./doc/images/monitoring-selecting-process-2.png)
