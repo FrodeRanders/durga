@@ -776,7 +776,7 @@
                     {/if}
                 {:else}
                     <p class="empty">No validation runs for this process. Deploy a shadow worker (scaffold with
-                        <code>--validation</code>) to compare a candidate task against production.</p>
+                        <code>--validation</code>) to compare candidate tasks against production.</p>
                 {/if}
             </section>
 
