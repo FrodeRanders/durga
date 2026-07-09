@@ -18,6 +18,7 @@ INFRA_LOCK="$PROJECT_DIR/.e2e-infra-running"
 MONITOR_PORT=8081
 MONITOR_JAR="$PROJECT_DIR/durga-monitor/target/durga-monitor-0.1.0-beta.1-runner.jar"
 TOOLS_JAR="$PROJECT_DIR/durga-tools/target/durga-tools-0.1.0-beta.1.jar"
+DEMO_JAR="$PROJECT_DIR/durga-demo/target/durga-demo-0.1.0-beta.1.jar"
 MONITOR_LOG="$PROJECT_DIR/target/monitor.log"
 MONITOR_PID_FILE="$PROJECT_DIR/target/monitor.pid"
 GEN_DIR="$PROJECT_DIR/target/e2e-gen"
@@ -148,15 +149,16 @@ stop_infra() {
 # ------- internal: build -------
 
 build_all() {
-    if [ -f "$TOOLS_JAR" ] && [ -f "$MONITOR_JAR" ] \
-       && [ -z "$(find "$PROJECT_DIR/durga-runtime/src" "$PROJECT_DIR/durga-tools/src" "$PROJECT_DIR/durga-monitor/src" "$PROJECT_DIR/monitoring-ui" -newer "$TOOLS_JAR" -print -quit 2>/dev/null)" ]; then
+    if [ -f "$TOOLS_JAR" ] && [ -f "$DEMO_JAR" ] && [ -f "$MONITOR_JAR" ] \
+       && [ -z "$(find "$PROJECT_DIR/durga-runtime/src" "$PROJECT_DIR/durga-tools/src" "$PROJECT_DIR/durga-demo/src" "$PROJECT_DIR/durga-monitor/src" "$PROJECT_DIR/monitoring-ui" -newer "$TOOLS_JAR" -print -quit 2>/dev/null)" ] \
+       && [ -z "$(find "$PROJECT_DIR/durga-runtime/src" "$PROJECT_DIR/durga-tools/src" "$PROJECT_DIR/durga-demo/src" -newer "$DEMO_JAR" -print -quit 2>/dev/null)" ]; then
         return
     fi
     log "Building durga modules..."
     cd "$PROJECT_DIR"
-    mvn -q install -DskipTests -pl durga-runtime,durga-tools
+    mvn -q install -DskipTests -pl durga-runtime,durga-tools,durga-demo
     mvn -q package -DskipTests -pl durga-monitor
-    if [ ! -f "$TOOLS_JAR" ] || [ ! -f "$MONITOR_JAR" ]; then
+    if [ ! -f "$TOOLS_JAR" ] || [ ! -f "$DEMO_JAR" ] || [ ! -f "$MONITOR_JAR" ]; then
         err "Build failed. Check output above."
         exit 1
     fi
@@ -494,7 +496,7 @@ cmd_feed() {
         feed_args+=("$count")
     fi
     java -Djava.util.logging.manager=org.jboss.logmanager.LogManager \
-        -cp "$TOOLS_JAR" "$FEED_PUBLISHER" "${feed_args[@]}"
+        -cp "$DEMO_JAR" "$FEED_PUBLISHER" "${feed_args[@]}"
 }
 
 cmd_test_run() {
@@ -540,7 +542,7 @@ cmd_test_run() {
         feed_args+=("$feed_count")
     fi
     java -Djava.util.logging.manager=org.jboss.logmanager.LogManager \
-        -cp "$TOOLS_JAR" "$FEED_PUBLISHER" "${feed_args[@]}"
+        -cp "$DEMO_JAR" "$FEED_PUBLISHER" "${feed_args[@]}"
 }
 
 cmd_stop() {

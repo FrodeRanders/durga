@@ -26,9 +26,9 @@ if [[ -z "${JAR}" || ! -f "${JAR}" ]]; then
   exit 1
 fi
 
-TOOLS_JAR="$(find durga-tools/target -maxdepth 1 -name 'durga-tools-*.jar' ! -name 'original-*' -type f -exec ls -t {} + 2>/dev/null | head -n 1 || true)"
-if [[ -z "${TOOLS_JAR}" || ! -f "${TOOLS_JAR}" ]]; then
-  echo "Could not find built Durga tools JAR under durga-tools/target/" >&2
+DEMO_JAR="$(find durga-demo/target -maxdepth 1 -name 'durga-demo-*.jar' ! -name 'original-*' -type f -exec ls -t {} + 2>/dev/null | head -n 1 || true)"
+if [[ -z "${DEMO_JAR}" || ! -f "${DEMO_JAR}" ]]; then
+  echo "Could not find built Durga demo JAR under durga-demo/target/" >&2
   exit 1
 fi
 
@@ -57,7 +57,7 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
-publish_output=$(java -cp "${TOOLS_JAR}" \
+publish_output=$(java -cp "${DEMO_JAR}" \
   org.gautelis.durga.demo.ProcessEventScenarioRunner \
   "${BOOTSTRAP}" \
   "${SCENARIO}" \

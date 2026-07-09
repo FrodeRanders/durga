@@ -13,7 +13,7 @@
     <artifactId>durga-tools</artifactId>
     <packaging>jar</packaging>
     <name>durga-tools</name>
-    <description>BPMN scaffolder and demo utilities</description>
+    <description>BPMN scaffolder and support tools</description>
 
     <properties>
         <logmgr.version>3.2.2.Final</logmgr.version>

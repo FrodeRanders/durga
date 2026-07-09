@@ -239,7 +239,7 @@ cd setup && docker compose up -d
 cd monitoring-ui && npm install && npm run build && cd ..
 mvn -q package -DskipTests
 JAR="$(find durga-monitor/target -maxdepth 1 -name 'durga-monitor-*-runner.jar' -print -quit)"
-TOOLS_JAR="$(find durga-tools/target -maxdepth 1 -name 'durga-tools-*.jar' ! -name 'original-*' -print -quit)"
+DEMO_JAR="$(find durga-demo/target -maxdepth 1 -name 'durga-demo-*.jar' ! -name 'original-*' -print -quit)"
 
 # Terminal 3 — Monitoring backend
 java -Dquarkus.http.port=8081 -Ddurga.streams.state.dir=/tmp/kafka-streams-state \
@@ -248,13 +248,13 @@ java -Dquarkus.http.port=8081 -Ddurga.streams.state.dir=/tmp/kafka-streams-state
 
 # Terminal 4 — Register BPMN models
 for f in durga-tools/src/test/resources/bpmn/*.bpmn; do
-  java -cp "${TOOLS_JAR}" \
+  java -cp "${DEMO_JAR}" \
     org.gautelis.durga.demo.BpmnModelPublisher \
     localhost:9094 "$(basename "$f" .bpmn)" "$f"
 done
 
 # Terminal 5 — Feed
-java -cp "${TOOLS_JAR}" \
+java -cp "${DEMO_JAR}" \
   org.gautelis.durga.demo.ContinuousFeedPublisher \
   localhost:9094 invoice_receipt 1000
 ```
@@ -320,7 +320,7 @@ client environment before running the commands.
 ### Demo scenarios (without a generated process)
 
 ```bash
-java -cp durga-tools/target/durga-tools-0.1.0-beta.1.jar \
+java -cp durga-demo/target/durga-demo-0.1.0-beta.1.jar \
   org.gautelis.durga.demo.ProcessEventScenarioRunner \
   localhost:9094 happy invoice_receipt register_invoice,review_invoice,notify_requester
 

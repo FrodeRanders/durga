@@ -94,9 +94,9 @@ if [[ -z "${JAR}" || ! -f "${JAR}" ]]; then
     echo "ERROR: Could not find built Durga monitor runner JAR under durga-monitor/target/" >&2; exit 1
 fi
 
-TOOLS_JAR="$(find "${ROOT_DIR}/durga-tools/target" -maxdepth 1 -name 'durga-tools-*.jar' ! -name 'original-*' -type f -print -quit)"
-if [[ -z "${TOOLS_JAR}" || ! -f "${TOOLS_JAR}" ]]; then
-    echo "ERROR: Could not find built Durga tools JAR under durga-tools/target/" >&2; exit 1
+DEMO_JAR="$(find "${ROOT_DIR}/durga-demo/target" -maxdepth 1 -name 'durga-demo-*.jar' ! -name 'original-*' -type f -print -quit)"
+if [[ -z "${DEMO_JAR}" || ! -f "${DEMO_JAR}" ]]; then
+    echo "ERROR: Could not find built Durga demo JAR under durga-demo/target/" >&2; exit 1
 fi
 
 # ── 3. Clean up ────────────────────────────────────────────────────────────
@@ -122,7 +122,7 @@ if [[ -d "${BPMN_DIR}" ]]; then
     banner "Registering BPMN models"
     for bpmn in "${BPMN_DIR}"/*.bpmn; do
         fname="$(basename "${bpmn}" .bpmn)"
-        java -cp "${TOOLS_JAR}" \
+        java -cp "${DEMO_JAR}" \
             org.gautelis.durga.demo.BpmnModelPublisher \
             "${BOOTSTRAP}" \
             "${fname}" \
@@ -137,7 +137,7 @@ fi
 banner "Starting feed generators"
 IFS=',' read -ra PIDS <<< "${FEED_PIDS}"
 for pid in "${PIDS[@]}"; do
-    java -cp "${TOOLS_JAR}" \
+    java -cp "${DEMO_JAR}" \
         org.gautelis.durga.demo.ContinuousFeedPublisher \
         "${BOOTSTRAP}" \
         "${pid}" \

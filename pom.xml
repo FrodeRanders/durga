@@ -13,6 +13,7 @@
     <modules>
         <module>durga-runtime</module>
         <module>durga-tools</module>
+        <module>durga-demo</module>
         <module>durga-monitor</module>
     </modules>
 
@@ -58,6 +59,11 @@
             <dependency>
                 <groupId>org.gautelis</groupId>
                 <artifactId>durga-tools</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.gautelis</groupId>
+                <artifactId>durga-demo</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
