@@ -1,6 +1,6 @@
 services:
   kafka_b:
-    image: docker.io/bitnami/kafka:4.0
+    image: docker.io/soldevelo/kafka:4.0
     hostname: kafka_b
     ports:
       - "9092:9092"
