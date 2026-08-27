@@ -120,10 +120,12 @@ a transaction never spans two Kafka service instances.
 The low-level Charlotte Kafka profile supports a bounded allow-list of broker
 destinations, one fixed consume route, and a bounded, ordered allow-list of
 produce topic/partition routes. Producer sequence numbers and transaction
-partition state are maintained per route. A version-3 profile is serialized as
+partition state are maintained per route. A version-4 profile is serialized as
 one SHA-256-protected object and passed through a kernel-enforced read-only
 launch capability; the hash detects corruption while launcher authority
-establishes provenance. Generated descriptors select maxima of 32 broker
+establishes provenance. It also fixes the connector's bounded registration
+name, so generated steps use independently named connector instances rather
+than replacing one global \texttt{kafka} publication. Generated descriptors select maxima of 32 broker
 endpoints and 64 produce routes; operators may lower those admission ceilings,
 while Charlotte rejects declared or actual counts above its hard maxima.
 CharlotteOS now implements the generic \texttt{kafka\_step} runner and its

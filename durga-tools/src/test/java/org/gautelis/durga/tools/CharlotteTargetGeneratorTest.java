@@ -59,7 +59,7 @@ public class CharlotteTargetGeneratorTest {
                 map(firstDeployment.get("currentManifestAdapter")).get("status"));
         assertEquals("kafka-step",
                 map(firstDeployment.get("transactionalStep")).get("platformArtifact"));
-        assertEquals("transform_order-connector",
+        assertEquals("e2e_pipeline-transform_order-connector",
                 map(firstDeployment.get("transactionalStep")).get("kafkaConnector"));
         assertEquals("runner-available; requires-controller-binding",
                 map(firstDeployment.get("transactionalStep")).get("implementationStatus"));
@@ -71,7 +71,7 @@ public class CharlotteTargetGeneratorTest {
         assertEquals(7, list(capabilitySpec.get("transactionalSteps")).size());
         Map<String, Object> firstStep = map(list(capabilitySpec.get("transactionalSteps")).get(0));
         Map<String, Object> kafka = map(firstStep.get("kafka"));
-        assertEquals(3, kafka.get("profileFormatVersion"));
+        assertEquals(4, kafka.get("profileFormatVersion"));
         assertEquals("read-only-launch-capability", kafka.get("profileDelivery"));
         assertEquals("sha256-integrity", kafka.get("profileDigest"));
         Map<String, Object> connector = map(kafka.get("connector"));
@@ -80,7 +80,9 @@ public class CharlotteTargetGeneratorTest {
         assertEquals("exact-advertised-host-and-port", brokerDestinations.get("selection"));
         assertEquals(64, kafka.get("maxProduceRoutes"));
         assertEquals("kafka", connector.get("platformArtifact"));
+        assertEquals("e2e_pipeline-transform_order-connector", connector.get("instance"));
         assertEquals("launcher-only", connector.get("profileMaterial"));
+        assertEquals("immutable-profile-v4", connector.get("registrationNameSource"));
         List<Object> routes = list(kafka.get("produceRoutes"));
         assertEquals(3, routes.size());
         assertEquals(1, map(routes.get(0)).get("index"));
