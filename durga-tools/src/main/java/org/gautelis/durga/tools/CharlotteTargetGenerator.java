@@ -231,7 +231,7 @@ final class CharlotteTargetGenerator {
                     "platformArtifact", "kafka-step",
                     "procedureEndpoint", component.artifactName,
                     "profile", component.node.name + "-step",
-                    "kafkaConnector", component.artifactName + "-connector",
+                    "kafkaConnector", component.artifactName + "-connector-transactional",
                     "implementationStatus", "runner-available; requires-controller-binding"
             ));
             deployments.add(entry);
@@ -290,7 +290,11 @@ final class CharlotteTargetGenerator {
             step.put("kafka", Map.of(
                     "connector", Map.of(
                             "instance", component.artifactName + "-connector",
-                            "registrationNameSource", "immutable-profile-v4",
+                            "authorityEndpoint", Map.of(
+                                    "name", component.artifactName + "-connector-transactional",
+                                    "rights", List.of("consume", "produce", "transaction")
+                            ),
+                            "registrationNameSource", "immutable-profile-v5-authority-endpoint",
                             "platformArtifact", "kafka",
                             "profileMaterial", "launcher-only",
                             "grant", "connection-capability-to-transactional-step",
@@ -300,7 +304,7 @@ final class CharlotteTargetGenerator {
                                     "selection", "exact-advertised-host-and-port"
                             )
                     ),
-                    "profileFormatVersion", 4,
+                    "profileFormatVersion", 5,
                     "profileDelivery", "read-only-launch-capability",
                     "profileDigest", "sha256-integrity",
                     "maxProduceRoutes", MAX_KAFKA_PRODUCE_ROUTES,
@@ -605,8 +609,8 @@ final class CharlotteTargetGenerator {
                 + "resolve its logical service profiles into launch capabilities.\n\n"
                 + "## Platform integration status\n\n"
                 + "Charlotte's low-level Kafka profile supports one consume route and allow-listed "
-                + "multi-topic produce routes in one transaction. Its version-4 profile carries an "
-                + "exact connector registration name, at most "
+                + "multi-topic produce routes in one transaction. Its version-5 profile carries "
+                + "separately named authority endpoints with enforced Kafka-rights ceilings, at most "
                 + "32 reviewed broker destinations and 64 routes, is protected by a SHA-256 integrity "
                 + "digest, and is delivered as a read-only launch capability. "
                 + "CharlotteOS now provides the higher-level `kafka_step` runner and its bounded "

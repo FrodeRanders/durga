@@ -89,14 +89,16 @@ offset in the same transaction. The procedure itself receives no Kafka
 capability. Holding several producer/consumer service endpoints is supported
 for independent work, but cannot create one transaction across those endpoints.
 
-Each generated step declares Charlotte Kafka profile format version 4. The
+Each generated step declares Charlotte Kafka profile format version 5. The
 deployment controller must serialize the complete broker-destination allow-list,
 consume, produce, group, transaction, TLS, and rights configuration into one
 SHA-256-protected object and deliver it as a kernel-enforced read-only launch
 capability. The hash detects corruption; launcher authority establishes the
-profile's provenance. The same profile carries the connector's exact bounded
-registration name, allowing every deployment step to receive a separately
-named connector without exposing broker configuration to its procedure. Kafka
+profile's provenance. The same profile carries a bounded transactional
+authority-endpoint name and its consume/produce/transaction ceiling. The
+connector checks that ceiling against every operation, while every deployment
+step receives only that access-point capability and no broker configuration is
+exposed to its procedure. Kafka
 metadata may select only a provisioned destination
 whose advertised hostname and port match exactly. Generated plans select safety
 ceilings of 32 broker endpoints and 64 produce routes; a site may lower those
@@ -110,8 +112,8 @@ to that connector plus a connection to the activity procedure; the procedure
 receives neither Kafka authority nor profile material. Connector credentials
 can therefore be rotated without rebuilding generated business logic.
 Connector instance names use the generated artifact-safe component name plus
-`-connector`; they are not the single global `kafka` name and cannot be changed
-by the application at runtime.
+`-connector`; the transactional access point adds `-transactional`. Neither is
+the single global `kafka` name, and neither can be changed by application code.
 
 CharlotteOS now implements this generic runner as `kafka_step.elf` with the
 bounded `charlotte-kafka-step` procedure ABI. It validates all returned route

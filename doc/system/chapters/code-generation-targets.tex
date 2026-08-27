@@ -120,12 +120,13 @@ a transaction never spans two Kafka service instances.
 The low-level Charlotte Kafka profile supports a bounded allow-list of broker
 destinations, one fixed consume route, and a bounded, ordered allow-list of
 produce topic/partition routes. Producer sequence numbers and transaction
-partition state are maintained per route. A version-4 profile is serialized as
+partition state are maintained per route. A version-5 profile is serialized as
 one SHA-256-protected object and passed through a kernel-enforced read-only
 launch capability; the hash detects corruption while launcher authority
-establishes provenance. It also fixes the connector's bounded registration
-name, so generated steps use independently named connector instances rather
-than replacing one global \texttt{kafka} publication. Generated descriptors select maxima of 32 broker
+establishes provenance. It fixes the connector identity plus bounded authority
+endpoint names and rights ceilings, so generated steps use an independently
+named transactional capability rather than a global \texttt{kafka}
+publication. Generated descriptors select maxima of 32 broker
 endpoints and 64 produce routes; operators may lower those admission ceilings,
 while Charlotte rejects declared or actual counts above its hard maxima.
 CharlotteOS now implements the generic \texttt{kafka\_step} runner and its
@@ -140,8 +141,10 @@ semantics.
 The generated plan treats the broker connector and transactional-step runner
 as separate deployment authorities. Only the connector service receives the
 profile containing broker addresses, TLS material, and SASL/SCRAM or mTLS
-credentials. The runner receives an attenuated connection capability to that
-connector, and the activity procedure receives only its bounded invocation.
+credentials. The version-5 profile publishes a separately named transactional
+access point whose consume, produce, and transaction rights are enforced for
+every opcode. The runner receives only that access-point capability, and the
+activity procedure receives only its bounded invocation.
 Credential rotation therefore does not require rebuilding business logic.
 
 Data objects, stores, and associations are retained in the bundle. An S3 data
