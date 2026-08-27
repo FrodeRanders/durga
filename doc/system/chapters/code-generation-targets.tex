@@ -3,8 +3,10 @@
 
 The scaffolder is target-parameterised: from a single BPMN model it can render a
 generated project in more than one implementation language. The mature target is
-Java (Quarkus / SmallRye Reactive Messaging); a Rust target is in progress. Both
-targets emit workers that speak the same Kafka wire protocol, so a single process
+Java (Quarkus / SmallRye Reactive Messaging); a Rust target is in progress, and
+the experimental CharlotteOS target emits portable Rust procedure contracts plus
+cluster deployment descriptors. The Java and ordinary Rust targets emit workers
+that speak the same Kafka wire protocol, so a single process
 can, in principle, be realised as a mix of Java and Rust workers, and the same
 Java monitor observes either.
 
@@ -16,6 +18,9 @@ Template groups are separated by target under \filepath{durga-tools/src/main/res
 \item \filepath{templates-java/} --- the Java target (\filepath{scaffold.stg} and
   companions). This is the default and the only fully implemented target.
 \item \filepath{templates-rust/} --- the Rust target (in progress).
+\item The CharlotteOS target uses a deterministic descriptor writer rather than
+  source templates. It emits a small \texttt{no\_std} Rust contract crate and the
+  three reviewable YAML resources under \filepath{charlotte/}.
 \end{itemize}
 
 The attribute model passed from the generator (process id, task id, plugin
@@ -89,6 +94,56 @@ binary and no separate candidate wire record: both targets emit ordinary
 \texttt{ProcessEvent} records, and because their chaining topics are identical, a shadow
 of either target validates a production of either target.
 
+\subsection{CharlotteOS process bundles}
+\label{sec:CharlotteTarget}
+
+The experimental \texttt{-{}-target charlotte} path treats generated output as a
+process bundle rather than a container image. It preserves the original BPMN
+model and its SHA-256 digest, emits one portable procedure module per activity
+or exclusive gateway, and records the semantic graph in
+\filepath{charlotte/bundle.yaml}. The companion
+\filepath{charlotte/deployment.yaml} declares CLS2 artifact identity, singleton
+\texttt{PlacementPolicy} fields, generation fencing, and the placeholders that a
+trusted build/admission pipeline must replace with artifact and provenance
+digests. \filepath{charlotte/capabilities.yaml} is the least-authority review
+plan; it is not a bag of credentials.
+
+A Durga procedure is deliberately not a Kafka worker on CharlotteOS. A generic
+transactional-step service owns the input delivery and Kafka transaction, calls
+the generated procedure endpoint, validates its returned route/output records,
+produces to the launch-authorised output routes, includes the input offset, and
+then commits. Consequently generated business code cannot leak a delivery,
+forget an abort, or select an undeclared topic. Producer and consumer endpoint
+roles remain available for applications whose operations are independent, but
+a transaction never spans two Kafka service instances.
+
+The low-level Charlotte Kafka profile supports one fixed consume route and a
+bounded, ordered allow-list of produce topic/partition routes. Producer sequence
+numbers and transaction partition state are maintained per route. A version-2
+profile is serialized as one SHA-256-authenticated object and passed through a
+kernel-enforced read-only launch capability. Generated descriptors select a
+maximum of 64 produce routes; operators may lower that admission ceiling, while
+Charlotte rejects either a declared limit or an actual route count above its
+hard maximum. The missing
+higher-level contract is the generic transactional-step runner and its bounded
+procedure request/reply ABI. Generated deployments therefore say
+\texttt{deployable: false} until that runner, capability injection, and the
+activity handlers exist; the target does not silently weaken Durga's delivery
+semantics.
+
+The generated plan treats the broker connector and transactional-step runner
+as separate deployment authorities. Only the connector service receives the
+profile containing broker addresses, TLS material, and future SASL or mTLS
+credentials. The runner receives an attenuated connection capability to that
+connector, and the activity procedure receives only its bounded invocation.
+Credential rotation therefore does not require rebuilding business logic.
+
+Data objects, stores, and associations are retained in the bundle. An S3 data
+store becomes an explicit profile request, with credentials referenced from a
+launch-time secret profile rather than copied into the generated source. Kafka
+transactions do not cover S3 or other external effects, so such activities must
+declare an outbox, idempotency, or compensation policy before production use.
+
 \subsection{Status}
 
 Implemented so far: the crate contracts (\texttt{Plugin}, \texttt{PluginResult},
@@ -102,3 +157,9 @@ worker performs. Rust remains the less-mature target: it currently covers plugin
 tasks, custom-task stubs (with contract modules and \texttt{build.rs} entries),
 exclusive gateways, and validation mode in a start/tasks/gateways/end topology, and
 reports and skips unsupported constructs.
+
+The CharlotteOS target currently implements bundle, deployment, capability, and
+portable procedure-contract generation. It does not yet emit runnable ELFs or
+submit a cluster deployment. This boundary is intentional: signing, provenance,
+capability grants, placement realisation, and transactional-step supervision are
+trusted deployment stages rather than code-generator side effects.

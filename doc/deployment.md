@@ -58,6 +58,52 @@ KAFKA_BOOTSTRAP_SERVERS=kafka-prod:9092 PROFILE=prod ./run-local.sh
 4. **Test locally**: `START_KAFKA=true ./run-local.sh`
 5. **Observe**: monitoring dashboard or `watch-process-events.sh`
 
+## CharlotteOS process bundles
+
+Generate the experimental Charlotte target with:
+
+```bash
+java -jar durga-tools/target/durga-tools-0.1.0-beta.1.jar \
+  process.bpmn --target charlotte --out generated-charlotte
+```
+
+This produces a portable `no_std` Rust activity-contract crate, the original
+BPMN model, and three descriptors:
+
+- `charlotte/bundle.yaml` is the versioned semantic/process bundle;
+- `charlotte/deployment.yaml` declares CLS2 artifacts, placement, rollout, and
+  current single-node manifest adaptation; and
+- `charlotte/capabilities.yaml` separates procedure authority from the generic
+  Kafka transactional-step service's broker authority.
+
+The output is deliberately marked non-deployable while generated handlers or
+required platform contracts are missing. A trusted later stage must compile
+self-contained AArch64 ELFs, attach CLS2 metadata, sign them, compute artifact
+and provenance digests, resolve capability profiles, select nodes, and submit
+generation-fenced assignments to the Charlotte cluster.
+
+For Durga activities, the planned default is a procedural application behind a
+generic transactional-step service. The service polls Kafka, calls the
+procedure, produces its result to allow-listed routes, and commits the input
+offset in the same transaction. The procedure itself receives no Kafka
+capability. Holding several producer/consumer service endpoints is supported
+for independent work, but cannot create one transaction across those endpoints.
+
+Each generated step declares Charlotte Kafka profile format version 2. The
+deployment controller must serialize the complete broker, consume, produce,
+group, transaction, TLS, and rights configuration into one SHA-256-authenticated
+object and deliver it as a kernel-enforced read-only launch capability. Generated
+plans select a safety ceiling of 64 produce routes; a site may lower that value,
+and Charlotte rejects profiles whose declared or actual count exceeds its hard
+ceiling.
+
+The Kafka connector and the transactional-step runner are separate deployment
+authorities. Only the connector receives broker addresses, TLS material, and
+future SASL or mTLS secrets. The step runner receives a connection capability
+to that connector plus a connection to the activity procedure; the procedure
+receives neither Kafka authority nor profile material. Connector credentials
+can therefore be rotated without rebuilding generated business logic.
+
 ## Packaging
 
 ### JAR deployment

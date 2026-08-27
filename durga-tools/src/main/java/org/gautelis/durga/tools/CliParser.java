@@ -11,7 +11,8 @@ final class CliParser {
     private static final String USAGE =
             "Usage: BpmnScaffolder <path-to-bpmn.xml> [--out <dir>] [--process-id <id>] [--package <pkg>] "
                     + "[--event-topic <topic>] [--retention <h|d|w>] [--dry-run] [--transactions] "
-                    + "[--separate-workers] [--strimzi] [--connect] [--validation] [--target java|rust]";
+                    + "[--separate-workers] [--strimzi] [--connect] [--validation] "
+                    + "[--target java|rust|charlotte]";
 
     private static final String PROCESS_ID_PATTERN = "[a-zA-Z0-9][a-zA-Z0-9_-]*";
     private static final String PACKAGE_PATTERN = "[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*";
@@ -99,8 +100,8 @@ final class CliParser {
                     return null;
                 }
                 target = args[++i];
-                if (!"java".equals(target) && !"rust".equals(target)) {
-                    System.err.println("--target must be 'java' or 'rust'");
+                if (!"java".equals(target) && !"rust".equals(target) && !"charlotte".equals(target)) {
+                    System.err.println("--target must be 'java', 'rust', or 'charlotte'");
                     return null;
                 }
             } else {

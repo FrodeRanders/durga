@@ -245,6 +245,24 @@ public class BpmnScaffolder {
                     .add(flowInfo(flow));
         }
 
+        // CharlotteOS target: preserve the semantic graph and generate a no_std activity
+        // contract plus explicit artifact, placement, and capability descriptors. The target
+        // reports platform gaps rather than silently weakening Durga's delivery semantics.
+        if ("charlotte".equals(parsed.target)) {
+            CharlotteTargetGenerator.generate(
+                    parsed,
+                    processId,
+                    outputRoot,
+                    taskSpecs,
+                    nodes,
+                    flowsBySource,
+                    dataObjectSpecs,
+                    dataStoreSpecs,
+                    dataAssociationSpecs
+            );
+            return;
+        }
+
         // Rust code-generation target: from the same extracted model, render a Cargo
         // project whose workers depend on the durga-rust plugin crate. This is a distinct
         // generation path from the Java target below.
