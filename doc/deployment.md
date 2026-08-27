@@ -89,12 +89,14 @@ offset in the same transaction. The procedure itself receives no Kafka
 capability. Holding several producer/consumer service endpoints is supported
 for independent work, but cannot create one transaction across those endpoints.
 
-Each generated step declares Charlotte Kafka profile format version 5. The
+Each generated step declares Charlotte Kafka profile format version 6. The
 deployment controller must serialize the complete broker-destination allow-list,
 consume, produce, group, transaction, TLS, and rights configuration into one
 SHA-256-protected object and deliver it as a kernel-enforced read-only launch
 capability. The hash detects corruption; launcher authority establishes the
-profile's provenance. The same profile carries a bounded transactional
+profile's provenance. Connector-only SCRAM and mTLS material uses bounded,
+length-delimited authentication sections; unknown critical sections fail
+closed while future optional sections can be skipped. The same profile carries a bounded transactional
 authority-endpoint name and its consume/produce/transaction ceiling. The
 connector checks that ceiling against every operation, while every deployment
 step receives only that access-point capability and no broker configuration is

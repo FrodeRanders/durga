@@ -120,7 +120,7 @@ a transaction never spans two Kafka service instances.
 The low-level Charlotte Kafka profile supports a bounded allow-list of broker
 destinations, one fixed consume route, and a bounded, ordered allow-list of
 produce topic/partition routes. Producer sequence numbers and transaction
-partition state are maintained per route. A version-5 profile is serialized as
+partition state are maintained per route. A version-6 profile is serialized as
 one SHA-256-protected object and passed through a kernel-enforced read-only
 launch capability; the hash detects corruption while launcher authority
 establishes provenance. It fixes the connector identity plus bounded authority
@@ -129,6 +129,9 @@ named transactional capability rather than a global \texttt{kafka}
 publication. Generated descriptors select maxima of 32 broker
 endpoints and 64 produce routes; operators may lower those admission ceilings,
 while Charlotte rejects declared or actual counts above its hard maxima.
+Connector-only SCRAM and mTLS material uses bounded, length-delimited sections;
+unknown critical authentication sections fail closed while future optional
+sections can be skipped by an older connector.
 CharlotteOS now implements the generic \texttt{kafka\_step} runner and its
 bounded procedure request/reply ABI. It validates outputs before starting a
 transaction, combines admitted records with the input offset, retries transient
@@ -141,7 +144,7 @@ semantics.
 The generated plan treats the broker connector and transactional-step runner
 as separate deployment authorities. Only the connector service receives the
 profile containing broker addresses, TLS material, and SASL/SCRAM or mTLS
-credentials. The version-5 profile publishes a separately named transactional
+credentials. The version-6 profile publishes a separately named transactional
 access point whose consume, produce, and transaction rights are enforced for
 every opcode. The runner receives only that access-point capability, and the
 activity procedure receives only its bounded invocation.
