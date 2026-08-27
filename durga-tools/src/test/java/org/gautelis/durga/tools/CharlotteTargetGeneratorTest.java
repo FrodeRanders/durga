@@ -66,11 +66,14 @@ public class CharlotteTargetGeneratorTest {
         assertEquals(7, list(capabilitySpec.get("transactionalSteps")).size());
         Map<String, Object> firstStep = map(list(capabilitySpec.get("transactionalSteps")).get(0));
         Map<String, Object> kafka = map(firstStep.get("kafka"));
-        assertEquals(2, kafka.get("profileFormatVersion"));
+        assertEquals(3, kafka.get("profileFormatVersion"));
         assertEquals("read-only-launch-capability", kafka.get("profileDelivery"));
-        assertEquals("sha256", kafka.get("profileDigest"));
-        assertEquals(64, kafka.get("maxProduceRoutes"));
+        assertEquals("sha256-integrity", kafka.get("profileDigest"));
         Map<String, Object> connector = map(kafka.get("connector"));
+        Map<String, Object> brokerDestinations = map(connector.get("brokerDestinations"));
+        assertEquals(32, brokerDestinations.get("maxEndpoints"));
+        assertEquals("exact-advertised-host-and-port", brokerDestinations.get("selection"));
+        assertEquals(64, kafka.get("maxProduceRoutes"));
         assertEquals("kafka", connector.get("platformArtifact"));
         assertEquals("launcher-only", connector.get("profileMaterial"));
         List<Object> routes = list(kafka.get("produceRoutes"));

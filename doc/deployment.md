@@ -89,13 +89,16 @@ offset in the same transaction. The procedure itself receives no Kafka
 capability. Holding several producer/consumer service endpoints is supported
 for independent work, but cannot create one transaction across those endpoints.
 
-Each generated step declares Charlotte Kafka profile format version 2. The
-deployment controller must serialize the complete broker, consume, produce,
-group, transaction, TLS, and rights configuration into one SHA-256-authenticated
-object and deliver it as a kernel-enforced read-only launch capability. Generated
-plans select a safety ceiling of 64 produce routes; a site may lower that value,
-and Charlotte rejects profiles whose declared or actual count exceeds its hard
-ceiling.
+Each generated step declares Charlotte Kafka profile format version 3. The
+deployment controller must serialize the complete broker-destination allow-list,
+consume, produce, group, transaction, TLS, and rights configuration into one
+SHA-256-protected object and deliver it as a kernel-enforced read-only launch
+capability. The hash detects corruption; launcher authority establishes the
+profile's provenance. Kafka metadata may select only a provisioned destination
+whose advertised hostname and port match exactly. Generated plans select safety
+ceilings of 32 broker endpoints and 64 produce routes; a site may lower those
+values, and Charlotte rejects profiles whose declared or actual counts exceed
+its hard ceilings.
 
 The Kafka connector and the transactional-step runner are separate deployment
 authorities. Only the connector receives broker addresses, TLS material, and

@@ -117,14 +117,15 @@ forget an abort, or select an undeclared topic. Producer and consumer endpoint
 roles remain available for applications whose operations are independent, but
 a transaction never spans two Kafka service instances.
 
-The low-level Charlotte Kafka profile supports one fixed consume route and a
-bounded, ordered allow-list of produce topic/partition routes. Producer sequence
-numbers and transaction partition state are maintained per route. A version-2
-profile is serialized as one SHA-256-authenticated object and passed through a
-kernel-enforced read-only launch capability. Generated descriptors select a
-maximum of 64 produce routes; operators may lower that admission ceiling, while
-Charlotte rejects either a declared limit or an actual route count above its
-hard maximum. The missing
+The low-level Charlotte Kafka profile supports a bounded allow-list of broker
+destinations, one fixed consume route, and a bounded, ordered allow-list of
+produce topic/partition routes. Producer sequence numbers and transaction
+partition state are maintained per route. A version-3 profile is serialized as
+one SHA-256-protected object and passed through a kernel-enforced read-only
+launch capability; the hash detects corruption while launcher authority
+establishes provenance. Generated descriptors select maxima of 32 broker
+endpoints and 64 produce routes; operators may lower those admission ceilings,
+while Charlotte rejects declared or actual counts above its hard maxima. The missing
 higher-level contract is the generic transactional-step runner and its bounded
 procedure request/reply ABI. Generated deployments therefore say
 \texttt{deployable: false} until that runner, capability injection, and the

@@ -293,11 +293,16 @@ final class CharlotteTargetGenerator {
                             "instance", component.node.name + "-connector",
                             "platformArtifact", "kafka",
                             "profileMaterial", "launcher-only",
-                            "grant", "connection-capability-to-transactional-step"
+                            "grant", "connection-capability-to-transactional-step",
+                            "brokerDestinations", Map.of(
+                                    "source", "reviewed-capability-profile",
+                                    "maxEndpoints", 32,
+                                    "selection", "exact-advertised-host-and-port"
+                            )
                     ),
-                    "profileFormatVersion", 2,
+                    "profileFormatVersion", 3,
                     "profileDelivery", "read-only-launch-capability",
-                    "profileDigest", "sha256",
+                    "profileDigest", "sha256-integrity",
                     "maxProduceRoutes", MAX_KAFKA_PRODUCE_ROUTES,
                     "input", Map.of(
                             "topic", component.inputTopic,
@@ -599,8 +604,9 @@ final class CharlotteTargetGenerator {
                 + "resolve its logical service profiles into launch capabilities.\n\n"
                 + "## Important implementation gap\n\n"
                 + "Charlotte's low-level Kafka profile supports one consume route and allow-listed "
-                + "multi-topic produce routes in one transaction. Its version-2, SHA-256-authenticated "
-                + "profile is delivered as a read-only launch capability and admits at most 64 routes. "
+                + "multi-topic produce routes in one transaction. Its version-3 profile carries at most "
+                + "32 reviewed broker destinations and 64 routes, is protected by a SHA-256 integrity "
+                + "digest, and is delivered as a read-only launch capability. "
                 + "The higher-level transactional-step "
                 + "service still needs its bounded procedure request/reply ABI, timeout/retry policy, "
                 + "and controller-supplied procedure capability. The deployment remains blocked until "
