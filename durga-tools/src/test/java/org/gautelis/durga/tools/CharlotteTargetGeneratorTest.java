@@ -37,7 +37,8 @@ public class CharlotteTargetGeneratorTest {
         assertEquals(7, list(bundleSpec.get("components")).size());
         assertTrue(list(bundleSpec.get("requiredPlatformContracts")).stream()
                 .map(CharlotteTargetGeneratorTest::map)
-                .anyMatch(requirement -> "kafka-transactional-step-runner".equals(requirement.get("id"))));
+                .anyMatch(requirement -> "kafka-transactional-step-runner".equals(requirement.get("id"))
+                        && "available-in-charlotte-os".equals(requirement.get("status"))));
 
         for (Object value : list(bundleSpec.get("components"))) {
             String logicalName = (String) map(map(value).get("artifact")).get("logicalName");
@@ -47,6 +48,8 @@ public class CharlotteTargetGeneratorTest {
         Map<String, Object> deployment = readYaml(output.resolve("charlotte/deployment.yaml"));
         Map<String, Object> deploymentSpec = map(deployment.get("spec"));
         assertEquals(Boolean.FALSE, map(deploymentSpec.get("status")).get("deployable"));
+        assertFalse(list(map(deploymentSpec.get("status")).get("blockedBy"))
+                .contains("kafka-transactional-step-runner"));
         Map<String, Object> firstDeployment = map(list(deploymentSpec.get("components")).get(0));
         Map<String, Object> placement = map(firstDeployment.get("placement"));
         assertEquals(1, placement.get("replicas"));
@@ -58,6 +61,8 @@ public class CharlotteTargetGeneratorTest {
                 map(firstDeployment.get("transactionalStep")).get("platformArtifact"));
         assertEquals("transform_order-connector",
                 map(firstDeployment.get("transactionalStep")).get("kafkaConnector"));
+        assertEquals("runner-available; requires-controller-binding",
+                map(firstDeployment.get("transactionalStep")).get("implementationStatus"));
 
         Map<String, Object> capabilities = readYaml(output.resolve("charlotte/capabilities.yaml"));
         Map<String, Object> capabilitySpec = map(capabilities.get("spec"));
@@ -88,6 +93,7 @@ public class CharlotteTargetGeneratorTest {
         assertFalse(handler.contains("unsafe"));
         String readme = Files.readString(output.resolve("README.md"));
         assertTrue(readme.contains("not yet a deployable Charlotte application"));
+        assertTrue(readme.contains("CharlotteOS now provides the higher-level `kafka_step` runner"));
         assertTrue(readme.contains("catten_rt::owned"));
         assertTrue(readme.contains("business code does not receive Kafka authority"));
     }

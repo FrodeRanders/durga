@@ -125,16 +125,19 @@ one SHA-256-protected object and passed through a kernel-enforced read-only
 launch capability; the hash detects corruption while launcher authority
 establishes provenance. Generated descriptors select maxima of 32 broker
 endpoints and 64 produce routes; operators may lower those admission ceilings,
-while Charlotte rejects declared or actual counts above its hard maxima. The missing
-higher-level contract is the generic transactional-step runner and its bounded
-procedure request/reply ABI. Generated deployments therefore say
-\texttt{deployable: false} until that runner, capability injection, and the
-activity handlers exist; the target does not silently weaken Durga's delivery
+while Charlotte rejects declared or actual counts above its hard maxima.
+CharlotteOS now implements the generic \texttt{kafka\_step} runner and its
+bounded procedure request/reply ABI. It validates outputs before starting a
+transaction, combines admitted records with the input offset, retries transient
+procedure failures and timeouts, and transactionally sends terminal, malformed,
+or exhausted records to the configured DLQ. Generated deployments still say
+\texttt{deployable: false} until activity handlers and controller-supplied
+capability bindings exist; the target does not silently weaken Durga's delivery
 semantics.
 
 The generated plan treats the broker connector and transactional-step runner
 as separate deployment authorities. Only the connector service receives the
-profile containing broker addresses, TLS material, and future SASL or mTLS
+profile containing broker addresses, TLS material, and SASL/SCRAM or mTLS
 credentials. The runner receives an attenuated connection capability to that
 connector, and the activity procedure receives only its bounded invocation.
 Credential rotation therefore does not require rebuilding business logic.

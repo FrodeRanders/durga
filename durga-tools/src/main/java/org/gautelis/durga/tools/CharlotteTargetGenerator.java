@@ -232,7 +232,7 @@ final class CharlotteTargetGenerator {
                     "procedureEndpoint", component.artifactName,
                     "profile", component.node.name + "-step",
                     "kafkaConnector", component.node.name + "-connector",
-                    "implementationStatus", "requires-transactional-step-runner"
+                    "implementationStatus", "runner-available; requires-controller-binding"
             ));
             deployments.add(entry);
         }
@@ -246,7 +246,6 @@ final class CharlotteTargetGenerator {
                 "deployable", false,
                 "blockedBy", List.of(
                         "activity-handlers",
-                        "kafka-transactional-step-runner",
                         "capability-grant-controller"
                 )
         ));
@@ -457,9 +456,10 @@ final class CharlotteTargetGenerator {
         return List.of(
                 requirement(
                         "kafka-transactional-step-runner",
-                        "required",
-                        "Own poll/transaction/offset resources, call the generated procedure, "
-                                + "and publish its result through allow-listed Kafka routes."
+                        "available-in-charlotte-os",
+                        "The bounded kafka_step service owns poll/transaction/offset resources, "
+                                + "calls the generated procedure, validates allow-listed outputs, "
+                                + "and applies timeout, retry, abort, and DLQ policy."
                 ),
                 requirement(
                         "capability-grant-controller",
@@ -602,15 +602,15 @@ final class CharlotteTargetGenerator {
                 + "current manifest; replica placement still needs a controller.\n"
                 + "- `charlotte/capabilities.yaml` is a least-authority review plan. A controller must "
                 + "resolve its logical service profiles into launch capabilities.\n\n"
-                + "## Important implementation gap\n\n"
+                + "## Platform integration status\n\n"
                 + "Charlotte's low-level Kafka profile supports one consume route and allow-listed "
                 + "multi-topic produce routes in one transaction. Its version-3 profile carries at most "
                 + "32 reviewed broker destinations and 64 routes, is protected by a SHA-256 integrity "
                 + "digest, and is delivered as a read-only launch capability. "
-                + "The higher-level transactional-step "
-                + "service still needs its bounded procedure request/reply ABI, timeout/retry policy, "
-                + "and controller-supplied procedure capability. The deployment remains blocked until "
-                + "that runner exists.\n\n"
+                + "CharlotteOS now provides the higher-level `kafka_step` runner and its bounded "
+                + "procedure ABI, output validation, timeout/retry policy, and transactional DLQ path. "
+                + "The generated deployment remains blocked until handlers are implemented and a "
+                + "controller supplies the reviewed connector and procedure capabilities.\n\n"
                 + "Build the portable contract with `cargo test`. Building deployable AArch64 ELFs, "
                 + "signing CLS2 notes, computing provenance/digests, granting capabilities, and "
                 + "submitting generation-fenced assignments are intentionally later pipeline stages.\n";

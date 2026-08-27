@@ -102,10 +102,20 @@ its hard ceilings.
 
 The Kafka connector and the transactional-step runner are separate deployment
 authorities. Only the connector receives broker addresses, TLS material, and
-future SASL or mTLS secrets. The step runner receives a connection capability
+SASL/SCRAM or mTLS secrets. The step runner receives a connection capability
 to that connector plus a connection to the activity procedure; the procedure
 receives neither Kafka authority nor profile material. Connector credentials
 can therefore be rotated without rebuilding generated business logic.
+
+CharlotteOS now implements this generic runner as `kafka_step.elf` with the
+bounded `charlotte-kafka-step` procedure ABI. It validates all returned route
+indices before starting a transaction, combines admitted outputs with the
+input offset, retries procedure timeouts/transient replies, and transactionally
+writes terminal, malformed, or exhausted records to the configured DLQ.
+Generated deployment plans therefore mark the runner contract as available.
+They remain non-deployable until activity handlers exist and the Charlotte
+controller injects the exact connector and procedure capabilities, signs the
+artifacts, and realizes placement.
 
 ## Packaging
 
