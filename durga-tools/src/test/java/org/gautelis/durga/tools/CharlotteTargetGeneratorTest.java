@@ -67,6 +67,15 @@ public class CharlotteTargetGeneratorTest {
         assertEquals(0, map(firstDeployment.get("currentManifestAdapter")).get("nodeKey"));
         assertEquals("central-s3-compatible-object-store",
                 map(firstDeployment.get("distribution")).get("transport"));
+        assertEquals("charlotte/descriptors/e2e_pipeline-transform_order.cdep",
+                map(firstDeployment.get("distribution")).get("descriptorPath"));
+        Map<String, Object> rollout = map(deploymentSpec.get("rollout"));
+        assertEquals("independent-descriptors", rollout.get("admission"));
+        assertEquals(Boolean.FALSE, rollout.get("atomic"));
+        assertTrue(((String) rollout.get("applyCommand"))
+                .startsWith("cluster-sign deployment-apply 127.0.0.1:8081 120 "));
+        assertTrue(((String) rollout.get("applyCommand"))
+                .contains("charlotte/descriptors/e2e_pipeline-transform_order.cdep"));
         assertEquals("kafka-step",
                 map(firstDeployment.get("transactionalStep")).get("platformArtifact"));
         assertEquals("e2e_pipeline-transform_order-connector-transactional",
@@ -119,6 +128,8 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(readme.contains("CharlotteOS now provides the higher-level `kafka_step` runner"));
         assertTrue(readme.contains("catten_rt::owned"));
         assertTrue(readme.contains("business code does not receive Kafka authority"));
+        assertTrue(readme.contains("cluster-sign deployment-apply 127.0.0.1:8081 120"));
+        assertTrue(readme.contains("commits each descriptor independently"));
     }
 
     @Test

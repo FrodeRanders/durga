@@ -81,7 +81,7 @@ final class CharlotteTargetGenerator {
         write(parsed, outputRoot.resolve("charlotte/runtime/Cargo.toml.in"),
                 runtimeCargoToml(processId, components));
         write(parsed, outputRoot.resolve("charlotte/build-applications.sh"), runtimeBuildScript());
-        write(parsed, outputRoot.resolve("README.md"), readme(processId));
+        write(parsed, outputRoot.resolve("README.md"), readme(processId, components));
         copyModel(parsed, outputRoot.resolve("model.bpmn"));
 
         LOG.info("Charlotte target: generated {} activity contract(s) and cluster descriptors "
@@ -235,6 +235,7 @@ final class CharlotteTargetGenerator {
             ));
             entry.put("distribution", Map.of(
                     "objectKey", "releases/" + component.artifactName + ".elf",
+                    "descriptorPath", "charlotte/descriptors/" + component.artifactName + ".cdep",
                     "transport", "central-s3-compatible-object-store",
                     "notification", "POST /v1/deployments with signed CDEPLOY1",
                     "credentialsVisibleToApplication", false
@@ -250,6 +251,9 @@ final class CharlotteTargetGenerator {
         }
         spec.put("components", deployments);
         spec.put("rollout", Map.of(
+                "applyCommand", deploymentApplyCommand(components),
+                "admission", "independent-descriptors",
+                "atomic", false,
                 "generationFenced", true,
                 "strategy", "stop-old-then-activate-new",
                 "readinessContract", "REQUIRED_BEFORE_AUTOMATED_ROLLOUT"
@@ -756,7 +760,14 @@ final class CharlotteTargetGenerator {
                 """.formatted(escapeRust(component.artifactName), component.moduleName);
     }
 
-    private static String readme(String processId) {
+    private static String deploymentApplyCommand(List<Component> components) {
+        return "cluster-sign deployment-apply 127.0.0.1:8081 120 "
+                + components.stream()
+                .map(component -> "charlotte/descriptors/" + component.artifactName + ".cdep")
+                .collect(java.util.stream.Collectors.joining(" "));
+    }
+
+    private static String readme(String processId, List<Component> components) {
         return "# " + processId + " — CharlotteOS target\n\n"
                 + "This directory is an initial CharlotteOS process bundle generated from `model.bpmn`. "
                 + "It contains Charlotte application source contracts plus an actionable platform "
@@ -791,8 +802,15 @@ final class CharlotteTargetGenerator {
                 + "blocked only while generated activity handlers return `NotImplemented`.\n\n"
                 + "Build the portable contract with `cargo test`. Building deployable AArch64 ELFs, "
                 + "signing CLS2 notes, computing provenance/digests, granting capabilities, and "
-                + "uploading signed ELFs to the central S3-compatible store, and notifying the cluster "
-                + "remain release-pipeline stages because they require cluster-owned keys and endpoints.\n";
+                + "uploading signed ELFs to the central S3-compatible store remain release-pipeline "
+                + "stages because they require cluster-owned keys and endpoints. Write each signed "
+                + "descriptor to the `descriptorPath` in `charlotte/deployment.yaml`, then submit and "
+                + "observe the component set with:\n\n```text\n"
+                + deploymentApplyCommand(components) + "\n```\n\n"
+                + "This prevalidates the whole local descriptor set and waits for generation-fenced "
+                + "readiness, but Charlotte currently commits each descriptor independently. A partial "
+                + "failure is safe to retry with the exact same descriptors; atomic process-bundle "
+                + "admission and coordinated rollback remain cluster-controller work.\n";
     }
 
     private static Map<String, Object> resource(String kind, String name) {
