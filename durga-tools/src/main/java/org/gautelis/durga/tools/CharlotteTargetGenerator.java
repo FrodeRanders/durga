@@ -29,9 +29,9 @@ import java.util.Set;
  *
  * <p>The target deliberately separates portable activity code from cluster admission. The Rust
  * crate is compileable business-logic scaffolding; the YAML files describe the artifacts,
- * capabilities, and desired placement that a future Charlotte deployment controller must turn
- * into signed CLS2 ELFs and generation-fenced assignments. Requirements that Charlotte does not
- * yet implement are represented explicitly and keep the deployment in a blocked state.
+ * capabilities, and desired placement consumed by Charlotte's signed deployment ingress and node
+ * reconcilers. Generated handlers remain fail-closed until developers implement the business
+ * behavior; platform readiness and business-code readiness are reported separately.
  */
 final class CharlotteTargetGenerator {
 
@@ -75,7 +75,12 @@ final class CharlotteTargetGenerator {
         for (Component component : components) {
             write(parsed, outputRoot.resolve("src/" + component.moduleName + ".rs"),
                     componentRs(component));
+            write(parsed, outputRoot.resolve("charlotte/runtime/src/bin/" + component.moduleName + ".rs"),
+                    runtimeAdapterRs(component));
         }
+        write(parsed, outputRoot.resolve("charlotte/runtime/Cargo.toml.in"),
+                runtimeCargoToml(processId, components));
+        write(parsed, outputRoot.resolve("charlotte/build-applications.sh"), runtimeBuildScript());
         write(parsed, outputRoot.resolve("README.md"), readme(processId));
         copyModel(parsed, outputRoot.resolve("model.bpmn"));
 
@@ -223,9 +228,16 @@ final class CharlotteTargetGenerator {
                     "antiAffinityGroup", 0
             ));
             entry.put("currentManifestAdapter", Map.of(
-                    "status", "requires-explicit-single-node-assignment",
+                    "status", "supported-by-signed-deployment-ingress",
                     "objectId", "DERIVED_BY_CHARLOTTE_FROM_LOGICAL_NAME",
-                    "nodeKey", "REQUIRED_AT_DEPLOY_TIME"
+                    "nodeKey", 0,
+                    "nodeKeyMeaning", "automatic-leader-placement"
+            ));
+            entry.put("distribution", Map.of(
+                    "objectKey", "releases/" + component.artifactName + ".elf",
+                    "transport", "central-s3-compatible-object-store",
+                    "notification", "POST /v1/deployments with signed CDEPLOY1",
+                    "credentialsVisibleToApplication", false
             ));
             entry.put("transactionalStep", Map.of(
                     "platformArtifact", "kafka-step",
@@ -243,11 +255,10 @@ final class CharlotteTargetGenerator {
                 "readinessContract", "REQUIRED_BEFORE_AUTOMATED_ROLLOUT"
         ));
         spec.put("status", Map.of(
+                "platformDeployable", true,
+                "businessLogicComplete", false,
                 "deployable", false,
-                "blockedBy", List.of(
-                        "activity-handlers",
-                        "capability-grant-controller"
-                )
+                "blockedBy", List.of("activity-handlers")
         ));
         root.put("spec", spec);
         return root;
@@ -265,10 +276,15 @@ final class CharlotteTargetGenerator {
         for (Component component : components) {
             Map<String, Object> principal = map();
             principal.put("artifact", component.artifactName);
-            principal.put("bootstrapNameService", Map.of(
-                    "ownership", "borrowed-from-Context",
-                    "purpose", "resolve only declared service profiles"
+            principal.put("bootstrap", Map.of(
+                    "service", "capability-grant-controller",
+                    "profile", "signed-CDEPLOY1-read-only",
+                    "ambientNameService", false
             ));
+            principal.put("grants", List.of(Map.of(
+                    "service", component.artifactName,
+                    "rights", List.of("publish")
+            )));
             principal.put("kafka", Map.of(
                     "granted", false,
                     "reason", "the transactional-step service owns delivery and transaction state"
@@ -294,7 +310,7 @@ final class CharlotteTargetGenerator {
                                     "name", component.artifactName + "-connector-transactional",
                                     "rights", List.of("consume", "produce", "transaction")
                             ),
-                            "registrationNameSource", "immutable-profile-v5-authority-endpoint",
+                            "registrationNameSource", "immutable-profile-v6-authority-endpoint",
                             "platformArtifact", "kafka",
                             "profileMaterial", "launcher-only",
                             "grant", "connection-capability-to-transactional-step",
@@ -304,7 +320,7 @@ final class CharlotteTargetGenerator {
                                     "selection", "exact-advertised-host-and-port"
                             )
                     ),
-                    "profileFormatVersion", 5,
+                    "profileFormatVersion", 6,
                     "profileDelivery", "read-only-launch-capability",
                     "profileDigest", "sha256-integrity",
                     "maxProduceRoutes", MAX_KAFKA_PRODUCE_ROUTES,
@@ -468,13 +484,22 @@ final class CharlotteTargetGenerator {
                 ),
                 requirement(
                         "capability-grant-controller",
-                        "required",
-                        "Resolve reviewed profile names into least-authority launch capabilities."
+                        "available-in-charlotte-os",
+                        "Mint only descriptor-authorized service connections and publication rights; "
+                                + "applications receive no ambient name service."
+                ),
+                requirement(
+                        "signed-deployment-reconciler",
+                        "available-in-charlotte-os",
+                        "Pull signed artifacts through a node-local S3 connector, reconcile multiple "
+                                + "48-byte artifact names, and generation-fence retirement."
                 ),
                 requirement(
                         "placement-controller",
-                        "planned",
-                        "Realise PlacementPolicy as replica sets; current manifests assign one node."
+                        "partial",
+                        "Automatic leader placement is available for one replica. Capacity, affinity, "
+                                + "failure-domain spreading, rescheduling, and replicas greater than one "
+                                + "still require cluster-level planning."
                 ),
                 requirement(
                         "durable-process-state",
@@ -589,10 +614,154 @@ final class CharlotteTargetGenerator {
                 + "}\n";
     }
 
+    private static String runtimeCargoToml(String processId, List<Component> components) {
+        String packageName = processId.toLowerCase(Locale.ROOT).replace('_', '-')
+                + "-charlotte-runtime";
+        StringBuilder manifest = new StringBuilder("[package]\n")
+                .append("name = \"").append(packageName).append("\"\n")
+                .append("version = \"0.1.0\"\n")
+                .append("edition = \"2024\"\n")
+                .append("publish = false\n\n")
+                .append("[dependencies]\n")
+                .append("contract = { package = \"")
+                .append(processId.toLowerCase(Locale.ROOT).replace('_', '-'))
+                .append("-charlotte-contract\", path = \"../..\" }\n")
+                .append("catten-rt = { path = \"@CHARLOTTE_ROOT@/crates/catten-rt\" }\n")
+                .append("catten-services = { path = \"@CHARLOTTE_ROOT@/crates/catten-services\" }\n")
+                .append("charlotte-kafka-step = { path = \"@CHARLOTTE_ROOT@/crates/charlotte-kafka-step\" }\n")
+                .append("charlotte-protocol-kafka = { path = \"@CHARLOTTE_ROOT@/crates/charlotte-protocol-kafka\" }\n\n");
+        for (Component component : components) {
+            manifest.append("[[bin]]\n")
+                    .append("name = \"").append(component.artifactName).append("\"\n")
+                    .append("path = \"src/bin/").append(component.moduleName).append(".rs\"\n\n");
+        }
+        return manifest.toString();
+    }
+
+    private static String runtimeBuildScript() {
+        return "#!/usr/bin/env sh\n"
+                + "set -eu\n"
+                + ": \"${CHARLOTTE_ROOT:?set CHARLOTTE_ROOT to the CharlotteOS checkout}\"\n"
+                + "SCRIPT_DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
+                + "RUNTIME_DIR=\"$SCRIPT_DIR/runtime\"\n"
+                + "TOOLCHAIN=$(sed -n 's/^channel = \"\\(.*\\)\"/\\1/p' "
+                + "\"$CHARLOTTE_ROOT/rust-toolchain.toml\")\n"
+                + "RUSTC=$(rustup which --toolchain \"$TOOLCHAIN\" rustc)\n"
+                + "export RUSTC\n"
+                + "sed \"s|@CHARLOTTE_ROOT@|$CHARLOTTE_ROOT|g\" \"$RUNTIME_DIR/Cargo.toml.in\" "
+                + "> \"$RUNTIME_DIR/Cargo.toml\"\n"
+                + "mkdir -p \"$RUNTIME_DIR/crates/catten-services\"\n"
+                + "cp \"$CHARLOTTE_ROOT/crates/catten-services/link.x\" "
+                + "\"$RUNTIME_DIR/crates/catten-services/link.x\"\n"
+                + "cd \"$CHARLOTTE_ROOT\"\n"
+                + "rustup run \"$TOOLCHAIN\" cargo build --manifest-path \"$RUNTIME_DIR/Cargo.toml\" "
+                + "--target \"$CHARLOTTE_ROOT/crates/catten-services/aarch64-unknown-none.json\" "
+                + "--release -Z json-target-spec -Z build-std=core,alloc\n";
+    }
+
+    private static String runtimeAdapterRs(Component component) {
+        return """
+                #![no_std]
+                #![no_main]
+
+                extern crate alloc;
+
+                use alloc::vec;
+                use catten_rt::{Context, owned::{Endpoint, OwnedMemory, ReplyToken}};
+                use catten_services::{grant_client, kafka_step as protocol};
+                use charlotte_kafka_step::{OutputBatch, OutputRecord};
+                use charlotte_protocol_kafka::DeliveredRecord;
+                use contract::{ActivityDecision, ActivityError};
+
+                catten_rt::entry!(main);
+
+                const ARTIFACT_NAME: &[u8] = b"%s";
+
+                fn reply_output(reply: ReplyToken, route: u16, value: &[u8]) -> bool {
+                    let batch = OutputBatch { records: vec![OutputRecord {
+                        route, key: None, value: Some(value),
+                    }] };
+                    let memory = match OwnedMemory::allocate((value.len() + 4095).div_ceil(4096).max(1)) {
+                        Ok(memory) => memory,
+                        Err(_) => return false,
+                    };
+                    let mut mapping = match memory.map_writable() {
+                        Ok(mapping) => mapping,
+                        Err(_) => return false,
+                    };
+                    let len = match batch.encode(mapping.as_mut_slice()) {
+                        Ok(len) => len,
+                        Err(_) => return false,
+                    };
+                    let memory = match mapping.unmap() {
+                        Ok(memory) => memory,
+                        Err(_) => return false,
+                    };
+                    reply.reply_move(memory, len as i64).is_ok()
+                }
+
+                fn main(ctx: Context) -> ! {
+                    let bootstrap = ctx.bootstrap_connection().unwrap_or_else(|| catten_rt::domain_abort());
+                    let descriptor = ctx.profile_memory().unwrap_or_else(|| catten_rt::domain_abort());
+                    let endpoint = Endpoint::create(protocol::INTERFACE, protocol::VERSION, 8)
+                        .unwrap_or_else(|_| catten_rt::domain_abort());
+                    if grant_client::publish(bootstrap, &descriptor, ARTIFACT_NAME, &endpoint)
+                        .is_err()
+                    {
+                        catten_rt::domain_abort();
+                    }
+                    loop {
+                        let mut message = endpoint.receive().unwrap_or_else(|_| catten_rt::domain_abort());
+                        let Some(reply) = message.reply.take() else { continue; };
+                        if message.opcode != protocol::OP_INVOKE {
+                            let _ = reply.reply(protocol::RESULT_INVALID);
+                            continue;
+                        }
+                        let Some(memory) = message.memory.take() else {
+                            let _ = reply.reply(protocol::RESULT_INVALID);
+                            continue;
+                        };
+                        let mapping = match memory.map_read_only() {
+                            Ok(mapping) => mapping,
+                            Err(_) => {
+                                let _ = reply.reply(protocol::RESULT_INVALID);
+                                continue;
+                            }
+                        };
+                        let Some(record) = DeliveredRecord::decode(mapping.as_slice()) else {
+                            let _ = reply.reply(protocol::RESULT_INVALID);
+                            continue;
+                        };
+                        let mut output = vec![0u8; 65_535];
+                        let decision = contract::%s::handle(
+                            record.value.unwrap_or_default(), &mut output
+                        );
+                        drop(mapping);
+                        match decision {
+                            Ok(ActivityDecision::Complete) => { let _ = reply.reply(0); }
+                            Ok(ActivityDecision::Emit { route, len }) if len <= output.len() => {
+                                if !reply_output(reply, route, &output[..len]) {
+                                    catten_rt::domain_abort();
+                                }
+                            }
+                            Ok(ActivityDecision::Emit { .. }) | Err(ActivityError::InvalidPayload) => {
+                                let _ = reply.reply(protocol::RESULT_INVALID);
+                            }
+                            Err(ActivityError::NotImplemented) => {
+                                let _ = reply.reply(protocol::RESULT_TERMINAL);
+                            }
+                        }
+                    }
+                }
+                """.formatted(escapeRust(component.artifactName), component.moduleName);
+    }
+
     private static String readme(String processId) {
         return "# " + processId + " — CharlotteOS target\n\n"
                 + "This directory is an initial CharlotteOS process bundle generated from `model.bpmn`. "
-                + "It is a design and build input, not yet a deployable Charlotte application.\n\n"
+                + "It contains Charlotte application source contracts plus an actionable platform "
+                + "deployment plan. The generated handlers deliberately fail closed until their business "
+                + "logic is implemented.\n\n"
                 + "The generated Rust crate contains `no_std` activity contracts and fail-closed "
                 + "handler stubs. Implement each `handle` function as a procedure endpoint. The "
                 + "generic transactional-step service owns Kafka delivery and transaction resources "
@@ -603,10 +772,11 @@ final class CharlotteTargetGenerator {
                 + "- `charlotte/bundle.yaml` preserves the BPMN digest, component graph, topics, data "
                 + "assets, and platform requirements.\n"
                 + "- `charlotte/deployment.yaml` records CLS2 admission metadata and the exact "
-                + "`PlacementPolicy` fields. Its singleton assignment can be adapted to Charlotte's "
-                + "current manifest; replica placement still needs a controller.\n"
-                + "- `charlotte/capabilities.yaml` is a least-authority review plan. A controller must "
-                + "resolve its logical service profiles into launch capabilities.\n\n"
+                + "`PlacementPolicy` fields. A zero node key requests Charlotte's current automatic "
+                + "single-replica placement; replica spreading still needs a cluster scheduler.\n"
+                + "- `charlotte/capabilities.yaml` is a least-authority review plan consumed by the "
+                + "capability-grant controller. Application bootstrap contains that controller and a "
+                + "read-only signed descriptor, never the ambient name service.\n\n"
                 + "## Platform integration status\n\n"
                 + "Charlotte's low-level Kafka profile supports one consume route and allow-listed "
                 + "multi-topic produce routes in one transaction. Its version-6 profile carries "
@@ -616,11 +786,13 @@ final class CharlotteTargetGenerator {
                 + "read-only launch capability. "
                 + "CharlotteOS now provides the higher-level `kafka_step` runner and its bounded "
                 + "procedure ABI, output validation, timeout/retry policy, and transactional DLQ path. "
-                + "The generated deployment remains blocked until handlers are implemented and a "
-                + "controller supplies the reviewed connector and procedure capabilities.\n\n"
+                + "Charlotte's signed deployment ingress, multi-application node reconciler, and grant "
+                + "controller now satisfy the platform side of the generated plan. Deployment remains "
+                + "blocked only while generated activity handlers return `NotImplemented`.\n\n"
                 + "Build the portable contract with `cargo test`. Building deployable AArch64 ELFs, "
                 + "signing CLS2 notes, computing provenance/digests, granting capabilities, and "
-                + "submitting generation-fenced assignments are intentionally later pipeline stages.\n";
+                + "uploading signed ELFs to the central S3-compatible store, and notifying the cluster "
+                + "remain release-pipeline stages because they require cluster-owned keys and endpoints.\n";
     }
 
     private static Map<String, Object> resource(String kind, String name) {

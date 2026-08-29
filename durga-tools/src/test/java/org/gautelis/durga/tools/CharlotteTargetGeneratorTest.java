@@ -17,8 +17,8 @@ import static org.junit.Assert.assertTrue;
 public class CharlotteTargetGeneratorTest {
 
     @Test
-    public void generatesPortableContractsAndBlockedDeploymentPlan() throws Exception {
-        System.out.println("TC: Charlotte target generates portable contracts and an honest blocked deployment plan");
+    public void generatesPortableContractsAndActionableDeploymentPlan() throws Exception {
+        System.out.println("TC: Charlotte target separates platform-deployable output from unfinished business handlers");
         Path output = Files.createTempDirectory("durga-charlotte-target-");
 
         generate("e2e_pipeline.bpmn", output);
@@ -28,6 +28,9 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(Files.exists(output.resolve("src/lib.rs")));
         assertTrue(Files.exists(output.resolve("src/transform_order.rs")));
         assertTrue(Files.exists(output.resolve("src/route_by_amount.rs")));
+        assertTrue(Files.exists(output.resolve("charlotte/runtime/Cargo.toml.in")));
+        assertTrue(Files.exists(output.resolve("charlotte/runtime/src/bin/transform_order.rs")));
+        assertTrue(Files.exists(output.resolve("charlotte/build-applications.sh")));
 
         Map<String, Object> bundle = readYaml(output.resolve("charlotte/bundle.yaml"));
         assertEquals("durga.gautelis.org/charlotte-v1alpha1", bundle.get("apiVersion"));
@@ -48,15 +51,22 @@ public class CharlotteTargetGeneratorTest {
         Map<String, Object> deployment = readYaml(output.resolve("charlotte/deployment.yaml"));
         Map<String, Object> deploymentSpec = map(deployment.get("spec"));
         assertEquals(Boolean.FALSE, map(deploymentSpec.get("status")).get("deployable"));
+        assertEquals(Boolean.TRUE, map(deploymentSpec.get("status")).get("platformDeployable"));
+        assertEquals(Boolean.FALSE, map(deploymentSpec.get("status")).get("businessLogicComplete"));
         assertFalse(list(map(deploymentSpec.get("status")).get("blockedBy"))
                 .contains("kafka-transactional-step-runner"));
+        assertFalse(list(map(deploymentSpec.get("status")).get("blockedBy"))
+                .contains("capability-grant-controller"));
         Map<String, Object> firstDeployment = map(list(deploymentSpec.get("components")).get(0));
         Map<String, Object> placement = map(firstDeployment.get("placement"));
         assertEquals(1, placement.get("replicas"));
         assertEquals(1, placement.get("maxInstancesPerNode"));
         assertEquals(1, placement.get("minDistinctNodes"));
-        assertEquals("requires-explicit-single-node-assignment",
+        assertEquals("supported-by-signed-deployment-ingress",
                 map(firstDeployment.get("currentManifestAdapter")).get("status"));
+        assertEquals(0, map(firstDeployment.get("currentManifestAdapter")).get("nodeKey"));
+        assertEquals("central-s3-compatible-object-store",
+                map(firstDeployment.get("distribution")).get("transport"));
         assertEquals("kafka-step",
                 map(firstDeployment.get("transactionalStep")).get("platformArtifact"));
         assertEquals("e2e_pipeline-transform_order-connector-transactional",
@@ -67,11 +77,12 @@ public class CharlotteTargetGeneratorTest {
         Map<String, Object> capabilities = readYaml(output.resolve("charlotte/capabilities.yaml"));
         Map<String, Object> capabilitySpec = map(capabilities.get("spec"));
         Map<String, Object> firstPrincipal = map(list(capabilitySpec.get("principals")).get(0));
+        assertEquals(Boolean.FALSE, map(firstPrincipal.get("bootstrap")).get("ambientNameService"));
         assertEquals(Boolean.FALSE, map(firstPrincipal.get("kafka")).get("granted"));
         assertEquals(7, list(capabilitySpec.get("transactionalSteps")).size());
         Map<String, Object> firstStep = map(list(capabilitySpec.get("transactionalSteps")).get(0));
         Map<String, Object> kafka = map(firstStep.get("kafka"));
-        assertEquals(5, kafka.get("profileFormatVersion"));
+        assertEquals(6, kafka.get("profileFormatVersion"));
         assertEquals("read-only-launch-capability", kafka.get("profileDelivery"));
         assertEquals("sha256-integrity", kafka.get("profileDigest"));
         Map<String, Object> connector = map(kafka.get("connector"));
@@ -87,7 +98,7 @@ public class CharlotteTargetGeneratorTest {
         assertEquals(List.of("consume", "produce", "transaction"),
                 list(authorityEndpoint.get("rights")));
         assertEquals("launcher-only", connector.get("profileMaterial"));
-        assertEquals("immutable-profile-v5-authority-endpoint", connector.get("registrationNameSource"));
+        assertEquals("immutable-profile-v6-authority-endpoint", connector.get("registrationNameSource"));
         List<Object> routes = list(kafka.get("produceRoutes"));
         assertEquals(3, routes.size());
         assertEquals(1, map(routes.get(0)).get("index"));
@@ -98,8 +109,13 @@ public class CharlotteTargetGeneratorTest {
         String handler = Files.readString(output.resolve("src/transform_order.rs"));
         assertTrue(handler.contains("Err(ActivityError::NotImplemented)"));
         assertFalse(handler.contains("unsafe"));
+        String adapter = Files.readString(
+                output.resolve("charlotte/runtime/src/bin/transform_order.rs"));
+        assertTrue(adapter.contains("grant_client::publish"));
+        assertTrue(adapter.contains("DeliveredRecord::decode"));
+        assertTrue(adapter.contains("contract::transform_order::handle"));
         String readme = Files.readString(output.resolve("README.md"));
-        assertTrue(readme.contains("not yet a deployable Charlotte application"));
+        assertTrue(readme.contains("actionable platform deployment plan"));
         assertTrue(readme.contains("CharlotteOS now provides the higher-level `kafka_step` runner"));
         assertTrue(readme.contains("catten_rt::owned"));
         assertTrue(readme.contains("business code does not receive Kafka authority"));
