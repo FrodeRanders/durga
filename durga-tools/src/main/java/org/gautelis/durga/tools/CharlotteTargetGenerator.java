@@ -251,9 +251,11 @@ final class CharlotteTargetGenerator {
         }
         spec.put("components", deployments);
         spec.put("rollout", Map.of(
-                "applyCommand", deploymentApplyCommand(components),
-                "admission", "independent-descriptors",
-                "atomic", false,
+                "releaseEnvelope", releasePath(processId),
+                "signCommand", releaseSignCommand(processId, components),
+                "applyCommand", releaseApplyCommand(processId),
+                "admission", "signed-release-envelope",
+                "atomic", true,
                 "generationFenced", true,
                 "strategy", "stop-old-then-activate-new",
                 "readinessContract", "REQUIRED_BEFORE_AUTOMATED_ROLLOUT"
@@ -760,11 +762,25 @@ final class CharlotteTargetGenerator {
                 """.formatted(escapeRust(component.artifactName), component.moduleName);
     }
 
-    private static String deploymentApplyCommand(List<Component> components) {
-        return "cluster-sign deployment-apply 127.0.0.1:8081 120 "
-                + components.stream()
+    private static String releasePath(String processId) {
+        return "charlotte/releases/" + artifactName(processId + "-release") + ".crelease";
+    }
+
+    private static String descriptorPaths(List<Component> components) {
+        return components.stream()
                 .map(component -> "charlotte/descriptors/" + component.artifactName + ".cdep")
                 .collect(java.util.stream.Collectors.joining(" "));
+    }
+
+    private static String releaseSignCommand(String processId, List<Component> components) {
+        return "cluster-sign release-sign " + releasePath(processId) + " "
+                + artifactName(processId + "-release")
+                + " <release-sequence> <private-key-hex> " + descriptorPaths(components);
+    }
+
+    private static String releaseApplyCommand(String processId) {
+        return "cluster-sign release-apply " + releasePath(processId)
+                + " 127.0.0.1:8081 120";
     }
 
     private static String readme(String processId, List<Component> components) {
@@ -804,13 +820,15 @@ final class CharlotteTargetGenerator {
                 + "signing CLS2 notes, computing provenance/digests, granting capabilities, and "
                 + "uploading signed ELFs to the central S3-compatible store remain release-pipeline "
                 + "stages because they require cluster-owned keys and endpoints. Write each signed "
-                + "descriptor to the `descriptorPath` in `charlotte/deployment.yaml`, then submit and "
-                + "observe the component set with:\n\n```text\n"
-                + deploymentApplyCommand(components) + "\n```\n\n"
-                + "This prevalidates the whole local descriptor set and waits for generation-fenced "
-                + "readiness, but Charlotte currently commits each descriptor independently. A partial "
-                + "failure is safe to retry with the exact same descriptors; atomic process-bundle "
-                + "admission and coordinated rollback remain cluster-controller work.\n";
+                + "descriptor to the `descriptorPath` in `charlotte/deployment.yaml`, then sign and "
+                + "apply the exact component set with:\n\n```text\n"
+                + releaseSignCommand(processId, components) + "\n"
+                + releaseApplyCommand(processId) + "\n```\n\n"
+                + "The outer release signature binds the exact descriptor set. Charlotte admits all "
+                + "desired component records in one Raft command and then waits for generation-fenced "
+                + "readiness. Fetch and launch happen after admission, so coordinated rollback after a "
+                + "runtime failure and a richer semantic bundle binding BPMN and schemas remain "
+                + "cluster-controller work.\n";
     }
 
     private static Map<String, Object> resource(String kind, String name) {

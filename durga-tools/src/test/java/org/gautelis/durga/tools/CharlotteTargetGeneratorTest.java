@@ -70,12 +70,15 @@ public class CharlotteTargetGeneratorTest {
         assertEquals("charlotte/descriptors/e2e_pipeline-transform_order.cdep",
                 map(firstDeployment.get("distribution")).get("descriptorPath"));
         Map<String, Object> rollout = map(deploymentSpec.get("rollout"));
-        assertEquals("independent-descriptors", rollout.get("admission"));
-        assertEquals(Boolean.FALSE, rollout.get("atomic"));
+        assertEquals("signed-release-envelope", rollout.get("admission"));
+        assertEquals(Boolean.TRUE, rollout.get("atomic"));
+        assertEquals("charlotte/releases/e2e_pipeline-release.crelease",
+                rollout.get("releaseEnvelope"));
+        assertTrue(((String) rollout.get("signCommand"))
+                .startsWith("cluster-sign release-sign charlotte/releases/e2e_pipeline-release.crelease"));
         assertTrue(((String) rollout.get("applyCommand"))
-                .startsWith("cluster-sign deployment-apply 127.0.0.1:8081 120 "));
-        assertTrue(((String) rollout.get("applyCommand"))
-                .contains("charlotte/descriptors/e2e_pipeline-transform_order.cdep"));
+                .equals("cluster-sign release-apply charlotte/releases/e2e_pipeline-release.crelease "
+                        + "127.0.0.1:8081 120"));
         assertEquals("kafka-step",
                 map(firstDeployment.get("transactionalStep")).get("platformArtifact"));
         assertEquals("e2e_pipeline-transform_order-connector-transactional",
@@ -128,8 +131,9 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(readme.contains("CharlotteOS now provides the higher-level `kafka_step` runner"));
         assertTrue(readme.contains("catten_rt::owned"));
         assertTrue(readme.contains("business code does not receive Kafka authority"));
-        assertTrue(readme.contains("cluster-sign deployment-apply 127.0.0.1:8081 120"));
-        assertTrue(readme.contains("commits each descriptor independently"));
+        assertTrue(readme.contains("cluster-sign release-sign charlotte/releases/e2e_pipeline-release.crelease"));
+        assertTrue(readme.contains("cluster-sign release-apply charlotte/releases/e2e_pipeline-release.crelease"));
+        assertTrue(readme.contains("admits all desired component records in one Raft command"));
     }
 
     @Test
