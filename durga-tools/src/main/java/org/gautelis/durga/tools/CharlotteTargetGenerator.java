@@ -37,13 +37,15 @@ import java.util.Set;
 final class CharlotteTargetGenerator {
 
     private static final Logger LOG = LoggerFactory.getLogger(CharlotteTargetGenerator.class);
-    private static final String API_VERSION = "durga.gautelis.org/charlotte-v1alpha3";
+    private static final String API_VERSION = "durga.gautelis.org/charlotte-v1alpha4";
     private static final int ARTIFACT_NAME_CAPACITY = 48;
     private static final int USER_STACK_PAGE_SIZE_BYTES = 4096;
     private static final int DEFAULT_STACK_PAGES_PER_THREAD = 4;
     private static final int MAX_STACK_PAGES_PER_THREAD = 64;
     private static final int DEFAULT_MAX_THREADS = 1;
     private static final int MAX_THREADS = 64;
+    private static final int DEFAULT_SHUTDOWN_GRACE_MILLIS = 5_000;
+    private static final int MAX_SHUTDOWN_GRACE_MILLIS = 300_000;
     private static final int MAX_KAFKA_PRODUCE_ROUTES = 64;
     private static final Set<String> RUST_KEYWORDS = Set.of(
             "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false",
@@ -243,6 +245,7 @@ final class CharlotteTargetGenerator {
             entry.put("execution", Map.of(
                     "stackPagesPerThread", execution.stackPagesPerThread,
                     "maxThreads", execution.maxThreads,
+                    "shutdownGraceMillis", execution.shutdownGraceMillis,
                     "pageSizeBytes", USER_STACK_PAGE_SIZE_BYTES,
                     "stackBytesPerThread",
                     execution.stackPagesPerThread * USER_STACK_PAGE_SIZE_BYTES,
@@ -267,7 +270,7 @@ final class CharlotteTargetGenerator {
                             ? descriptorSignCommand(component, execution)
                             : "REQUIRED_AFTER_EXECUTION_RESOURCE_REVIEW",
                     "transport", "central-s3-compatible-object-store",
-                    "notification", "POST /v1/deployments with signed CDEPLOY3",
+                    "notification", "POST /v1/deployments with signed CDEPLOY4",
                     "credentialsVisibleToApplication", false
             ));
             entry.put("transactionalStep", Map.of(
@@ -321,7 +324,7 @@ final class CharlotteTargetGenerator {
             principal.put("artifact", component.artifactName);
             principal.put("bootstrap", Map.of(
                     "service", "capability-grant-controller",
-                    "profile", "signed-CDEPLOY3-read-only",
+                    "profile", "signed-CDEPLOY4-read-only",
                     "ambientNameService", false
             ));
             principal.put("grants", List.of(Map.of(
@@ -710,8 +713,8 @@ final class CharlotteTargetGenerator {
                 extern crate alloc;
 
                 use alloc::vec;
-                use catten_rt::{Context, owned::{Endpoint, OwnedMemory, ReplyToken}};
-                use catten_services::{grant_client, kafka_step as protocol};
+                use catten_rt::{Context, ShutdownRequest, owned::{Endpoint, OwnedMemory, ReplyToken}};
+                use catten_services::{grant_client, kafka_step as protocol, sleep_ms};
                 use charlotte_kafka_step::{OutputBatch, OutputRecord};
                 use charlotte_protocol_kafka::DeliveredRecord;
                 use contract::{ActivityDecision, ActivityError};
@@ -743,7 +746,7 @@ final class CharlotteTargetGenerator {
                     reply.reply_move(memory, len as i64).is_ok()
                 }
 
-                fn main(ctx: Context) -> ! {
+                fn serve(ctx: &Context) -> ShutdownRequest {
                     let bootstrap = ctx.bootstrap_connection().unwrap_or_else(|| catten_rt::domain_abort());
                     let descriptor = ctx.profile_memory().unwrap_or_else(|| catten_rt::domain_abort());
                     let endpoint = Endpoint::create(protocol::INTERFACE, protocol::VERSION, 8)
@@ -754,7 +757,16 @@ final class CharlotteTargetGenerator {
                         catten_rt::domain_abort();
                     }
                     loop {
-                        let mut message = endpoint.receive().unwrap_or_else(|_| catten_rt::domain_abort());
+                        if let Some(request) = ctx.lifecycle().shutdown_requested() {
+                            drop(endpoint);
+                            return request;
+                        }
+                        let Some(mut message) = endpoint.try_receive()
+                            .unwrap_or_else(|_| catten_rt::domain_abort())
+                        else {
+                            sleep_ms(10);
+                            continue;
+                        };
                         let Some(reply) = message.reply.take() else { continue; };
                         if message.opcode != protocol::OP_INVOKE {
                             let _ = reply.reply(protocol::RESULT_INVALID);
@@ -796,6 +808,10 @@ final class CharlotteTargetGenerator {
                         }
                     }
                 }
+
+                fn main(ctx: Context) -> ! {
+                    serve(&ctx).complete()
+                }
                 """.formatted(escapeRust(component.artifactName), component.moduleName);
     }
 
@@ -810,7 +826,8 @@ final class CharlotteTargetGenerator {
             Map<String, ExecutionResources> defaults = new LinkedHashMap<>();
             for (Component component : components) {
                 defaults.put(component.artifactName, new ExecutionResources(
-                        DEFAULT_STACK_PAGES_PER_THREAD, DEFAULT_MAX_THREADS, false));
+                        DEFAULT_STACK_PAGES_PER_THREAD, DEFAULT_MAX_THREADS,
+                        DEFAULT_SHUTDOWN_GRACE_MILLIS, false));
             }
             writeYaml(parsed, path, executionResourceDocument(processId, components, defaults));
             return defaults;
@@ -850,6 +867,9 @@ final class CharlotteTargetGenerator {
                 int stackPages = requireInt(
                         entry.get("stackPagesPerThread"), "stackPagesPerThread", path);
                 int maxThreads = requireInt(entry.get("maxThreads"), "maxThreads", path);
+                int shutdownGraceMillis = entry.containsKey("shutdownGraceMillis")
+                        ? requireInt(entry.get("shutdownGraceMillis"), "shutdownGraceMillis", path)
+                        : DEFAULT_SHUTDOWN_GRACE_MILLIS;
                 boolean reviewed = requireBoolean(entry.get("reviewed"), "reviewed", path);
                 if (stackPages < 1 || stackPages > MAX_STACK_PAGES_PER_THREAD) {
                     throw new IllegalStateException(path + " stackPagesPerThread for " + artifact
@@ -859,7 +879,13 @@ final class CharlotteTargetGenerator {
                     throw new IllegalStateException(path + " maxThreads for " + artifact
                             + " must be between 1 and " + MAX_THREADS);
                 }
-                result.put(artifact, new ExecutionResources(stackPages, maxThreads, reviewed));
+                if (shutdownGraceMillis < 0
+                        || shutdownGraceMillis > MAX_SHUTDOWN_GRACE_MILLIS) {
+                    throw new IllegalStateException(path + " shutdownGraceMillis for " + artifact
+                            + " must be between 0 and " + MAX_SHUTDOWN_GRACE_MILLIS);
+                }
+                result.put(artifact, new ExecutionResources(
+                        stackPages, maxThreads, shutdownGraceMillis, reviewed));
             }
             if (!expected.isEmpty()) {
                 throw new IllegalStateException(path + " lacks current BPMN artifacts "
@@ -885,6 +911,7 @@ final class CharlotteTargetGenerator {
                     "artifact", component.artifactName,
                     "stackPagesPerThread", execution.stackPagesPerThread,
                     "maxThreads", execution.maxThreads,
+                    "shutdownGraceMillis", execution.shutdownGraceMillis,
                     "reviewed", execution.reviewed
             ));
         }
@@ -941,7 +968,7 @@ final class CharlotteTargetGenerator {
                 + component.artifactName + ".cdep " + component.artifactName
                 + " releases/" + component.artifactName + ".elf <artifact-sha256> 0 "
                 + "<deployment-sequence> " + execution.stackPagesPerThread + " "
-                + execution.maxThreads
+                + execution.maxThreads + " " + execution.shutdownGraceMillis
                 + " <private-key-hex> " + component.artifactName + "=publish";
     }
 
@@ -983,7 +1010,7 @@ final class CharlotteTargetGenerator {
                 + "single-replica placement; replica spreading still needs a cluster scheduler.\n"
                 + "- `charlotte/resources.yaml` is developer-owned input. The generator creates it "
                 + "once, then validates and preserves it on regeneration. It is the single source "
-                + "for stack pages, maximum threads, and their review state.\n"
+                + "for stack pages, maximum threads, shutdown grace, and their review state.\n"
                 + "- `charlotte/capabilities.yaml` is a least-authority review plan consumed by the "
                 + "capability-grant controller. Application bootstrap contains that controller and a "
                 + "read-only signed descriptor, never the ambient name service.\n\n"
@@ -999,11 +1026,13 @@ final class CharlotteTargetGenerator {
                 + "Charlotte's signed deployment ingress, multi-application node reconciler, and grant "
                 + "controller now satisfy the platform side of the generated plan. Deployment remains "
                 + "blocked while activity handlers are unfinished or execution resources are unreviewed.\n\n"
-                + "Review `stackPagesPerThread` and `maxThreads` in `charlotte/resources.yaml` for "
+                + "Review `stackPagesPerThread`, `maxThreads`, and `shutdownGraceMillis` in "
+                + "`charlotte/resources.yaml` for "
                 + "every component after implementing its handler, then set `reviewed: true`. The "
                 + "generated four-page, one-thread values are starting points, not measured claims. "
-                + "Charlotte signs both values into CDEPLOY3, gives every thread the exact 4 KiB-page "
-                + "stack limit, and aborts a domain that exceeds its active-thread contract. Invalid "
+                + "Charlotte signs all three values into CDEPLOY4, gives every thread the exact 4 KiB-page "
+                + "stack limit, requests cooperative draining, and forcibly retires a domain after its "
+                + "deadline. Invalid "
                 + "or excessive values are rejected rather than clamped. A `descriptorSignCommand` is "
                 + "emitted only after review and is always derived from the same retained values.\n\n"
                 + "Build the portable contract with `cargo test`. Building deployable AArch64 ELFs, "
@@ -1138,6 +1167,7 @@ final class CharlotteTargetGenerator {
     private record ExecutionResources(
             int stackPagesPerThread,
             int maxThreads,
+            int shutdownGraceMillis,
             boolean reviewed
     ) {
     }
