@@ -1,6 +1,7 @@
 package org.gautelis.durga.tools;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -36,10 +37,13 @@ import java.util.Set;
 final class CharlotteTargetGenerator {
 
     private static final Logger LOG = LoggerFactory.getLogger(CharlotteTargetGenerator.class);
-    private static final String API_VERSION = "durga.gautelis.org/charlotte-v1alpha2";
+    private static final String API_VERSION = "durga.gautelis.org/charlotte-v1alpha3";
     private static final int ARTIFACT_NAME_CAPACITY = 48;
     private static final int USER_STACK_PAGE_SIZE_BYTES = 4096;
     private static final int DEFAULT_STACK_PAGES_PER_THREAD = 4;
+    private static final int MAX_STACK_PAGES_PER_THREAD = 64;
+    private static final int DEFAULT_MAX_THREADS = 1;
+    private static final int MAX_THREADS = 64;
     private static final int MAX_KAFKA_PRODUCE_ROUTES = 64;
     private static final Set<String> RUST_KEYWORDS = Set.of(
             "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false",
@@ -64,12 +68,14 @@ final class CharlotteTargetGenerator {
     ) {
         List<Component> components = components(processId, taskSpecs, nodes, flowsBySource);
         String modelDigest = sha256(Path.of(parsed.bpmnPath));
+        Map<String, ExecutionResources> resources = executionResources(
+                parsed, outputRoot, processId, components);
 
         writeYaml(parsed, outputRoot.resolve("charlotte/bundle.yaml"),
                 bundle(processId, modelDigest, components, nodes, flowsBySource,
                         dataObjects, dataStores, dataAssociations));
         writeYaml(parsed, outputRoot.resolve("charlotte/deployment.yaml"),
-                deployment(processId, components));
+                deployment(processId, components, resources));
         writeYaml(parsed, outputRoot.resolve("charlotte/capabilities.yaml"),
                 capabilities(processId, components, dataStores));
         write(parsed, outputRoot.resolve("Cargo.toml"), cargoToml(processId));
@@ -195,7 +201,11 @@ final class CharlotteTargetGenerator {
         return root;
     }
 
-    private static Map<String, Object> deployment(String processId, List<Component> components) {
+    private static Map<String, Object> deployment(
+            String processId,
+            List<Component> components,
+            Map<String, ExecutionResources> resources
+    ) {
         Map<String, Object> root = resource("CharlotteProcessDeployment", processId);
         Map<String, Object> spec = map();
         spec.put("bundle", Map.of(
@@ -210,6 +220,7 @@ final class CharlotteTargetGenerator {
 
         List<Map<String, Object>> deployments = new ArrayList<>();
         for (Component component : components) {
+            ExecutionResources execution = resources.get(component.artifactName);
             Map<String, Object> entry = map();
             entry.put("component", component.node.name);
             entry.put("artifact", Map.of(
@@ -230,12 +241,17 @@ final class CharlotteTargetGenerator {
                     "antiAffinityGroup", 0
             ));
             entry.put("execution", Map.of(
-                    "stackPagesPerThread", DEFAULT_STACK_PAGES_PER_THREAD,
+                    "stackPagesPerThread", execution.stackPagesPerThread,
+                    "maxThreads", execution.maxThreads,
                     "pageSizeBytes", USER_STACK_PAGE_SIZE_BYTES,
                     "stackBytesPerThread",
-                    DEFAULT_STACK_PAGES_PER_THREAD * USER_STACK_PAGE_SIZE_BYTES,
-                    "source", "generator-default",
-                    "reviewStatus", "required-before-descriptor-signing",
+                    execution.stackPagesPerThread * USER_STACK_PAGE_SIZE_BYTES,
+                    "maximumStackBytes",
+                    execution.stackPagesPerThread * USER_STACK_PAGE_SIZE_BYTES
+                            * execution.maxThreads,
+                    "source", "charlotte/resources.yaml",
+                    "reviewStatus", execution.reviewed
+                            ? "developer-reviewed" : "required-before-descriptor-signing",
                     "admission", "exact-or-reject; never-clamp"
             ));
             entry.put("currentManifestAdapter", Map.of(
@@ -247,9 +263,11 @@ final class CharlotteTargetGenerator {
             entry.put("distribution", Map.of(
                     "objectKey", "releases/" + component.artifactName + ".elf",
                     "descriptorPath", "charlotte/descriptors/" + component.artifactName + ".cdep",
-                    "descriptorSignCommand", descriptorSignCommand(component),
+                    "descriptorSignCommand", execution.reviewed
+                            ? descriptorSignCommand(component, execution)
+                            : "REQUIRED_AFTER_EXECUTION_RESOURCE_REVIEW",
                     "transport", "central-s3-compatible-object-store",
-                    "notification", "POST /v1/deployments with signed CDEPLOY2",
+                    "notification", "POST /v1/deployments with signed CDEPLOY3",
                     "credentialsVisibleToApplication", false
             ));
             entry.put("transactionalStep", Map.of(
@@ -272,11 +290,18 @@ final class CharlotteTargetGenerator {
                 "strategy", "stop-old-then-activate-new",
                 "readinessContract", "REQUIRED_BEFORE_AUTOMATED_ROLLOUT"
         ));
+        boolean resourcesReviewed = resources.values().stream()
+                .allMatch(resource -> resource.reviewed);
+        List<String> blockedBy = new ArrayList<>(List.of("activity-handlers"));
+        if (!resourcesReviewed) {
+            blockedBy.add("execution-resource-review");
+        }
         spec.put("status", Map.of(
                 "platformDeployable", true,
                 "businessLogicComplete", false,
+                "executionResourcesReviewed", resourcesReviewed,
                 "deployable", false,
-                "blockedBy", List.of("activity-handlers")
+                "blockedBy", blockedBy
         ));
         root.put("spec", spec);
         return root;
@@ -296,7 +321,7 @@ final class CharlotteTargetGenerator {
             principal.put("artifact", component.artifactName);
             principal.put("bootstrap", Map.of(
                     "service", "capability-grant-controller",
-                    "profile", "signed-CDEPLOY2-read-only",
+                    "profile", "signed-CDEPLOY3-read-only",
                     "ambientNameService", false
             ));
             principal.put("grants", List.of(Map.of(
@@ -774,15 +799,149 @@ final class CharlotteTargetGenerator {
                 """.formatted(escapeRust(component.artifactName), component.moduleName);
     }
 
+    private static Map<String, ExecutionResources> executionResources(
+            ParsedArgs parsed,
+            Path outputRoot,
+            String processId,
+            List<Component> components
+    ) {
+        Path path = outputRoot.resolve("charlotte/resources.yaml");
+        if (!Files.exists(path)) {
+            Map<String, ExecutionResources> defaults = new LinkedHashMap<>();
+            for (Component component : components) {
+                defaults.put(component.artifactName, new ExecutionResources(
+                        DEFAULT_STACK_PAGES_PER_THREAD, DEFAULT_MAX_THREADS, false));
+            }
+            writeYaml(parsed, path, executionResourceDocument(processId, components, defaults));
+            return defaults;
+        }
+
+        try {
+            ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+            Map<String, Object> root = mapper.readValue(path.toFile(), new TypeReference<>() {
+            });
+            if (!"CharlotteExecutionResources".equals(root.get("kind"))) {
+                throw new IllegalStateException(path + " must have kind CharlotteExecutionResources");
+            }
+            Map<String, Object> spec = requireMap(root.get("spec"), "spec", path);
+            Object values = spec.get("components");
+            if (!(values instanceof List<?> entries)) {
+                throw new IllegalStateException(path + " spec.components must be a list");
+            }
+
+            Map<String, Component> expected = new LinkedHashMap<>();
+            for (Component component : components) {
+                expected.put(component.artifactName, component);
+            }
+            Map<String, ExecutionResources> result = new LinkedHashMap<>();
+            for (Object value : entries) {
+                Map<String, Object> entry = requireMap(value, "component entry", path);
+                String artifact = requireString(entry.get("artifact"), "artifact", path);
+                Component component = expected.remove(artifact);
+                if (component == null || result.containsKey(artifact)) {
+                    throw new IllegalStateException(
+                            path + " contains an unknown or duplicate artifact " + artifact);
+                }
+                String componentName = requireString(entry.get("component"), "component", path);
+                if (!component.node.name.equals(componentName)) {
+                    throw new IllegalStateException(path + " component name for " + artifact
+                            + " does not match the current BPMN model");
+                }
+                int stackPages = requireInt(
+                        entry.get("stackPagesPerThread"), "stackPagesPerThread", path);
+                int maxThreads = requireInt(entry.get("maxThreads"), "maxThreads", path);
+                boolean reviewed = requireBoolean(entry.get("reviewed"), "reviewed", path);
+                if (stackPages < 1 || stackPages > MAX_STACK_PAGES_PER_THREAD) {
+                    throw new IllegalStateException(path + " stackPagesPerThread for " + artifact
+                            + " must be between 1 and " + MAX_STACK_PAGES_PER_THREAD);
+                }
+                if (maxThreads < 1 || maxThreads > MAX_THREADS) {
+                    throw new IllegalStateException(path + " maxThreads for " + artifact
+                            + " must be between 1 and " + MAX_THREADS);
+                }
+                result.put(artifact, new ExecutionResources(stackPages, maxThreads, reviewed));
+            }
+            if (!expected.isEmpty()) {
+                throw new IllegalStateException(path + " lacks current BPMN artifacts "
+                        + String.join(", ", expected.keySet()));
+            }
+            return result;
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read Charlotte execution resources " + path, e);
+        }
+    }
+
+    private static Map<String, Object> executionResourceDocument(
+            String processId,
+            List<Component> components,
+            Map<String, ExecutionResources> resources
+    ) {
+        Map<String, Object> root = resource("CharlotteExecutionResources", processId);
+        List<Map<String, Object>> entries = new ArrayList<>();
+        for (Component component : components) {
+            ExecutionResources execution = resources.get(component.artifactName);
+            entries.add(Map.of(
+                    "component", component.node.name,
+                    "artifact", component.artifactName,
+                    "stackPagesPerThread", execution.stackPagesPerThread,
+                    "maxThreads", execution.maxThreads,
+                    "reviewed", execution.reviewed
+            ));
+        }
+        root.put("spec", Map.of(
+                "ownership", "developer-maintained; generator creates once and never overwrites",
+                "components", entries
+        ));
+        return root;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> requireMap(Object value, String field, Path path) {
+        if (!(value instanceof Map<?, ?>)) {
+            throw new IllegalStateException(path + " " + field + " must be a mapping");
+        }
+        return (Map<String, Object>) value;
+    }
+
+    private static String requireString(Object value, String field, Path path) {
+        if (!(value instanceof String string) || string.isBlank()) {
+            throw new IllegalStateException(path + " " + field + " must be a non-empty string");
+        }
+        return string;
+    }
+
+    private static int requireInt(Object value, String field, Path path) {
+        if (!(value instanceof Number number)) {
+            throw new IllegalStateException(path + " " + field + " must be an integer");
+        }
+        long integer = number.longValue();
+        if (integer < Integer.MIN_VALUE || integer > Integer.MAX_VALUE
+                || number.doubleValue() != integer) {
+            throw new IllegalStateException(path + " " + field + " must be an integer");
+        }
+        return (int) integer;
+    }
+
+    private static boolean requireBoolean(Object value, String field, Path path) {
+        if (!(value instanceof Boolean bool)) {
+            throw new IllegalStateException(path + " " + field + " must be true or false");
+        }
+        return bool;
+    }
+
     private static String releasePath(String processId) {
         return "charlotte/releases/" + artifactName(processId + "-release") + ".crelease";
     }
 
-    private static String descriptorSignCommand(Component component) {
+    private static String descriptorSignCommand(
+            Component component,
+            ExecutionResources execution
+    ) {
         return "cluster-sign deployment-sign charlotte/descriptors/"
                 + component.artifactName + ".cdep " + component.artifactName
                 + " releases/" + component.artifactName + ".elf <artifact-sha256> 0 "
-                + "<deployment-sequence> " + DEFAULT_STACK_PAGES_PER_THREAD
+                + "<deployment-sequence> " + execution.stackPagesPerThread + " "
+                + execution.maxThreads
                 + " <private-key-hex> " + component.artifactName + "=publish";
     }
 
@@ -819,9 +978,12 @@ final class CharlotteTargetGenerator {
                 + "- `charlotte/bundle.yaml` preserves the BPMN digest, component graph, topics, data "
                 + "assets, and platform requirements.\n"
                 + "- `charlotte/deployment.yaml` records CLS2 admission metadata and the exact "
-                + "`PlacementPolicy` fields plus a per-thread stack requirement. A zero node key "
+                + "`PlacementPolicy` fields plus signed execution-resource requirements. A zero node key "
                 + "requests Charlotte's current automatic "
                 + "single-replica placement; replica spreading still needs a cluster scheduler.\n"
+                + "- `charlotte/resources.yaml` is developer-owned input. The generator creates it "
+                + "once, then validates and preserves it on regeneration. It is the single source "
+                + "for stack pages, maximum threads, and their review state.\n"
                 + "- `charlotte/capabilities.yaml` is a least-authority review plan consumed by the "
                 + "capability-grant controller. Application bootstrap contains that controller and a "
                 + "read-only signed descriptor, never the ambient name service.\n\n"
@@ -836,13 +998,14 @@ final class CharlotteTargetGenerator {
                 + "procedure ABI, output validation, timeout/retry policy, and transactional DLQ path. "
                 + "Charlotte's signed deployment ingress, multi-application node reconciler, and grant "
                 + "controller now satisfy the platform side of the generated plan. Deployment remains "
-                + "blocked only while generated activity handlers return `NotImplemented`.\n\n"
-                + "Review `execution.stackPagesPerThread` for every component after implementing its "
-                + "handler. The generated value is a four-page (16 KiB) starting point, not a measured "
-                + "claim. Charlotte signs the reviewed value into CDEPLOY2 and gives every thread in "
-                + "the protected domain that exact 4 KiB-page limit; admission rejects invalid or "
-                + "excessive values instead of clamping them. The `descriptorSignCommand` next to each "
-                + "component carries the value into the release pipeline.\n\n"
+                + "blocked while activity handlers are unfinished or execution resources are unreviewed.\n\n"
+                + "Review `stackPagesPerThread` and `maxThreads` in `charlotte/resources.yaml` for "
+                + "every component after implementing its handler, then set `reviewed: true`. The "
+                + "generated four-page, one-thread values are starting points, not measured claims. "
+                + "Charlotte signs both values into CDEPLOY3, gives every thread the exact 4 KiB-page "
+                + "stack limit, and aborts a domain that exceeds its active-thread contract. Invalid "
+                + "or excessive values are rejected rather than clamped. A `descriptorSignCommand` is "
+                + "emitted only after review and is always derived from the same retained values.\n\n"
                 + "Build the portable contract with `cargo test`. Building deployable AArch64 ELFs, "
                 + "signing CLS2 notes, computing provenance/digests, granting capabilities, and "
                 + "uploading signed ELFs to the central S3-compatible store remain release-pipeline "
@@ -969,6 +1132,13 @@ final class CharlotteTargetGenerator {
             String kind,
             String inputTopic,
             List<String> outputTopics
+    ) {
+    }
+
+    private record ExecutionResources(
+            int stackPagesPerThread,
+            int maxThreads,
+            boolean reviewed
     ) {
     }
 }

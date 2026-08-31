@@ -31,9 +31,10 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(Files.exists(output.resolve("charlotte/runtime/Cargo.toml.in")));
         assertTrue(Files.exists(output.resolve("charlotte/runtime/src/bin/transform_order.rs")));
         assertTrue(Files.exists(output.resolve("charlotte/build-applications.sh")));
+        assertTrue(Files.exists(output.resolve("charlotte/resources.yaml")));
 
         Map<String, Object> bundle = readYaml(output.resolve("charlotte/bundle.yaml"));
-        assertEquals("durga.gautelis.org/charlotte-v1alpha2", bundle.get("apiVersion"));
+        assertEquals("durga.gautelis.org/charlotte-v1alpha3", bundle.get("apiVersion"));
         assertEquals("CharlotteProcessBundle", bundle.get("kind"));
         Map<String, Object> bundleSpec = map(bundle.get("spec"));
         assertEquals("aarch64-unknown-none-catten", map(bundleSpec.get("target")).get("triple"));
@@ -53,6 +54,10 @@ public class CharlotteTargetGeneratorTest {
         assertEquals(Boolean.FALSE, map(deploymentSpec.get("status")).get("deployable"));
         assertEquals(Boolean.TRUE, map(deploymentSpec.get("status")).get("platformDeployable"));
         assertEquals(Boolean.FALSE, map(deploymentSpec.get("status")).get("businessLogicComplete"));
+        assertEquals(Boolean.FALSE,
+                map(deploymentSpec.get("status")).get("executionResourcesReviewed"));
+        assertTrue(list(map(deploymentSpec.get("status")).get("blockedBy"))
+                .contains("execution-resource-review"));
         assertFalse(list(map(deploymentSpec.get("status")).get("blockedBy"))
                 .contains("kafka-transactional-step-runner"));
         assertFalse(list(map(deploymentSpec.get("status")).get("blockedBy"))
@@ -71,16 +76,18 @@ public class CharlotteTargetGeneratorTest {
                 map(firstDeployment.get("distribution")).get("descriptorPath"));
         Map<String, Object> execution = map(firstDeployment.get("execution"));
         assertEquals(4, execution.get("stackPagesPerThread"));
+        assertEquals(1, execution.get("maxThreads"));
         assertEquals(4096, execution.get("pageSizeBytes"));
         assertEquals(16384, execution.get("stackBytesPerThread"));
-        assertEquals("generator-default", execution.get("source"));
+        assertEquals(16384, execution.get("maximumStackBytes"));
+        assertEquals("charlotte/resources.yaml", execution.get("source"));
         assertEquals("required-before-descriptor-signing", execution.get("reviewStatus"));
         assertEquals("exact-or-reject; never-clamp", execution.get("admission"));
         Map<String, Object> distribution = map(firstDeployment.get("distribution"));
-        assertEquals("POST /v1/deployments with signed CDEPLOY2",
+        assertEquals("POST /v1/deployments with signed CDEPLOY3",
                 distribution.get("notification"));
-        assertTrue(((String) distribution.get("descriptorSignCommand"))
-                .contains("<deployment-sequence> 4 <private-key-hex>"));
+        assertEquals("REQUIRED_AFTER_EXECUTION_RESOURCE_REVIEW",
+                distribution.get("descriptorSignCommand"));
         Map<String, Object> rollout = map(deploymentSpec.get("rollout"));
         assertEquals("signed-release-envelope", rollout.get("admission"));
         assertEquals(Boolean.TRUE, rollout.get("atomic"));
@@ -102,7 +109,7 @@ public class CharlotteTargetGeneratorTest {
         Map<String, Object> capabilitySpec = map(capabilities.get("spec"));
         Map<String, Object> firstPrincipal = map(list(capabilitySpec.get("principals")).get(0));
         assertEquals(Boolean.FALSE, map(firstPrincipal.get("bootstrap")).get("ambientNameService"));
-        assertEquals("signed-CDEPLOY2-read-only",
+        assertEquals("signed-CDEPLOY3-read-only",
                 map(firstPrincipal.get("bootstrap")).get("profile"));
         assertEquals(Boolean.FALSE, map(firstPrincipal.get("kafka")).get("granted"));
         assertEquals(7, list(capabilitySpec.get("transactionalSteps")).size());
@@ -148,8 +155,46 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(readme.contains("cluster-sign release-sign charlotte/releases/e2e_pipeline-release.crelease"));
         assertTrue(readme.contains("cluster-sign release-apply charlotte/releases/e2e_pipeline-release.crelease"));
         assertTrue(readme.contains("admits all desired component records in one Raft command"));
-        assertTrue(readme.contains("Review `execution.stackPagesPerThread`"));
-        assertTrue(readme.contains("signs the reviewed value into CDEPLOY2"));
+        assertTrue(readme.contains("generator creates it once, then validates and preserves it"));
+        assertTrue(readme.contains("Review `stackPagesPerThread` and `maxThreads`"));
+        assertTrue(readme.contains("signs both values into CDEPLOY3"));
+    }
+
+    @Test
+    public void preservesReviewedExecutionResourcesAndDerivesSigningCommands() throws Exception {
+        System.out.println("TC: Charlotte target preserves developer-owned execution resources");
+        Path output = Files.createTempDirectory("durga-charlotte-resources-");
+
+        generate("e2e_pipeline.bpmn", output);
+        Path resourcesPath = output.resolve("charlotte/resources.yaml");
+        Map<String, Object> resources = readYaml(resourcesPath);
+        List<Object> entries = list(map(resources.get("spec")).get("components"));
+        for (Object value : entries) {
+            map(value).put("reviewed", true);
+        }
+        Map<String, Object> first = map(entries.get(0));
+        first.put("stackPagesPerThread", 8);
+        first.put("maxThreads", 3);
+        writeYaml(resourcesPath, resources);
+        String reviewedSource = Files.readString(resourcesPath);
+
+        generate("e2e_pipeline.bpmn", output);
+
+        assertEquals(reviewedSource, Files.readString(resourcesPath));
+        Map<String, Object> deployment = readYaml(output.resolve("charlotte/deployment.yaml"));
+        Map<String, Object> deploymentSpec = map(deployment.get("spec"));
+        Map<String, Object> status = map(deploymentSpec.get("status"));
+        assertEquals(Boolean.TRUE, status.get("executionResourcesReviewed"));
+        assertFalse(list(status.get("blockedBy")).contains("execution-resource-review"));
+        Map<String, Object> firstDeployment = map(list(deploymentSpec.get("components")).get(0));
+        Map<String, Object> execution = map(firstDeployment.get("execution"));
+        assertEquals(8, execution.get("stackPagesPerThread"));
+        assertEquals(3, execution.get("maxThreads"));
+        assertEquals(98304, execution.get("maximumStackBytes"));
+        assertEquals("developer-reviewed", execution.get("reviewStatus"));
+        String command = (String) map(firstDeployment.get("distribution"))
+                .get("descriptorSignCommand");
+        assertTrue(command.contains("<deployment-sequence> 8 3 <private-key-hex>"));
     }
 
     @Test
@@ -192,6 +237,10 @@ public class CharlotteTargetGeneratorTest {
     private static Map<String, Object> readYaml(Path path) throws Exception {
         return new ObjectMapper(new YAMLFactory()).readValue(path.toFile(), new TypeReference<>() {
         });
+    }
+
+    private static void writeYaml(Path path, Map<String, Object> value) throws Exception {
+        new ObjectMapper(new YAMLFactory()).writeValue(path.toFile(), value);
     }
 
     @SuppressWarnings("unchecked")
