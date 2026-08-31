@@ -33,7 +33,7 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(Files.exists(output.resolve("charlotte/build-applications.sh")));
 
         Map<String, Object> bundle = readYaml(output.resolve("charlotte/bundle.yaml"));
-        assertEquals("durga.gautelis.org/charlotte-v1alpha1", bundle.get("apiVersion"));
+        assertEquals("durga.gautelis.org/charlotte-v1alpha2", bundle.get("apiVersion"));
         assertEquals("CharlotteProcessBundle", bundle.get("kind"));
         Map<String, Object> bundleSpec = map(bundle.get("spec"));
         assertEquals("aarch64-unknown-none-catten", map(bundleSpec.get("target")).get("triple"));
@@ -69,6 +69,18 @@ public class CharlotteTargetGeneratorTest {
                 map(firstDeployment.get("distribution")).get("transport"));
         assertEquals("charlotte/descriptors/e2e_pipeline-transform_order.cdep",
                 map(firstDeployment.get("distribution")).get("descriptorPath"));
+        Map<String, Object> execution = map(firstDeployment.get("execution"));
+        assertEquals(4, execution.get("stackPagesPerThread"));
+        assertEquals(4096, execution.get("pageSizeBytes"));
+        assertEquals(16384, execution.get("stackBytesPerThread"));
+        assertEquals("generator-default", execution.get("source"));
+        assertEquals("required-before-descriptor-signing", execution.get("reviewStatus"));
+        assertEquals("exact-or-reject; never-clamp", execution.get("admission"));
+        Map<String, Object> distribution = map(firstDeployment.get("distribution"));
+        assertEquals("POST /v1/deployments with signed CDEPLOY2",
+                distribution.get("notification"));
+        assertTrue(((String) distribution.get("descriptorSignCommand"))
+                .contains("<deployment-sequence> 4 <private-key-hex>"));
         Map<String, Object> rollout = map(deploymentSpec.get("rollout"));
         assertEquals("signed-release-envelope", rollout.get("admission"));
         assertEquals(Boolean.TRUE, rollout.get("atomic"));
@@ -90,6 +102,8 @@ public class CharlotteTargetGeneratorTest {
         Map<String, Object> capabilitySpec = map(capabilities.get("spec"));
         Map<String, Object> firstPrincipal = map(list(capabilitySpec.get("principals")).get(0));
         assertEquals(Boolean.FALSE, map(firstPrincipal.get("bootstrap")).get("ambientNameService"));
+        assertEquals("signed-CDEPLOY2-read-only",
+                map(firstPrincipal.get("bootstrap")).get("profile"));
         assertEquals(Boolean.FALSE, map(firstPrincipal.get("kafka")).get("granted"));
         assertEquals(7, list(capabilitySpec.get("transactionalSteps")).size());
         Map<String, Object> firstStep = map(list(capabilitySpec.get("transactionalSteps")).get(0));
@@ -134,6 +148,8 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(readme.contains("cluster-sign release-sign charlotte/releases/e2e_pipeline-release.crelease"));
         assertTrue(readme.contains("cluster-sign release-apply charlotte/releases/e2e_pipeline-release.crelease"));
         assertTrue(readme.contains("admits all desired component records in one Raft command"));
+        assertTrue(readme.contains("Review `execution.stackPagesPerThread`"));
+        assertTrue(readme.contains("signs the reviewed value into CDEPLOY2"));
     }
 
     @Test

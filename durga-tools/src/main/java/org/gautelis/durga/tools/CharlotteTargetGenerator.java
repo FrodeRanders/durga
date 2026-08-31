@@ -36,8 +36,10 @@ import java.util.Set;
 final class CharlotteTargetGenerator {
 
     private static final Logger LOG = LoggerFactory.getLogger(CharlotteTargetGenerator.class);
-    private static final String API_VERSION = "durga.gautelis.org/charlotte-v1alpha1";
+    private static final String API_VERSION = "durga.gautelis.org/charlotte-v1alpha2";
     private static final int ARTIFACT_NAME_CAPACITY = 48;
+    private static final int USER_STACK_PAGE_SIZE_BYTES = 4096;
+    private static final int DEFAULT_STACK_PAGES_PER_THREAD = 4;
     private static final int MAX_KAFKA_PRODUCE_ROUTES = 64;
     private static final Set<String> RUST_KEYWORDS = Set.of(
             "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false",
@@ -227,6 +229,15 @@ final class CharlotteTargetGenerator {
                     "affinityGroup", 0,
                     "antiAffinityGroup", 0
             ));
+            entry.put("execution", Map.of(
+                    "stackPagesPerThread", DEFAULT_STACK_PAGES_PER_THREAD,
+                    "pageSizeBytes", USER_STACK_PAGE_SIZE_BYTES,
+                    "stackBytesPerThread",
+                    DEFAULT_STACK_PAGES_PER_THREAD * USER_STACK_PAGE_SIZE_BYTES,
+                    "source", "generator-default",
+                    "reviewStatus", "required-before-descriptor-signing",
+                    "admission", "exact-or-reject; never-clamp"
+            ));
             entry.put("currentManifestAdapter", Map.of(
                     "status", "supported-by-signed-deployment-ingress",
                     "objectId", "DERIVED_BY_CHARLOTTE_FROM_LOGICAL_NAME",
@@ -236,8 +247,9 @@ final class CharlotteTargetGenerator {
             entry.put("distribution", Map.of(
                     "objectKey", "releases/" + component.artifactName + ".elf",
                     "descriptorPath", "charlotte/descriptors/" + component.artifactName + ".cdep",
+                    "descriptorSignCommand", descriptorSignCommand(component),
                     "transport", "central-s3-compatible-object-store",
-                    "notification", "POST /v1/deployments with signed CDEPLOY1",
+                    "notification", "POST /v1/deployments with signed CDEPLOY2",
                     "credentialsVisibleToApplication", false
             ));
             entry.put("transactionalStep", Map.of(
@@ -284,7 +296,7 @@ final class CharlotteTargetGenerator {
             principal.put("artifact", component.artifactName);
             principal.put("bootstrap", Map.of(
                     "service", "capability-grant-controller",
-                    "profile", "signed-CDEPLOY1-read-only",
+                    "profile", "signed-CDEPLOY2-read-only",
                     "ambientNameService", false
             ));
             principal.put("grants", List.of(Map.of(
@@ -766,6 +778,14 @@ final class CharlotteTargetGenerator {
         return "charlotte/releases/" + artifactName(processId + "-release") + ".crelease";
     }
 
+    private static String descriptorSignCommand(Component component) {
+        return "cluster-sign deployment-sign charlotte/descriptors/"
+                + component.artifactName + ".cdep " + component.artifactName
+                + " releases/" + component.artifactName + ".elf <artifact-sha256> 0 "
+                + "<deployment-sequence> " + DEFAULT_STACK_PAGES_PER_THREAD
+                + " <private-key-hex> " + component.artifactName + "=publish";
+    }
+
     private static String descriptorPaths(List<Component> components) {
         return components.stream()
                 .map(component -> "charlotte/descriptors/" + component.artifactName + ".cdep")
@@ -799,7 +819,8 @@ final class CharlotteTargetGenerator {
                 + "- `charlotte/bundle.yaml` preserves the BPMN digest, component graph, topics, data "
                 + "assets, and platform requirements.\n"
                 + "- `charlotte/deployment.yaml` records CLS2 admission metadata and the exact "
-                + "`PlacementPolicy` fields. A zero node key requests Charlotte's current automatic "
+                + "`PlacementPolicy` fields plus a per-thread stack requirement. A zero node key "
+                + "requests Charlotte's current automatic "
                 + "single-replica placement; replica spreading still needs a cluster scheduler.\n"
                 + "- `charlotte/capabilities.yaml` is a least-authority review plan consumed by the "
                 + "capability-grant controller. Application bootstrap contains that controller and a "
@@ -816,6 +837,12 @@ final class CharlotteTargetGenerator {
                 + "Charlotte's signed deployment ingress, multi-application node reconciler, and grant "
                 + "controller now satisfy the platform side of the generated plan. Deployment remains "
                 + "blocked only while generated activity handlers return `NotImplemented`.\n\n"
+                + "Review `execution.stackPagesPerThread` for every component after implementing its "
+                + "handler. The generated value is a four-page (16 KiB) starting point, not a measured "
+                + "claim. Charlotte signs the reviewed value into CDEPLOY2 and gives every thread in "
+                + "the protected domain that exact 4 KiB-page limit; admission rejects invalid or "
+                + "excessive values instead of clamping them. The `descriptorSignCommand` next to each "
+                + "component carries the value into the release pipeline.\n\n"
                 + "Build the portable contract with `cargo test`. Building deployable AArch64 ELFs, "
                 + "signing CLS2 notes, computing provenance/digests, granting capabilities, and "
                 + "uploading signed ELFs to the central S3-compatible store remain release-pipeline "
