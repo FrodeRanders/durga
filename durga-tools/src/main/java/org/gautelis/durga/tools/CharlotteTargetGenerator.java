@@ -37,7 +37,7 @@ import java.util.Set;
 final class CharlotteTargetGenerator {
 
     private static final Logger LOG = LoggerFactory.getLogger(CharlotteTargetGenerator.class);
-    private static final String API_VERSION = "durga.gautelis.org/charlotte-v1alpha4";
+    private static final String API_VERSION = "durga.gautelis.org/charlotte-v1alpha5";
     private static final int ARTIFACT_NAME_CAPACITY = 48;
     private static final int USER_STACK_PAGE_SIZE_BYTES = 4096;
     private static final int DEFAULT_STACK_PAGES_PER_THREAD = 4;
@@ -223,6 +223,11 @@ final class CharlotteTargetGenerator {
         List<Map<String, Object>> deployments = new ArrayList<>();
         for (Component component : components) {
             ExecutionResources execution = resources.get(component.artifactName);
+            List<String> cls2Flags = new ArrayList<>(List.of("no-runtime-code-fetch"));
+            if (execution.everyEligibleNode || execution.replicas > 1
+                    || execution.maxInstancesPerNode > 1) {
+                cls2Flags.add("parallel-instances");
+            }
             Map<String, Object> entry = map();
             entry.put("component", component.node.name);
             entry.put("artifact", Map.of(
@@ -232,15 +237,15 @@ final class CharlotteTargetGenerator {
                     "artifactVersion", 1,
                     "rollbackCounter", 1,
                     "class", "service",
-                    "cls2Flags", List.of("no-runtime-code-fetch")
+                    "cls2Flags", cls2Flags
             ));
             entry.put("placement", Map.of(
-                    "replicas", 1,
-                    "maxInstancesPerNode", 1,
-                    "minDistinctNodes", 1,
-                    "flags", List.of(),
-                    "affinityGroup", 0,
-                    "antiAffinityGroup", 0
+                    "replicas", execution.replicas,
+                    "maxInstancesPerNode", execution.maxInstancesPerNode,
+                    "minDistinctNodes", execution.minDistinctNodes,
+                    "flags", placementFlags(execution),
+                    "affinityGroup", execution.affinityGroup,
+                    "antiAffinityGroup", execution.antiAffinityGroup
             ));
             entry.put("execution", Map.of(
                     "stackPagesPerThread", execution.stackPagesPerThread,
@@ -261,7 +266,8 @@ final class CharlotteTargetGenerator {
                     "status", "supported-by-signed-deployment-ingress",
                     "objectId", "DERIVED_BY_CHARLOTTE_FROM_LOGICAL_NAME",
                     "nodeKey", 0,
-                    "nodeKeyMeaning", "automatic-leader-placement"
+                    "nodeKeyMeaning", "cluster-resolved-placement-policy",
+                    "assignment", "raft-committed-sorted-replica-set"
             ));
             entry.put("distribution", Map.of(
                     "objectKey", "releases/" + component.artifactName + ".elf",
@@ -270,7 +276,7 @@ final class CharlotteTargetGenerator {
                             ? descriptorSignCommand(component, execution)
                             : "REQUIRED_AFTER_EXECUTION_RESOURCE_REVIEW",
                     "transport", "central-s3-compatible-object-store",
-                    "notification", "POST /v1/deployments with signed CDEPLOY4",
+                    "notification", "POST /v1/releases with signed CDEPLOY5 inside CRELEASE",
                     "credentialsVisibleToApplication", false
             ));
             entry.put("transactionalStep", Map.of(
@@ -324,7 +330,7 @@ final class CharlotteTargetGenerator {
             principal.put("artifact", component.artifactName);
             principal.put("bootstrap", Map.of(
                     "service", "capability-grant-controller",
-                    "profile", "signed-CDEPLOY4-read-only",
+                    "profile", "signed-CDEPLOY5-read-only",
                     "ambientNameService", false
             ));
             principal.put("grants", List.of(Map.of(
@@ -542,10 +548,11 @@ final class CharlotteTargetGenerator {
                 ),
                 requirement(
                         "placement-controller",
-                        "partial",
-                        "Automatic leader placement is available for one replica. Capacity, affinity, "
-                                + "failure-domain spreading, rescheduling, and replicas greater than one "
-                                + "still require cluster-level planning."
+                        "available-in-charlotte-os",
+                        "Signed singleton, fixed-replica, every-eligible-node, affinity and strict "
+                                + "anti-affinity policy is resolved against admitted non-draining voters "
+                                + "and reconciled after membership changes. Capacity, named failure "
+                                + "domains and rolling replacement remain future work."
                 ),
                 requirement(
                         "durable-process-state",
@@ -827,7 +834,8 @@ final class CharlotteTargetGenerator {
             for (Component component : components) {
                 defaults.put(component.artifactName, new ExecutionResources(
                         DEFAULT_STACK_PAGES_PER_THREAD, DEFAULT_MAX_THREADS,
-                        DEFAULT_SHUTDOWN_GRACE_MILLIS, false));
+                        DEFAULT_SHUTDOWN_GRACE_MILLIS, 1, 1, 1,
+                        false, false, 0, 0, false));
             }
             writeYaml(parsed, path, executionResourceDocument(processId, components, defaults));
             return defaults;
@@ -870,6 +878,26 @@ final class CharlotteTargetGenerator {
                 int shutdownGraceMillis = entry.containsKey("shutdownGraceMillis")
                         ? requireInt(entry.get("shutdownGraceMillis"), "shutdownGraceMillis", path)
                         : DEFAULT_SHUTDOWN_GRACE_MILLIS;
+                boolean everyEligibleNode = entry.containsKey("everyEligibleNode")
+                        && requireBoolean(entry.get("everyEligibleNode"), "everyEligibleNode", path);
+                int replicas = entry.containsKey("replicas")
+                        ? requireInt(entry.get("replicas"), "replicas", path)
+                        : everyEligibleNode ? 0 : 1;
+                int maxInstancesPerNode = entry.containsKey("maxInstancesPerNode")
+                        ? requireInt(entry.get("maxInstancesPerNode"), "maxInstancesPerNode", path)
+                        : 1;
+                int minDistinctNodes = entry.containsKey("minDistinctNodes")
+                        ? requireInt(entry.get("minDistinctNodes"), "minDistinctNodes", path)
+                        : everyEligibleNode ? 0 : replicas;
+                boolean spreadReplicas = entry.containsKey("spreadReplicas")
+                        && requireBoolean(entry.get("spreadReplicas"), "spreadReplicas", path);
+                long affinityGroup = entry.containsKey("affinityGroup")
+                        ? requireNonNegativeLong(entry.get("affinityGroup"), "affinityGroup", path)
+                        : 0;
+                long antiAffinityGroup = entry.containsKey("antiAffinityGroup")
+                        ? requireNonNegativeLong(
+                                entry.get("antiAffinityGroup"), "antiAffinityGroup", path)
+                        : 0;
                 boolean reviewed = requireBoolean(entry.get("reviewed"), "reviewed", path);
                 if (stackPages < 1 || stackPages > MAX_STACK_PAGES_PER_THREAD) {
                     throw new IllegalStateException(path + " stackPagesPerThread for " + artifact
@@ -884,8 +912,28 @@ final class CharlotteTargetGenerator {
                     throw new IllegalStateException(path + " shutdownGraceMillis for " + artifact
                             + " must be between 0 and " + MAX_SHUTDOWN_GRACE_MILLIS);
                 }
+                if (everyEligibleNode ? replicas != 0 : replicas < 1 || replicas > 65535) {
+                    throw new IllegalStateException(path + " replicas for " + artifact
+                            + " must be zero only for everyEligibleNode, otherwise 1..65535");
+                }
+                if (maxInstancesPerNode < 1 || maxInstancesPerNode > 65535) {
+                    throw new IllegalStateException(path + " maxInstancesPerNode for " + artifact
+                            + " must be between 1 and 65535");
+                }
+                if (!everyEligibleNode && (minDistinctNodes < 1
+                        || minDistinctNodes > replicas
+                        || (long) minDistinctNodes * maxInstancesPerNode < replicas)) {
+                    throw new IllegalStateException(path + " minDistinctNodes for " + artifact
+                            + " cannot satisfy the requested replicas");
+                }
+                if (everyEligibleNode && minDistinctNodes != 0) {
+                    throw new IllegalStateException(path + " minDistinctNodes for " + artifact
+                            + " must be zero for everyEligibleNode");
+                }
                 result.put(artifact, new ExecutionResources(
-                        stackPages, maxThreads, shutdownGraceMillis, reviewed));
+                        stackPages, maxThreads, shutdownGraceMillis, replicas,
+                        maxInstancesPerNode, minDistinctNodes, everyEligibleNode,
+                        spreadReplicas, affinityGroup, antiAffinityGroup, reviewed));
             }
             if (!expected.isEmpty()) {
                 throw new IllegalStateException(path + " lacks current BPMN artifacts "
@@ -906,14 +954,21 @@ final class CharlotteTargetGenerator {
         List<Map<String, Object>> entries = new ArrayList<>();
         for (Component component : components) {
             ExecutionResources execution = resources.get(component.artifactName);
-            entries.add(Map.of(
-                    "component", component.node.name,
-                    "artifact", component.artifactName,
-                    "stackPagesPerThread", execution.stackPagesPerThread,
-                    "maxThreads", execution.maxThreads,
-                    "shutdownGraceMillis", execution.shutdownGraceMillis,
-                    "reviewed", execution.reviewed
-            ));
+            Map<String, Object> entry = map();
+            entry.put("component", component.node.name);
+            entry.put("artifact", component.artifactName);
+            entry.put("stackPagesPerThread", execution.stackPagesPerThread);
+            entry.put("maxThreads", execution.maxThreads);
+            entry.put("shutdownGraceMillis", execution.shutdownGraceMillis);
+            entry.put("replicas", execution.replicas);
+            entry.put("maxInstancesPerNode", execution.maxInstancesPerNode);
+            entry.put("minDistinctNodes", execution.minDistinctNodes);
+            entry.put("everyEligibleNode", execution.everyEligibleNode);
+            entry.put("spreadReplicas", execution.spreadReplicas);
+            entry.put("affinityGroup", execution.affinityGroup);
+            entry.put("antiAffinityGroup", execution.antiAffinityGroup);
+            entry.put("reviewed", execution.reviewed);
+            entries.add(entry);
         }
         root.put("spec", Map.of(
                 "ownership", "developer-maintained; generator creates once and never overwrites",
@@ -949,6 +1004,17 @@ final class CharlotteTargetGenerator {
         return (int) integer;
     }
 
+    private static long requireNonNegativeLong(Object value, String field, Path path) {
+        if (!(value instanceof Number number)) {
+            throw new IllegalStateException(path + " " + field + " must be an integer");
+        }
+        long integer = number.longValue();
+        if (integer < 0 || number.doubleValue() != integer) {
+            throw new IllegalStateException(path + " " + field + " must be a non-negative integer");
+        }
+        return integer;
+    }
+
     private static boolean requireBoolean(Object value, String field, Path path) {
         if (!(value instanceof Boolean bool)) {
             throw new IllegalStateException(path + " " + field + " must be true or false");
@@ -964,12 +1030,44 @@ final class CharlotteTargetGenerator {
             Component component,
             ExecutionResources execution
     ) {
-        return "cluster-sign deployment-sign charlotte/descriptors/"
-                + component.artifactName + ".cdep " + component.artifactName
-                + " releases/" + component.artifactName + ".elf <artifact-sha256> 0 "
-                + "<deployment-sequence> " + execution.stackPagesPerThread + " "
-                + execution.maxThreads + " " + execution.shutdownGraceMillis
-                + " <private-key-hex> " + component.artifactName + "=publish";
+        StringBuilder command = new StringBuilder("cluster-sign deployment-sign charlotte/descriptors/")
+                .append(component.artifactName).append(".cdep ").append(component.artifactName)
+                .append(" releases/").append(component.artifactName)
+                .append(".elf <artifact-sha256> 0 <deployment-sequence> ")
+                .append(execution.stackPagesPerThread).append(" ")
+                .append(execution.maxThreads).append(" ")
+                .append(execution.shutdownGraceMillis).append(" <private-key-hex>");
+        if (execution.everyEligibleNode) {
+            command.append(" --every-eligible-node");
+        } else {
+            command.append(" --replicas=").append(execution.replicas);
+        }
+        command.append(" --max-instances-per-node=").append(execution.maxInstancesPerNode)
+                .append(" --min-distinct-nodes=").append(execution.minDistinctNodes);
+        if (execution.spreadReplicas) {
+            command.append(" --spread-replicas");
+        }
+        if (execution.affinityGroup != 0) {
+            command.append(" --affinity-group=").append(execution.affinityGroup);
+        }
+        if (execution.antiAffinityGroup != 0) {
+            command.append(" --anti-affinity-group=").append(execution.antiAffinityGroup);
+        }
+        return command.append(" ").append(component.artifactName).append("=publish").toString();
+    }
+
+    private static List<String> placementFlags(ExecutionResources execution) {
+        List<String> flags = new ArrayList<>();
+        if (execution.everyEligibleNode) {
+            flags.add("every-eligible-node");
+        }
+        if (execution.spreadReplicas) {
+            flags.add("spread-replicas");
+        }
+        if (execution.affinityGroup != 0) {
+            flags.add("co-locate-affinity-group");
+        }
+        return flags;
     }
 
     private static String descriptorPaths(List<Component> components) {
@@ -1006,11 +1104,13 @@ final class CharlotteTargetGenerator {
                 + "assets, and platform requirements.\n"
                 + "- `charlotte/deployment.yaml` records CLS2 admission metadata and the exact "
                 + "`PlacementPolicy` fields plus signed execution-resource requirements. A zero node key "
-                + "requests Charlotte's current automatic "
-                + "single-replica placement; replica spreading still needs a cluster scheduler.\n"
-                + "- `charlotte/resources.yaml` is developer-owned input. The generator creates it "
+                + "asks Charlotte to resolve singleton, fixed-replica, or every-eligible-node policy "
+                + "against admitted non-draining voters.\n"
+                + "- `charlotte/resources.yaml` is developer-owned policy input. The generator creates it "
                 + "once, then validates and preserves it on regeneration. It is the single source "
-                + "for stack pages, maximum threads, shutdown grace, and their review state.\n"
+                + "for stack pages, maximum threads, shutdown grace, replica count, affinity, "
+                + "anti-affinity, and their review state. Concurrent placement causes the release "
+                + "pipeline to bless the CLS2 `parallel-instances` flag.\n"
                 + "- `charlotte/capabilities.yaml` is a least-authority review plan consumed by the "
                 + "capability-grant controller. Application bootstrap contains that controller and a "
                 + "read-only signed descriptor, never the ambient name service.\n\n"
@@ -1026,11 +1126,12 @@ final class CharlotteTargetGenerator {
                 + "Charlotte's signed deployment ingress, multi-application node reconciler, and grant "
                 + "controller now satisfy the platform side of the generated plan. Deployment remains "
                 + "blocked while activity handlers are unfinished or execution resources are unreviewed.\n\n"
-                + "Review `stackPagesPerThread`, `maxThreads`, and `shutdownGraceMillis` in "
+                + "Review execution resources and placement (`replicas`, `everyEligibleNode`, "
+                + "affinity, and anti-affinity) in "
                 + "`charlotte/resources.yaml` for "
                 + "every component after implementing its handler, then set `reviewed: true`. The "
                 + "generated four-page, one-thread values are starting points, not measured claims. "
-                + "Charlotte signs all three values into CDEPLOY4, gives every thread the exact 4 KiB-page "
+                + "Charlotte signs these values and placement into CDEPLOY5, gives every thread the exact 4 KiB-page "
                 + "stack limit, requests cooperative draining, and forcibly retires a domain after its "
                 + "deadline. Invalid "
                 + "or excessive values are rejected rather than clamped. A `descriptorSignCommand` is "
@@ -1168,6 +1269,13 @@ final class CharlotteTargetGenerator {
             int stackPagesPerThread,
             int maxThreads,
             int shutdownGraceMillis,
+            int replicas,
+            int maxInstancesPerNode,
+            int minDistinctNodes,
+            boolean everyEligibleNode,
+            boolean spreadReplicas,
+            long affinityGroup,
+            long antiAffinityGroup,
             boolean reviewed
     ) {
     }

@@ -34,7 +34,7 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(Files.exists(output.resolve("charlotte/resources.yaml")));
 
         Map<String, Object> bundle = readYaml(output.resolve("charlotte/bundle.yaml"));
-        assertEquals("durga.gautelis.org/charlotte-v1alpha4", bundle.get("apiVersion"));
+        assertEquals("durga.gautelis.org/charlotte-v1alpha5", bundle.get("apiVersion"));
         assertEquals("CharlotteProcessBundle", bundle.get("kind"));
         Map<String, Object> bundleSpec = map(bundle.get("spec"));
         assertEquals("aarch64-unknown-none-catten", map(bundleSpec.get("target")).get("triple"));
@@ -42,6 +42,10 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(list(bundleSpec.get("requiredPlatformContracts")).stream()
                 .map(CharlotteTargetGeneratorTest::map)
                 .anyMatch(requirement -> "kafka-transactional-step-runner".equals(requirement.get("id"))
+                        && "available-in-charlotte-os".equals(requirement.get("status"))));
+        assertTrue(list(bundleSpec.get("requiredPlatformContracts")).stream()
+                .map(CharlotteTargetGeneratorTest::map)
+                .anyMatch(requirement -> "placement-controller".equals(requirement.get("id"))
                         && "available-in-charlotte-os".equals(requirement.get("status"))));
 
         for (Object value : list(bundleSpec.get("components"))) {
@@ -85,7 +89,7 @@ public class CharlotteTargetGeneratorTest {
         assertEquals("required-before-descriptor-signing", execution.get("reviewStatus"));
         assertEquals("exact-or-reject; never-clamp", execution.get("admission"));
         Map<String, Object> distribution = map(firstDeployment.get("distribution"));
-        assertEquals("POST /v1/deployments with signed CDEPLOY4",
+        assertEquals("POST /v1/releases with signed CDEPLOY5 inside CRELEASE",
                 distribution.get("notification"));
         assertEquals("REQUIRED_AFTER_EXECUTION_RESOURCE_REVIEW",
                 distribution.get("descriptorSignCommand"));
@@ -110,7 +114,7 @@ public class CharlotteTargetGeneratorTest {
         Map<String, Object> capabilitySpec = map(capabilities.get("spec"));
         Map<String, Object> firstPrincipal = map(list(capabilitySpec.get("principals")).get(0));
         assertEquals(Boolean.FALSE, map(firstPrincipal.get("bootstrap")).get("ambientNameService"));
-        assertEquals("signed-CDEPLOY4-read-only",
+        assertEquals("signed-CDEPLOY5-read-only",
                 map(firstPrincipal.get("bootstrap")).get("profile"));
         assertEquals(Boolean.FALSE, map(firstPrincipal.get("kafka")).get("granted"));
         assertEquals(7, list(capabilitySpec.get("transactionalSteps")).size());
@@ -159,8 +163,8 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(readme.contains("cluster-sign release-apply charlotte/releases/e2e_pipeline-release.crelease"));
         assertTrue(readme.contains("admits all desired component records in one Raft command"));
         assertTrue(readme.contains("generator creates it once, then validates and preserves it"));
-        assertTrue(readme.contains("Review `stackPagesPerThread`, `maxThreads`, and `shutdownGraceMillis`"));
-        assertTrue(readme.contains("signs all three values into CDEPLOY4"));
+        assertTrue(readme.contains("Review execution resources and placement"));
+        assertTrue(readme.contains("signs these values and placement into CDEPLOY5"));
     }
 
     @Test
@@ -179,6 +183,12 @@ public class CharlotteTargetGeneratorTest {
         first.put("stackPagesPerThread", 8);
         first.put("maxThreads", 3);
         first.put("shutdownGraceMillis", 15000);
+        first.put("replicas", 3);
+        first.put("maxInstancesPerNode", 1);
+        first.put("minDistinctNodes", 3);
+        first.put("spreadReplicas", true);
+        first.put("affinityGroup", 7);
+        first.put("antiAffinityGroup", 9);
         writeYaml(resourcesPath, resources);
         String reviewedSource = Files.readString(resourcesPath);
 
@@ -197,9 +207,21 @@ public class CharlotteTargetGeneratorTest {
         assertEquals(15000, execution.get("shutdownGraceMillis"));
         assertEquals(98304, execution.get("maximumStackBytes"));
         assertEquals("developer-reviewed", execution.get("reviewStatus"));
+        Map<String, Object> placement = map(firstDeployment.get("placement"));
+        assertEquals(3, placement.get("replicas"));
+        assertEquals(3, placement.get("minDistinctNodes"));
+        assertEquals(List.of("spread-replicas", "co-locate-affinity-group"),
+                list(placement.get("flags")));
+        assertEquals(7, placement.get("affinityGroup"));
+        assertEquals(9, placement.get("antiAffinityGroup"));
+        assertTrue(list(map(firstDeployment.get("artifact")).get("cls2Flags"))
+                .contains("parallel-instances"));
         String command = (String) map(firstDeployment.get("distribution"))
                 .get("descriptorSignCommand");
         assertTrue(command.contains("<deployment-sequence> 8 3 15000 <private-key-hex>"));
+        assertTrue(command.contains("--replicas=3 --max-instances-per-node=1 "
+                + "--min-distinct-nodes=3 --spread-replicas --affinity-group=7 "
+                + "--anti-affinity-group=9"));
     }
 
     @Test
