@@ -82,6 +82,26 @@ self-contained AArch64 ELFs, attach CLS2 metadata, sign them, compute artifact
 and provenance digests, resolve capability profiles, select nodes, and submit
 generation-fenced assignments to the Charlotte cluster.
 
+Generated bundles use `durga.gautelis.org/charlotte-v1alpha6` and pin runtime
+crates to CharlotteOS `9f3d5203e4604c3113afb07e25b28ef6cd0db48c` (runtime ABI 3).
+The generated build script delegates to the OS's `scripts/build-external-elf.sh`,
+verifies the checkout revision, and keeps all build output in the generated
+project. Freestanding x86 builds select `polyval_force_soft` to match the
+platform's erasing authentication-state backend. The generated release profile
+also matches the platform's abort/LTO code generation. `CHARLOTTE_ARCH` selects `aarch64` (default) or `x86_64`. Each signed
+`CDEPLOY6` descriptor binds the architecture, ABI, feature mask, digest, and
+object key of its ELF variant. The signer takes the final signed ELF **path**,
+not a digest argument; additional architectures use explicit `--variant=` inputs.
+Signing commands accept restricted private-key file paths, never key bytes.
+
+Deployment and release commands require verified mTLS. Set
+`CATTEN_MANAGEMENT_CA_FILE`, `CATTEN_MANAGEMENT_CERT_FILE`, and
+`CATTEN_MANAGEMENT_KEY_FILE` to PEM files; the certificate must be enrolled as
+an administrator for mutations. `CATTEN_MANAGEMENT_SERVER_NAME` optionally
+supplies the certificate's DNS/IP identity. The guest must have the matching
+sealed management TLS resource provisioned. These credentials are separate
+from artifact/release signing keys and Kafka connector credentials.
+
 For Durga activities, the planned default is a procedural application behind a
 generic transactional-step service. The service polls Kafka, calls the
 procedure, produces its result to allow-listed routes, and commits the input
@@ -89,14 +109,14 @@ offset in the same transaction. The procedure itself receives no Kafka
 capability. Holding several producer/consumer service endpoints is supported
 for independent work, but cannot create one transaction across those endpoints.
 
-Each generated step declares Charlotte Kafka profile format version 6. The
+Each generated step declares Charlotte Kafka profile format version 7. The
 deployment controller must serialize the complete broker-destination allow-list,
 consume, produce, group, transaction, TLS, and rights configuration into one
 SHA-256-protected object and deliver it as a kernel-enforced read-only launch
 capability. The hash detects corruption; launcher authority establishes the
-profile's provenance. Connector-only SCRAM and mTLS material uses bounded,
-length-delimited authentication sections; unknown critical sections fail
-closed while future optional sections can be skipped. The same profile carries a bounded transactional
+profile's provenance. Profile v7 has an exact 112-byte header and one closed
+authentication choice: none, SCRAM-SHA-256, mTLS-P256, or both. Authentication
+fields are bounded; retired v6 encodings and trailing extensions reject. The same profile carries a bounded transactional
 authority-endpoint name and its consume/produce/transaction ceiling. The
 connector checks that ceiling against every operation, while every deployment
 step receives only that access-point capability and no broker configuration is
@@ -206,3 +226,8 @@ For multi-instance deployments, all instances answer queries identically.
 The generated Docker image uses process-based health checks (`pgrep`).
 For custom health endpoints, add `quarkus-smallrye-health` to the generated `pom.xml`
 and implement `@Liveness`/`@Readiness` annotated resources.
+
+The research `charlotte-kafka-broker` is not yet a complete destination for the
+transactional-step runner. It still needs verified broker TLS and the
+`AddOffsetsToTxn` v0 / `TxnOffsetCommit` v3 wire APIs. Updating generated
+platform contracts does not establish end-to-end transactional interoperability.

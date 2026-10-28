@@ -37,7 +37,7 @@ import java.util.Set;
 final class CharlotteTargetGenerator {
 
     private static final Logger LOG = LoggerFactory.getLogger(CharlotteTargetGenerator.class);
-    private static final String API_VERSION = "durga.gautelis.org/charlotte-v1alpha5";
+    private static final String API_VERSION = "durga.gautelis.org/charlotte-v1alpha6";
     private static final int ARTIFACT_NAME_CAPACITY = 48;
     private static final int USER_STACK_PAGE_SIZE_BYTES = 4096;
     private static final int DEFAULT_STACK_PAGES_PER_THREAD = 4;
@@ -90,7 +90,7 @@ final class CharlotteTargetGenerator {
         }
         write(parsed, outputRoot.resolve("charlotte/runtime/Cargo.toml.in"),
                 runtimeCargoToml(processId, components));
-        write(parsed, outputRoot.resolve("charlotte/build-applications.sh"), runtimeBuildScript());
+        write(parsed, outputRoot.resolve("charlotte/build-applications.sh"), runtimeBuildScript(components));
         write(parsed, outputRoot.resolve("README.md"), readme(processId, components));
         copyModel(parsed, outputRoot.resolve("model.bpmn"));
 
@@ -262,9 +262,13 @@ final class CharlotteTargetGenerator {
                             ? "developer-reviewed" : "required-before-descriptor-signing",
                     "admission", "exact-or-reject; never-clamp"
             ));
+            entry.put("executionTarget", Map.of(
+                    "architecture", "derived-from-signed-elf",
+                    "runtimeAbi", 3,
+                    "requiredCpuFeatures", 0
+            ));
             entry.put("currentManifestAdapter", Map.of(
                     "status", "supported-by-signed-deployment-ingress",
-                    "objectId", "DERIVED_BY_CHARLOTTE_FROM_LOGICAL_NAME",
                     "nodeKey", 0,
                     "nodeKeyMeaning", "cluster-resolved-placement-policy",
                     "assignment", "raft-committed-sorted-replica-set"
@@ -276,7 +280,7 @@ final class CharlotteTargetGenerator {
                             ? descriptorSignCommand(component, execution)
                             : "REQUIRED_AFTER_EXECUTION_RESOURCE_REVIEW",
                     "transport", "central-s3-compatible-object-store",
-                    "notification", "POST /v1/releases with signed CDEPLOY5 inside CRELEASE",
+                    "notification", "POST /v1/releases with signed CDEPLOY6 inside CRELEASE",
                     "credentialsVisibleToApplication", false
             ));
             entry.put("transactionalStep", Map.of(
@@ -289,6 +293,14 @@ final class CharlotteTargetGenerator {
             deployments.add(entry);
         }
         spec.put("components", deployments);
+        spec.put("management", Map.of(
+                "transport", "verified-mutual-tls",
+                "caFileEnvironment", "CATTEN_MANAGEMENT_CA_FILE",
+                "clientCertificateEnvironment", "CATTEN_MANAGEMENT_CERT_FILE",
+                "clientKeyEnvironment", "CATTEN_MANAGEMENT_KEY_FILE",
+                "serverNameEnvironment", "CATTEN_MANAGEMENT_SERVER_NAME",
+                "mutationRole", "enrolled-administrator"
+        ));
         spec.put("rollout", Map.of(
                 "releaseEnvelope", releasePath(processId),
                 "signCommand", releaseSignCommand(processId, components),
@@ -330,7 +342,7 @@ final class CharlotteTargetGenerator {
             principal.put("artifact", component.artifactName);
             principal.put("bootstrap", Map.of(
                     "service", "capability-grant-controller",
-                    "profile", "signed-CDEPLOY5-read-only",
+                    "profile", "signed-CDEPLOY6-read-only",
                     "ambientNameService", false
             ));
             principal.put("grants", List.of(Map.of(
@@ -362,7 +374,7 @@ final class CharlotteTargetGenerator {
                                     "name", component.artifactName + "-connector-transactional",
                                     "rights", List.of("consume", "produce", "transaction")
                             ),
-                            "registrationNameSource", "immutable-profile-v6-authority-endpoint",
+                            "registrationNameSource", "immutable-profile-v7-authority-endpoint",
                             "platformArtifact", "kafka",
                             "profileMaterial", "launcher-only",
                             "grant", "connection-capability-to-transactional-step",
@@ -372,7 +384,7 @@ final class CharlotteTargetGenerator {
                                     "selection", "exact-advertised-host-and-port"
                             )
                     ),
-                    "profileFormatVersion", 6,
+                    "profileFormatVersion", 7,
                     "profileDelivery", "read-only-launch-capability",
                     "profileDigest", "sha256-integrity",
                     "maxProduceRoutes", MAX_KAFKA_PRODUCE_ROUTES,
@@ -679,37 +691,55 @@ final class CharlotteTargetGenerator {
                 .append("contract = { package = \"")
                 .append(processId.toLowerCase(Locale.ROOT).replace('_', '-'))
                 .append("-charlotte-contract\", path = \"../..\" }\n")
-                .append("catten-rt = { path = \"@CHARLOTTE_ROOT@/crates/catten-rt\" }\n")
-                .append("catten-services = { path = \"@CHARLOTTE_ROOT@/crates/catten-services\" }\n")
-                .append("charlotte-kafka-step = { path = \"@CHARLOTTE_ROOT@/crates/charlotte-kafka-step\" }\n")
-                .append("charlotte-protocol-kafka = { path = \"@CHARLOTTE_ROOT@/crates/charlotte-protocol-kafka\" }\n\n");
+                .append("catten-rt = { git = \"https://github.com/FrodeRanders/charlotte-os\", rev = \"9f3d5203e4604c3113afb07e25b28ef6cd0db48c\" }\n")
+                .append("catten-services = { git = \"https://github.com/FrodeRanders/charlotte-os\", rev = \"9f3d5203e4604c3113afb07e25b28ef6cd0db48c\" }\n")
+                .append("charlotte-kafka-step = { git = \"https://github.com/FrodeRanders/charlotte-os\", rev = \"9f3d5203e4604c3113afb07e25b28ef6cd0db48c\" }\n")
+                .append("charlotte-protocol-kafka = { git = \"https://github.com/FrodeRanders/charlotte-os\", rev = \"9f3d5203e4604c3113afb07e25b28ef6cd0db48c\" }\n\n");
         for (Component component : components) {
             manifest.append("[[bin]]\n")
                     .append("name = \"").append(component.artifactName).append("\"\n")
                     .append("path = \"src/bin/").append(component.moduleName).append(".rs\"\n\n");
         }
+        // Match the platform's freestanding release code generation, including
+        // deferred LTO code generation for the x86 soft-float target.
+        manifest.append("[profile.release]\n")
+                .append("debug = \"none\"\n")
+                .append("debug-assertions = false\n")
+                .append("panic = \"abort\"\n")
+                .append("lto = true\n")
+                .append("opt-level = 3\n");
         return manifest.toString();
     }
 
-    private static String runtimeBuildScript() {
-        return "#!/usr/bin/env sh\n"
-                + "set -eu\n"
-                + ": \"${CHARLOTTE_ROOT:?set CHARLOTTE_ROOT to the CharlotteOS checkout}\"\n"
-                + "SCRIPT_DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
-                + "RUNTIME_DIR=\"$SCRIPT_DIR/runtime\"\n"
-                + "TOOLCHAIN=$(sed -n 's/^channel = \"\\(.*\\)\"/\\1/p' "
-                + "\"$CHARLOTTE_ROOT/rust-toolchain.toml\")\n"
-                + "RUSTC=$(rustup which --toolchain \"$TOOLCHAIN\" rustc)\n"
-                + "export RUSTC\n"
-                + "sed \"s|@CHARLOTTE_ROOT@|$CHARLOTTE_ROOT|g\" \"$RUNTIME_DIR/Cargo.toml.in\" "
-                + "> \"$RUNTIME_DIR/Cargo.toml\"\n"
-                + "mkdir -p \"$RUNTIME_DIR/crates/catten-services\"\n"
-                + "cp \"$CHARLOTTE_ROOT/crates/catten-services/link.x\" "
-                + "\"$RUNTIME_DIR/crates/catten-services/link.x\"\n"
-                + "cd \"$CHARLOTTE_ROOT\"\n"
-                + "rustup run \"$TOOLCHAIN\" cargo build --manifest-path \"$RUNTIME_DIR/Cargo.toml\" "
-                + "--target \"$CHARLOTTE_ROOT/crates/catten-services/aarch64-unknown-none.json\" "
-                + "--release -Z json-target-spec -Z build-std=core,alloc\n";
+    private static String runtimeBuildScript(List<Component> components) {
+        String binaries = components.stream().map(component -> component.artifactName)
+                .collect(java.util.stream.Collectors.joining(" "));
+        return """
+                #!/usr/bin/env sh
+                set -eu
+                : "${CHARLOTTE_ROOT:?set CHARLOTTE_ROOT to the pinned CharlotteOS checkout}"
+                SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+                OUTPUT_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+                RUNTIME_DIR="$SCRIPT_DIR/runtime"
+                ARCH="${CHARLOTTE_ARCH:-aarch64}"
+                case "$ARCH" in
+                    x86_64) RUSTFLAGS="${RUSTFLAGS:-} --cfg polyval_force_soft"; export RUSTFLAGS ;;
+                    aarch64) ;;
+                    *) echo "error: CHARLOTTE_ARCH must be aarch64 or x86_64" >&2; exit 2 ;;
+                esac
+                REVISION=$(git -C "$CHARLOTTE_ROOT" rev-parse HEAD)
+                [ "$REVISION" = "9f3d5203e4604c3113afb07e25b28ef6cd0db48c" ] || {
+                    echo "error: CharlotteOS checkout differs from the generated runtime pin" >&2
+                    exit 1
+                }
+                cp "$RUNTIME_DIR/Cargo.toml.in" "$RUNTIME_DIR/Cargo.toml"
+                for binary in %s; do
+                    "$CHARLOTTE_ROOT/scripts/build-external-elf.sh" \\
+                        --manifest "$RUNTIME_DIR/Cargo.toml" --bin "$binary" \\
+                        --arch "$ARCH" --target-dir "$RUNTIME_DIR/target" \\
+                        --output "$OUTPUT_ROOT/artifacts/$binary.elf"
+                done
+                """.formatted(binaries);
     }
 
     private static String runtimeAdapterRs(Component component) {
@@ -721,7 +751,7 @@ final class CharlotteTargetGenerator {
 
                 use alloc::vec;
                 use catten_rt::{Context, ShutdownRequest, owned::{Endpoint, OwnedMemory, ReplyToken}};
-                use catten_services::{grant_client, kafka_step as protocol, sleep_ms};
+                use catten_services::{grant_client, kafka_step as protocol, reactor};
                 use charlotte_kafka_step::{OutputBatch, OutputRecord};
                 use charlotte_protocol_kafka::DeliveredRecord;
                 use contract::{ActivityDecision, ActivityError};
@@ -763,6 +793,7 @@ final class CharlotteTargetGenerator {
                     {
                         catten_rt::domain_abort();
                     }
+                    endpoint.bind_completion_queue(0).unwrap_or_else(|_| catten_rt::domain_abort());
                     loop {
                         if let Some(request) = ctx.lifecycle().shutdown_requested() {
                             drop(endpoint);
@@ -771,7 +802,7 @@ final class CharlotteTargetGenerator {
                         let Some(mut message) = endpoint.try_receive()
                             .unwrap_or_else(|_| catten_rt::domain_abort())
                         else {
-                            sleep_ms(10);
+                            reactor::wait(None, 0);
                             continue;
                         };
                         let Some(reply) = message.reply.take() else { continue; };
@@ -1033,10 +1064,11 @@ final class CharlotteTargetGenerator {
         StringBuilder command = new StringBuilder("cluster-sign deployment-sign charlotte/descriptors/")
                 .append(component.artifactName).append(".cdep ").append(component.artifactName)
                 .append(" releases/").append(component.artifactName)
-                .append(".elf <artifact-sha256> 0 <deployment-sequence> ")
+                .append(".elf artifacts/").append(component.artifactName)
+                .append(".elf 0 <deployment-sequence> ")
                 .append(execution.stackPagesPerThread).append(" ")
                 .append(execution.maxThreads).append(" ")
-                .append(execution.shutdownGraceMillis).append(" <private-key-hex>");
+                .append(execution.shutdownGraceMillis).append(" <private-key-file>");
         if (execution.everyEligibleNode) {
             command.append(" --every-eligible-node");
         } else {
@@ -1079,7 +1111,7 @@ final class CharlotteTargetGenerator {
     private static String releaseSignCommand(String processId, List<Component> components) {
         return "cluster-sign release-sign " + releasePath(processId) + " "
                 + artifactName(processId + "-release")
-                + " <release-sequence> <private-key-hex> " + descriptorPaths(components);
+                + " <release-sequence> <private-key-file> " + descriptorPaths(components);
     }
 
     private static String releaseApplyCommand(String processId) {
@@ -1116,10 +1148,10 @@ final class CharlotteTargetGenerator {
                 + "read-only signed descriptor, never the ambient name service.\n\n"
                 + "## Platform integration status\n\n"
                 + "Charlotte's low-level Kafka profile supports one consume route and allow-listed "
-                + "multi-topic produce routes in one transaction. Its version-6 profile carries "
+                + "multi-topic produce routes in one transaction. Its version-7 profile carries "
                 + "separately named authority endpoints with enforced Kafka-rights ceilings, at most "
                 + "32 reviewed broker destinations and 64 routes, is protected by a SHA-256 integrity "
-                + "digest, uses bounded extensible authentication sections, and is delivered as a "
+                + "digest, uses one closed, bounded authentication choice (none, SCRAM-SHA-256, mTLS-P256, or both), and is delivered as a "
                 + "read-only launch capability. "
                 + "CharlotteOS now provides the higher-level `kafka_step` runner and its bounded "
                 + "procedure ABI, output validation, timeout/retry policy, and transactional DLQ path. "
@@ -1131,12 +1163,12 @@ final class CharlotteTargetGenerator {
                 + "`charlotte/resources.yaml` for "
                 + "every component after implementing its handler, then set `reviewed: true`. The "
                 + "generated four-page, one-thread values are starting points, not measured claims. "
-                + "Charlotte signs these values and placement into CDEPLOY5, gives every thread the exact 4 KiB-page "
+                + "Charlotte signs these values and placement into CDEPLOY6, gives every thread the exact 4 KiB-page "
                 + "stack limit, requests cooperative draining, and forcibly retires a domain after its "
                 + "deadline. Invalid "
                 + "or excessive values are rejected rather than clamped. A `descriptorSignCommand` is "
                 + "emitted only after review and is always derived from the same retained values.\n\n"
-                + "Build the portable contract with `cargo test`. Building deployable AArch64 ELFs, "
+                + "Build the portable contract with `cargo test`. Build ELFs with `sh charlotte/build-applications.sh`; `CHARLOTTE_ARCH` selects `aarch64` or `x86_64` (default `aarch64`). Runtime ABI 3 and CPU feature mask 0 are required. "
                 + "signing CLS2 notes, computing provenance/digests, granting capabilities, and "
                 + "uploading signed ELFs to the central S3-compatible store remain release-pipeline "
                 + "stages because they require cluster-owned keys and endpoints. Write each signed "
@@ -1144,6 +1176,11 @@ final class CharlotteTargetGenerator {
                 + "apply the exact component set with:\n\n```text\n"
                 + releaseSignCommand(processId, components) + "\n"
                 + releaseApplyCommand(processId) + "\n```\n\n"
+                + "Management commands require verified mTLS: set `CATTEN_MANAGEMENT_CA_FILE`, "
+                + "`CATTEN_MANAGEMENT_CERT_FILE`, and `CATTEN_MANAGEMENT_KEY_FILE` to PEM files. "
+                + "The client certificate must be enrolled as an administrator for mutations. "
+                + "Set `CATTEN_MANAGEMENT_SERVER_NAME` when the certificate uses a DNS identity. "
+                + "Signing commands take restricted private-key file paths, never key bytes.\n\n"
                 + "The outer release signature binds the exact descriptor set. Charlotte admits all "
                 + "desired component records in one Raft command and then waits for generation-fenced "
                 + "readiness. Fetch and launch happen after admission, so coordinated rollback after a "

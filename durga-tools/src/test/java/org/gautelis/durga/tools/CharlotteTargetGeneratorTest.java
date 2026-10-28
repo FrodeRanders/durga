@@ -34,7 +34,7 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(Files.exists(output.resolve("charlotte/resources.yaml")));
 
         Map<String, Object> bundle = readYaml(output.resolve("charlotte/bundle.yaml"));
-        assertEquals("durga.gautelis.org/charlotte-v1alpha5", bundle.get("apiVersion"));
+        assertEquals("durga.gautelis.org/charlotte-v1alpha6", bundle.get("apiVersion"));
         assertEquals("CharlotteProcessBundle", bundle.get("kind"));
         Map<String, Object> bundleSpec = map(bundle.get("spec"));
         assertEquals("aarch64-unknown-none-catten", map(bundleSpec.get("target")).get("triple"));
@@ -89,10 +89,13 @@ public class CharlotteTargetGeneratorTest {
         assertEquals("required-before-descriptor-signing", execution.get("reviewStatus"));
         assertEquals("exact-or-reject; never-clamp", execution.get("admission"));
         Map<String, Object> distribution = map(firstDeployment.get("distribution"));
-        assertEquals("POST /v1/releases with signed CDEPLOY5 inside CRELEASE",
+        assertEquals("POST /v1/releases with signed CDEPLOY6 inside CRELEASE",
                 distribution.get("notification"));
         assertEquals("REQUIRED_AFTER_EXECUTION_RESOURCE_REVIEW",
                 distribution.get("descriptorSignCommand"));
+        assertEquals(3, map(firstDeployment.get("executionTarget")).get("runtimeAbi"));
+        assertEquals(0, map(firstDeployment.get("executionTarget")).get("requiredCpuFeatures"));
+        assertEquals("verified-mutual-tls", map(deploymentSpec.get("management")).get("transport"));
         Map<String, Object> rollout = map(deploymentSpec.get("rollout"));
         assertEquals("signed-release-envelope", rollout.get("admission"));
         assertEquals(Boolean.TRUE, rollout.get("atomic"));
@@ -114,13 +117,13 @@ public class CharlotteTargetGeneratorTest {
         Map<String, Object> capabilitySpec = map(capabilities.get("spec"));
         Map<String, Object> firstPrincipal = map(list(capabilitySpec.get("principals")).get(0));
         assertEquals(Boolean.FALSE, map(firstPrincipal.get("bootstrap")).get("ambientNameService"));
-        assertEquals("signed-CDEPLOY5-read-only",
+        assertEquals("signed-CDEPLOY6-read-only",
                 map(firstPrincipal.get("bootstrap")).get("profile"));
         assertEquals(Boolean.FALSE, map(firstPrincipal.get("kafka")).get("granted"));
         assertEquals(7, list(capabilitySpec.get("transactionalSteps")).size());
         Map<String, Object> firstStep = map(list(capabilitySpec.get("transactionalSteps")).get(0));
         Map<String, Object> kafka = map(firstStep.get("kafka"));
-        assertEquals(6, kafka.get("profileFormatVersion"));
+        assertEquals(7, kafka.get("profileFormatVersion"));
         assertEquals("read-only-launch-capability", kafka.get("profileDelivery"));
         assertEquals("sha256-integrity", kafka.get("profileDigest"));
         Map<String, Object> connector = map(kafka.get("connector"));
@@ -136,7 +139,7 @@ public class CharlotteTargetGeneratorTest {
         assertEquals(List.of("consume", "produce", "transaction"),
                 list(authorityEndpoint.get("rights")));
         assertEquals("launcher-only", connector.get("profileMaterial"));
-        assertEquals("immutable-profile-v6-authority-endpoint", connector.get("registrationNameSource"));
+        assertEquals("immutable-profile-v7-authority-endpoint", connector.get("registrationNameSource"));
         List<Object> routes = list(kafka.get("produceRoutes"));
         assertEquals(3, routes.size());
         assertEquals(1, map(routes.get(0)).get("index"));
@@ -154,6 +157,17 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(adapter.contains("contract::transform_order::handle"));
         assertTrue(adapter.contains("ctx.lifecycle().shutdown_requested()"));
         assertTrue(adapter.contains("serve(&ctx).complete()"));
+        assertTrue(adapter.contains("endpoint.bind_completion_queue(0)"));
+        assertTrue(adapter.contains("reactor::wait(None, 0)"));
+        assertFalse(adapter.contains("sleep_ms(10)"));
+        String buildScript = Files.readString(output.resolve("charlotte/build-applications.sh"));
+        assertTrue(buildScript.contains("scripts/build-external-elf.sh"));
+        assertTrue(buildScript.contains("CHARLOTTE_ARCH:-aarch64"));
+        assertFalse(buildScript.contains("cd \"$CHARLOTTE_ROOT\""));
+        String runtimeManifest = Files.readString(output.resolve("charlotte/runtime/Cargo.toml.in"));
+        assertTrue(runtimeManifest.contains("9f3d5203e4604c3113afb07e25b28ef6cd0db48c"));
+        assertFalse(runtimeManifest.contains("@CHARLOTTE_ROOT@"));
+        assertTrue(runtimeManifest.contains("lto = true"));
         String readme = Files.readString(output.resolve("README.md"));
         assertTrue(readme.contains("actionable platform deployment plan"));
         assertTrue(readme.contains("CharlotteOS now provides the higher-level `kafka_step` runner"));
@@ -164,7 +178,7 @@ public class CharlotteTargetGeneratorTest {
         assertTrue(readme.contains("admits all desired component records in one Raft command"));
         assertTrue(readme.contains("generator creates it once, then validates and preserves it"));
         assertTrue(readme.contains("Review execution resources and placement"));
-        assertTrue(readme.contains("signs these values and placement into CDEPLOY5"));
+        assertTrue(readme.contains("signs these values and placement into CDEPLOY6"));
     }
 
     @Test
@@ -218,7 +232,9 @@ public class CharlotteTargetGeneratorTest {
                 .contains("parallel-instances"));
         String command = (String) map(firstDeployment.get("distribution"))
                 .get("descriptorSignCommand");
-        assertTrue(command.contains("<deployment-sequence> 8 3 15000 <private-key-hex>"));
+        assertTrue(command.contains("artifacts/e2e_pipeline-transform_order.elf 0 <deployment-sequence>"));
+        assertFalse(command.contains("<artifact-sha256>"));
+        assertTrue(command.contains("<deployment-sequence> 8 3 15000 <private-key-file>"));
         assertTrue(command.contains("--replicas=3 --max-instances-per-node=1 "
                 + "--min-distinct-nodes=3 --spread-replicas --affinity-group=7 "
                 + "--anti-affinity-group=9"));
